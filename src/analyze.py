@@ -1,21 +1,39 @@
 import numpy as np
 from scipy.signal import welch
 
+def calculate_focus_index(alpha_power, beta_power):
+    """
+    Calculates a focus ratio. 
+    More Beta = More Focus. More Alpha = More Relaxation.
+    """
+    if alpha_power == 0:
+        return 0
+    
+    # Simple Beta/Alpha ratio
+    ratio = beta_power / alpha_power
+    
+    # Optional: Clamp the value between 0 and 5 for stability
+    return max(0, min(ratio, 5))
+
+def get_musical_parameters(focus_index):
+    """
+    Translates the Focus Index into numbers a music AI can understand.
+    """
+    # 0.0 to 1.0 scale: 0 is 'Chill/Ambient', 1 is 'Energetic/Complex'
+    intensity = focus_index / 2.0 
+    return max(0, min(intensity, 1.0))
+
 def get_band_powers(data, fs=256):
     """
-    fs: sampling rate (Muse is typically 256Hz)
+    Extracts Alpha and Beta power using Welch's method.
     """
-    # 1. Estimate Power Spectral Density (PSD)
-    # Using a shorter window (nperseg) helps with 1-second chunks
-    freqs, psd = welch(data, fs=fs, nperseg=len(data))
+    freqs, psd = welch(data, fs, nperseg=fs)
     
-    # 2. Extract specific frequency bands
-    # Alpha: 8-12 Hz | Beta: 13-30 Hz
-    alpha_idx = np.logical_and(freqs >= 8, freqs <= 12)
-    beta_idx = np.logical_and(freqs >= 13, freqs <= 30)
+    # Define bands
+    alpha_idx = np.where((freqs >= 8) & (freqs <= 12))
+    beta_idx = np.where((freqs >= 13) & (freqs <= 30))
     
-    # 3. Sum the power
-    alpha_power = np.sum(psd[alpha_idx])
-    beta_power = np.sum(psd[beta_idx])
+    alpha_power = np.mean(psd[alpha_idx])
+    beta_power = np.mean(psd[beta_idx])
     
     return alpha_power, beta_power
