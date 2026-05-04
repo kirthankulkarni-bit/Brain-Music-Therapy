@@ -4,3 +4,4 @@ __pycache__/
 ffmpeg*/
 mne_data/
 *.7z
+s01.dat

@@ -44,11 +44,11 @@ print("✅ Audio tensor generated in GPU memory!")
 try:
     for idx, one_wav in enumerate(wav):
         audio_write(
-            f'brain_music_{state_label.lower()}', 
+            f'sample_{state_label.lower()}', 
             one_wav.cpu(), 
             model.sample_rate, 
             strategy="loudness"
         )
-    print(f"🎉 SUCCESS! Created: brain_music_{state_label.lower()}.wav")
+    print(f"🎉 SUCCESS! Created: sample_{state_label.lower()}.wav")
 except Exception as e:
     print(f"❌ Export Failed: {e}")
