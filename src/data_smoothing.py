@@ -54,9 +54,9 @@ for chunk_idx in range(num_chunks):
     print(f"  -> Smoothed Ratio:  {smoothed_ratio:.4f}")
     
     if smoothed_ratio > 1.0:
-        print("  DECISION: target focus music")
+        print("  target focus music")
     else:
-        print("  DECISION: target calm music")
+        print("  target calm music")
     print("-" * 40)
     
     # small delay just so we can read the terminal updates easily
