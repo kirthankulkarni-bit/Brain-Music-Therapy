@@ -9,7 +9,7 @@ window_size = 5
 ratio_window = collections.deque(maxlen=window_size)
 
 # load participant 1 data
-with open('s01.dat', 'rb') as f:
+with open('../s01.dat', 'rb') as f:
     raw_data = pickle.load(f, encoding='latin1')
 
 # grab trial 0, channel 0 (frontal lobe / f3)
