@@ -124,8 +124,8 @@ try:
         smoothed_ratio = np.mean(ratio_window)
         
         # update target audio state based on ratio threshold
-        # threshold of 1.0 is a starting baseline; adjust this based on your personal readings
-        if smoothed_ratio > 1.0:
+        # threshold of 0.2 is a starting baseline; adjust this based on your personal readings
+        if smoothed_ratio > 0.2:
             current_state = "focus"
         else:
             current_state = "ambient"
