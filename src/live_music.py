@@ -26,10 +26,6 @@ sfreq = 128
 seconds_per_chunk = 5
 target_buffer_points = sfreq * seconds_per_chunk  
 
-# my personal calibrated baseline. figured this out after running 3 trials.
-# resting is around 0.1, max focus is 0.3. 0.2 feels like the perfect tripwire.
-CALIBRATED_THRESHOLD = 0.2  
-
 # where the music lives
 AUDIO_DIR = "generated_loops"
 AMBIENT_PATH = os.path.join(AUDIO_DIR, "calm_ambient.wav")
@@ -142,11 +138,16 @@ def eeg_processing_worker():
         ratio_window.append(raw_ratio)
         smoothed_ratio = np.mean(ratio_window)
         
-        # evaluate against my calibrated baseline
-        if smoothed_ratio > CALIBRATED_THRESHOLD:
+        # HYSTERESIS LOGIC (Calibrated to clean hardware baseline)
+        # Require a solid push above the 0.4 resting state to trigger focus
+        if current_state == "ambient" and smoothed_ratio > 0.55:
             current_state = "focus"
-        else:
+            
+        # Don't drop the focus track until the ratio falls below the resting baseline
+        elif current_state == "focus" and smoothed_ratio < 0.35:
             current_state = "ambient"
+            
+        # Ratios between 0.35 and 0.55 maintain the current audio state
         
         # push the latest ratio to the live graph
         plot_y_data.append(smoothed_ratio)
@@ -180,17 +181,24 @@ class LiveBrainPlotWindow(QtWidgets.QMainWindow):
         # axes labels
         self.graph_widget.setLabel('left', 'Focus Index (Beta/Alpha)', colors='#cccccc', size='14pt')
         self.graph_widget.setLabel('bottom', 'Time (Rolling Window)', colors='#cccccc', size='14pt')
-        self.graph_widget.setYRange(0, 0.4)
+        
+        # updated y-range to better fit the new 0.25 to 0.55 baseline
+        self.graph_widget.setYRange(0, 0.8)
         self.graph_widget.showGrid(x=True, y=True, alpha=0.2)
         
         # the live brainwave line (neon cyan)
         pen_wave = pg.mkPen(color='#00d2ff', width=3) 
         self.data_line = self.graph_widget.plot(plot_x_data, list(plot_y_data), pen=pen_wave)
         
-        # the target line to beat (red dashed)
-        pen_threshold = pg.mkPen(color='#ff3333', width=2, style=QtCore.Qt.DashLine)
-        self.threshold_line = pg.InfiniteLine(pos=CALIBRATED_THRESHOLD, angle=0, pen=pen_threshold)
-        self.graph_widget.addItem(self.threshold_line)
+        # the target line to beat (upper limit - red dashed)
+        pen_threshold_high = pg.mkPen(color='#ff3333', width=2, style=QtCore.Qt.DashLine)
+        self.threshold_line_high = pg.InfiniteLine(pos=0.55, angle=0, pen=pen_threshold_high)
+        self.graph_widget.addItem(self.threshold_line_high)
+
+        # the dropout line (lower limit - yellow dashed)
+        pen_threshold_low = pg.mkPen(color='#ffcc00', width=2, style=QtCore.Qt.DashLine)
+        self.threshold_line_low = pg.InfiniteLine(pos=0.35, angle=0, pen=pen_threshold_low)
+        self.graph_widget.addItem(self.threshold_line_low)
         
         # refresh the graph 10 times a second
         self.timer = QtCore.QTimer()
