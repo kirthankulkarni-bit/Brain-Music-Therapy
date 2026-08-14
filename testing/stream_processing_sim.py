@@ -1,3 +1,18 @@
+"""
+RETIRED - was src/stream_processing.py. Kept for provenance; nothing imports it.
+
+This is the DEAP-driven simulation of the closed loop. The generative stage is a
+time.sleep(3) stub, not a model: no audio was ever produced by this file. It is
+retained because it documents the design progression (trend-sensitive prompt
+construction first appeared here) and because the roadmap's claim that "the
+generative loop existed only as a stub" should be verifiable in the repo.
+
+Superseded by src/music_engine.py, which does continuation-based MusicGen
+generation with a real bounded queue and gapless callback playback.
+
+Run from the testing/ directory: it expects ../s01.dat.
+"""
+
 import pickle
 import numpy as np
 import mne

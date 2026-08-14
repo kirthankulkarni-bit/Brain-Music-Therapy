@@ -1,3 +1,18 @@
+# OFFLINE DEAP SCRIPT - NOT PART OF THE LIVE PIPELINE.
+#
+# sfreq = 128 below is CORRECT here: the DEAP dataset genuinely is sampled at
+# 128 Hz. Do not "fix" it to 256.
+#
+# The rate is a property of the DATASET, not of EEG in general. Copying this
+# literal into the live Muse path is exactly how the sampling-rate defect
+# happened (see logs_precorrection/README.txt). The live path never hardcodes a
+# rate - it reads it from the LSL stream via stream_utils.get_inlet().
+#
+# This script is retained as the origin of the rolling-window smoothing idea.
+# The live path now uses eeg_features.ExponentialSmoother instead of the 5-sample
+# boxcar here, because a boxcar of length N at hop h costs (N-1)*h/2 seconds of
+# pure group delay.
+
 import pickle
 import numpy as np
 import mne

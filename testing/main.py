@@ -1,3 +1,17 @@
+"""
+RETIRED - was the project root main.py. Kept for provenance; nothing imports it.
+
+First-light LSL test. Two defects make it unsuitable as anything but history:
+
+  1. It reads sample[0], which is TP9 - a TEMPORAL electrode - while the live
+     pipeline averages AF7 and AF8 (frontal). The two halves of the codebase were
+     measuring different parts of the head. eeg_features.FeatureConfig now names
+     channels explicitly so this cannot recur.
+
+  2. It calls plt.show() inside the acquisition loop, which is why it felt
+     sluggish. The live dashboard uses pyqtgraph on a QTimer instead.
+"""
+
 from src.stream_utils import get_inlet
 from src.analyze import get_band_powers
 import numpy as np

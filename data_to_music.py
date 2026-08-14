@@ -1,3 +1,13 @@
+# OFFLINE DEAP DEMO - NOT PART OF THE LIVE PIPELINE.
+#
+# sfreq = 128 below is CORRECT here: the DEAP dataset genuinely is sampled at
+# 128 Hz. Do not "fix" it to 256.
+#
+# The rate is a property of the DATASET, not of EEG in general. Copying this
+# literal into the live Muse path is exactly how the sampling-rate defect
+# happened (see logs_precorrection/README.txt). The live path never hardcodes a
+# rate - it reads it from the LSL stream via stream_utils.get_inlet().
+
 import pickle
 import numpy as np
 import mne

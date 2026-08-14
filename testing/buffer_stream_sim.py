@@ -1,3 +1,13 @@
+"""
+RETIRED - was src/buffer_stream.py. Kept for provenance; nothing imports it.
+
+Earlier draft of stream_processing_sim.py: same time.sleep(3) generation stub,
+binary prompt switching, no trend term. Superseded twice over, first by
+stream_processing.py and then by src/music_engine.py.
+
+Run from the testing/ directory: it expects ../s01.dat.
+"""
+
 import pickle
 import numpy as np
 import mne

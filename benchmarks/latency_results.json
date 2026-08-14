@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-08-14T16:07:23.444233",
+  "platform": "Windows 10 / Python 3.10.11",
+  "analysis": [
+    {
+      "sampling_rate": 256.0,
+      "window_seconds": 5.0,
+      "hop_seconds": 2.0,
+      "smoother_tau_s": 4.0,
+      "dsp_median_ms": 1.2899499852210283,
+      "dsp_p95_ms": 2.046630042605102,
+      "dsp_headroom_x": 1550.4477095344957,
+      "window_centroid_delay_s": 2.5,
+      "hop_quantization_s": 1.0,
+      "smoother_group_delay_s": 4.0,
+      "total_analysis_latency_s": 7.5,
+      "label": "old (5 s window, 2 s hop, 5-tap boxcar)"
+    },
+    {
+      "sampling_rate": 256.0,
+      "window_seconds": 4.0,
+      "hop_seconds": 1.0,
+      "smoother_tau_s": 3.0,
+      "dsp_median_ms": 1.358449924737215,
+      "dsp_p95_ms": 2.4290348635986443,
+      "dsp_headroom_x": 736.1331336474877,
+      "window_centroid_delay_s": 2.0,
+      "hop_quantization_s": 0.5,
+      "smoother_group_delay_s": 3.0,
+      "total_analysis_latency_s": 5.5,
+      "label": "new (4 s window, 1 s hop, tau=3 s)"
+    }
+  ],
+  "musicgen": null,
+  "audio_commitment_s": 8.0,
+  "end_to_end_worst_case_s": 13.5
+}

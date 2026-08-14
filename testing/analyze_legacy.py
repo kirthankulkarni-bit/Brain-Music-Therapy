@@ -1,3 +1,26 @@
+"""
+RETIRED - was src/analyze.py. Kept for provenance; nothing imports it.
+
+Superseded by src/eeg_features.py:
+
+    get_band_powers()        -> FeatureExtractor.extract()
+                                filters first, INTEGRATES the PSD over each band
+                                instead of averaging bins, returns all five bands,
+                                and reports artifact validity.
+
+    calculate_focus_index()  -> BandFeatures.log_beta_alpha
+                                log scale, and the max(0, min(ratio, 5)) clamp
+                                below is GONE. That clamp silently discarded the
+                                most extreme observations - exactly the ones a
+                                therapeutic effect would show up in.
+
+    get_musical_parameters() -> music_engine.build_prompt()
+                                five graded prompt levels instead of a 0-1 scalar.
+
+Note also that fs defaulted to 256 here while the live path declared 128. The two
+halves of the codebase disagreed about the hardware, and the live half was wrong.
+"""
+
 import numpy as np
 from scipy.signal import welch
 
