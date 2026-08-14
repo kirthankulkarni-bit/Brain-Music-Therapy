@@ -33,10 +33,26 @@ Two design decisions carry the closed-loop latency argument:
    worst-case (1 x segment) of commitment; depth 2 gives (2 x segment). Raise it
    only if you measure underruns. `worst_case_audio_latency_s` reports the number.
 
-On a Nitro 5 (RTX 3050 Ti), musicgen-small at fp16 generates 8 s of audio in
-roughly 4-7 s. That is faster than realtime, so generation hides entirely behind
-playback and never becomes the binding constraint. Verify on your machine with
-benchmarks/latency_probe.py.
+MEASURED CONSTRAINT, 2026-08-14, GTX 1650 Ti (4 GB, no tensor cores):
+
+    fp32  4 s segment -> 25.1 s median   (6.3x realtime)
+    fp32  8 s segment -> 42.0 s median   (5.2x realtime)
+    fp16  4 s segment -> 18.0 s median   (4.5x realtime)
+    fp16  8 s segment -> 48.0 s median   (6.0x realtime)
+
+Generation is roughly 5x SLOWER than realtime on this hardware, not faster. The
+architecture below assumes generation hides behind playback; on this GPU it does
+not, and the queue starves permanently - about 8 s of audio per 48 s of wall time,
+a 17% duty cycle with silence in between.
+
+Note also that fp16 is not reliably faster here. The GTX 16-series has no tensor
+cores, so autocast pays casting overhead without the matmul speedup an RTX card
+would give it. This is consistent with the June half_precision_test result
+(17.81 s -> 13.74 s, only 1.3x).
+
+Live generation therefore needs either a much faster model/GPU, or a precomputed
+segment library selected at runtime. Re-measure on any new machine with
+benchmarks/latency_probe.py before assuming the streaming path is viable.
 
 Set mock=True to run the whole pipeline with procedurally synthesized pads and no
 GPU, model download, or audiocraft install. Use it to debug the control loop.

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-14T16:07:23.444233",
+  "timestamp": "2026-08-14T17:04:41.280585",
   "platform": "Windows 10 / Python 3.10.11",
   "analysis": [
     {
@@ -7,9 +7,9 @@
       "window_seconds": 5.0,
       "hop_seconds": 2.0,
       "smoother_tau_s": 4.0,
-      "dsp_median_ms": 1.2899499852210283,
-      "dsp_p95_ms": 2.046630042605102,
-      "dsp_headroom_x": 1550.4477095344957,
+      "dsp_median_ms": 3.6058002151548862,
+      "dsp_p95_ms": 6.327974866144358,
+      "dsp_headroom_x": 554.661900455317,
       "window_centroid_delay_s": 2.5,
       "hop_quantization_s": 1.0,
       "smoother_group_delay_s": 4.0,
@@ -21,9 +21,9 @@
       "window_seconds": 4.0,
       "hop_seconds": 1.0,
       "smoother_tau_s": 3.0,
-      "dsp_median_ms": 1.358449924737215,
-      "dsp_p95_ms": 2.4290348635986443,
-      "dsp_headroom_x": 736.1331336474877,
+      "dsp_median_ms": 3.0141500756144524,
+      "dsp_p95_ms": 4.937669774517416,
+      "dsp_headroom_x": 331.7684836234122,
       "window_centroid_delay_s": 2.0,
       "hop_quantization_s": 0.5,
       "smoother_group_delay_s": 3.0,
@@ -31,7 +31,44 @@
       "label": "new (4 s window, 1 s hop, tau=3 s)"
     }
   ],
-  "musicgen": null,
+  "musicgen": [
+    {
+      "precision": "fp32",
+      "duration_s": 4.0,
+      "median_generation_s": 25.07793700695038,
+      "p95_generation_s": 27.672693026065826,
+      "realtime_factor": 6.269484251737595,
+      "faster_than_realtime": false,
+      "device": "cuda"
+    },
+    {
+      "precision": "fp32",
+      "duration_s": 8.0,
+      "median_generation_s": 42.00176787376404,
+      "p95_generation_s": 46.58562295436859,
+      "realtime_factor": 5.250220984220505,
+      "faster_than_realtime": false,
+      "device": "cuda"
+    },
+    {
+      "precision": "fp16",
+      "duration_s": 4.0,
+      "median_generation_s": 18.025773644447327,
+      "p95_generation_s": 18.379322373867033,
+      "realtime_factor": 4.506443411111832,
+      "faster_than_realtime": false,
+      "device": "cuda"
+    },
+    {
+      "precision": "fp16",
+      "duration_s": 8.0,
+      "median_generation_s": 47.948028564453125,
+      "p95_generation_s": 53.12152352333069,
+      "realtime_factor": 5.993503570556641,
+      "faster_than_realtime": false,
+      "device": "cuda"
+    }
+  ],
   "audio_commitment_s": 8.0,
   "end_to_end_worst_case_s": 13.5
 }
