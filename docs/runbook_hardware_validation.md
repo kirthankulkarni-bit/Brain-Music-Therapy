@@ -93,35 +93,27 @@ you are recording real brain activity and not amplifier noise: occipital and fro
 alpha rises sharply when the eyes close, typically by 1.5–3×. If you cannot
 reproduce this, nothing built on top of it means anything.
 
-Run a session with mock audio and a long intervention window:
-
 ```bash
-python src/live_music.py --participant ALPHATEST --mock-audio --baseline-seconds 120 --duration 6
+python scripts/alpha_test.py
 ```
 
-During the **intervention** phase, alternate on a timer, saying nothing and moving
-as little as possible:
+The script runs the block sequence itself — 6 blocks of 60 s, alternating — so every
+window is labelled with the condition it belongs to and you get a statistic instead
+of an impression. **Cues are audible**, because you cannot read a terminal with your
+eyes closed:
 
-| minutes | condition |
-|---|---|
-| 0–1 | eyes open, relaxed |
-| 1–2 | eyes closed |
-| 2–3 | eyes open |
-| 3–4 | eyes closed |
-| 4–5 | eyes open |
-| 5–6 | eyes closed |
+- **low tone** → close your eyes
+- **high tone** → open your eyes
 
-Watch the dashboard live: `z` should drop visibly during eyes-closed blocks, because
-closing your eyes raises alpha, which lowers log(beta/alpha).
+Sit still, jaw relaxed, breathe normally. Windows that straddle a transition are
+discarded automatically, as is the first 3 s after each cue.
 
-Then:
+**Expect:** ratio ≥ 1.5×, p < 0.01, and a clean square wave in the saved figure.
+The script prints PASS, WEAK, or FAIL and exits non-zero on failure.
 
-```bash
-python src/analyze_session.py
-```
-
-**Expect:** a clearly visible square-wave pattern in the z trace with roughly 1-minute
-periodicity. Alpha power should be markedly higher in the closed blocks.
+Typical frontal values are in the 1.5–3× range. Occipital alpha is much stronger,
+but the Muse has no occipital electrodes, so do not expect the 5–10× ratios quoted
+in textbooks that use Oz.
 
 **If there is no visible difference:** the most likely causes, in order — contact
 degraded during the run (rerun step 2), the frontal sensors are picking up mostly
@@ -129,8 +121,9 @@ muscle rather than cortex, or you were not relaxed enough for alpha to appear. S
 people show weak frontal alpha; if so, note it, because it affects whether
 beta/alpha is the right index for you.
 
-**JOURNAL:** the z traces for both conditions and the alpha ratio between them.
-This is a figure in your paper — it is your evidence that the sensing path works.
+**JOURNAL:** the ratio, Cohen's d, p-value, and the saved `alpha_validation.png`.
+This is a figure in your paper — it is your evidence that the sensing path measures
+cortex rather than noise.
 
 ---
 
