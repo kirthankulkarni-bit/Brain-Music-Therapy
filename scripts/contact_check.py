@@ -63,6 +63,15 @@ FLATLINE_SD_UV = 0.1
 SATURATION_FRACTION = 0.01
 SATURATION_LEVEL_UV = 500.0
 
+# The Muse 2's 12-bit ADC maps to +/-1000 uV (0.48828125 uV per bit), so a raw
+# peak-to-peak of 2000 uV is exactly full scale. A channel pinned there is not
+# drifting, it is RAILING: the amplifier input is floating because the electrode
+# is not making skin contact. Worth distinguishing from ordinary saturation,
+# because the fix is different and because a value landing on exactly 2000.0 is
+# otherwise a confusing thing to read.
+ADC_FULL_SCALE_P2P_UV = 2000.0
+RAILING_FRACTION_OF_FULL_SCALE = 0.98
+
 CRITICAL_CHANNELS = ("AF7", "AF8")
 
 
@@ -102,6 +111,10 @@ def assess(
     """
     raw = np.asarray(signal, dtype=np.float64)
     drift = float(np.ptp(raw - raw.mean()))
+
+    if drift >= ADC_FULL_SCALE_P2P_UV * RAILING_FRACTION_OF_FULL_SCALE:
+        return ChannelQuality(name, float("nan"), float("nan"), 1.0, "RAILING",
+                              "electrode floating, amplifier at full scale", drift)
 
     try:
         filtered = extractor.filter_signal(raw)
@@ -261,8 +274,31 @@ def main() -> int:
         tag = " (drives the arousal index)" if q.name in CRITICAL_CHANNELS else ""
         print(f"  {q.name:<5} {q.verdict:<5} {q.reason}{tag}")
 
+    railing = [q for q in latest if q.verdict == "RAILING"]
+    if len(railing) >= 3:
+        print("\n  ALL CHANNELS RAILING - THIS IS ALMOST CERTAINLY THE REFERENCE ELECTRODE.")
+        print()
+        print("  Every EEG channel on the Muse is measured against a single reference:")
+        print("  the flat pad in the CENTRE of your forehead, between the eyebrows. If")
+        print("  that one floats, all four channels rail together, which is what you are")
+        print("  seeing. Individual bad electrodes fail one at a time instead.")
+        print()
+        print("  In order of how often each fixes it:")
+        print("    1. Wipe your forehead with a damp cloth. Skin oil is the single")
+        print("       biggest source of contact impedance, and it builds up over a day.")
+        print("    2. Slide the headband DOWN so the centre pad presses firmly just")
+        print("       above the eyebrows. Loose is worse than slightly too tight.")
+        print("    3. Dampen the centre pad and the two frontal sensors with water.")
+        print("    4. Push any hair out from under the sensors, including fine hairs.")
+        print("    5. Wait 60 s after adjusting before rerunning - the electrodes need")
+        print("       to settle and the amplifier to come off the rail.")
+        print("    6. Check the battery. A nearly flat Muse behaves erratically.")
+        print()
+        print("  If all four still rail with the headset firmly on a clean forehead,")
+        print("  suspect the hardware rather than the fit.")
+
     drifts = [q.drift_uv for q in latest if np.isfinite(q.drift_uv)]
-    if drifts and np.median(drifts) > 800.0:
+    if not railing and drifts and np.median(drifts) > 800.0:
         print(f"\n  Note: raw drift is high (median {np.median(drifts):.0f} uV). That is normal for")
         print("  the first 30-60 s after putting the headset on, while the electrodes")
         print("  polarize and settle. It does not affect the verdicts above, which are")
