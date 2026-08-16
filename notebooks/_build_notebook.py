@@ -68,8 +68,12 @@ print(f"Torch      : {torch.__version__}")
     md("""
 ## 2. Clone and install
 
-Installing `audiocraft` may prompt a runtime restart. If it does, restart and
-rerun from this cell - the clone is idempotent.
+`audiocraft` pins older numpy and torch versions than Colab ships, so pip swaps
+them underneath a kernel that has already imported the originals. **A runtime
+restart is normally required**, and until you do it `import audiocraft` fails in
+ways that are not always obvious.
+
+Run this cell, then follow whatever the next cell tells you.
 """),
     code("""
 import os
@@ -78,6 +82,29 @@ if not os.path.isdir("Brain-Music-Therapy"):
     !git clone -q https://github.com/kirthankulkarni-bit/Brain-Music-Therapy.git
 
 %pip install -q audiocraft
+"""),
+
+    md("""
+## 2b. Verify audiocraft actually imports
+
+Do not skip this. Without it, the probe runs, silently records no GPU results, and
+the failure only surfaces later as a confusing empty table.
+"""),
+    code("""
+try:
+    import audiocraft
+    from audiocraft.models import MusicGen
+    print(f"audiocraft {audiocraft.__version__} imports cleanly - continue to cell 3.")
+except Exception as exc:
+    print(f"IMPORT FAILED: {type(exc).__name__}: {exc}")
+    print()
+    print("=" * 68)
+    print("  RESTART THE RUNTIME, THEN RUN AGAIN FROM CELL 2.")
+    print("  Runtime > Restart session, then Runtime > Run all.")
+    print()
+    print("  This is expected once: pip changed numpy/torch under a kernel that")
+    print("  had already imported them. It should import cleanly after a restart.")
+    print("=" * 68)
 """),
 
     md("""
@@ -113,9 +140,15 @@ print(f"{hw['gpu_name']}  |  capability {hw['compute_capability']}"
 print(f"end-to-end worst case: {results['end_to_end_worst_case_s']:.1f} s")
 print()
 
-pd.DataFrame(results["musicgen"])[
-    ["precision", "duration_s", "median_generation_s", "realtime_factor", "faster_than_realtime"]
-]
+if not results.get("musicgen"):
+    print("NO GPU RESULTS in this run.")
+    print(f"reason: {results.get('musicgen_error', 'unknown')}")
+    print()
+    print("Go back to cell 2b. Almost always audiocraft needs a runtime restart.")
+else:
+    display(pd.DataFrame(results["musicgen"])[
+        ["precision", "duration_s", "median_generation_s", "realtime_factor", "faster_than_realtime"]
+    ])
 """),
 
     md("""
@@ -125,6 +158,9 @@ The single number this notebook exists to produce. On the GTX 1650 Ti the speedu
 was about 1.0x or worse; a tensor-core GPU should be clearly above 1.0x.
 """),
     code("""
+if not results.get("musicgen"):
+    raise SystemExit("No GPU results - fix cell 2b first.")
+
 rows = {(r["precision"], r["duration_s"]): r["median_generation_s"] for r in results["musicgen"]}
 durations = sorted({d for _, d in rows})
 

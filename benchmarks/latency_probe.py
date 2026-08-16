@@ -272,12 +272,14 @@ def main() -> int:
     print("C. GENERATION AND PLAYBACK COMMITMENT")
     print("=" * 74)
 
+    musicgen_failed = False
     if args.skip_musicgen:
         print("  (skipped: --skip-musicgen)")
         results["musicgen"] = None
     else:
         try:
             results["musicgen"] = bench_musicgen(args.durations, args.trials, args.model)
+            musicgen_failed = False
             print(f"\n  {'precision':>9} | {'duration':>8} | {'median':>8} | {'p95':>7} | {'RT factor':>9} | faster than RT")
             print("  " + "-" * 68)
             for row in results["musicgen"]:
@@ -286,9 +288,20 @@ def main() -> int:
                     f"{row['p95_generation_s']:>6.2f}s | {row['realtime_factor']:>8.2f}x | "
                     f"{'YES' if row['faster_than_realtime'] else 'NO'}"
                 )
-        except ImportError as exc:
-            print(f"  audiocraft/torch not importable ({exc}); rerun with --skip-musicgen or fix the install")
+        except Exception as exc:  # noqa: BLE001
+            # Deliberately broad. A version-mismatched audiocraft raises far more
+            # than ImportError - AttributeError and RuntimeError are both common
+            # when numpy or torch was swapped underneath it. Catching only
+            # ImportError meant the probe wrote "musicgen": null and exited 0,
+            # so downstream code got an empty table with no idea why.
+            musicgen_failed = True
             results["musicgen"] = None
+            results["musicgen_error"] = f"{type(exc).__name__}: {exc}"
+            print()
+            print("  !! MUSICGEN BENCHMARK FAILED - section C has no data")
+            print(f"  !! {type(exc).__name__}: {exc}")
+            print("  !! On Colab this is almost always audiocraft needing a runtime")
+            print("  !! restart after install. Restart the session and run again.")
 
     cfg = MusicConfig()
     commitment = cfg.segment_seconds * cfg.queue_depth
@@ -307,7 +320,10 @@ def main() -> int:
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump(results, fh, indent=2)
     print(f"\nWrote {args.out}")
-    return 0
+
+    # Exit non-zero when the GPU benchmark was requested but produced nothing, so
+    # the failure is visible to a caller instead of only in the scrollback.
+    return 3 if musicgen_failed else 0
 
 
 if __name__ == "__main__":
