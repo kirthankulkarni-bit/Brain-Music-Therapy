@@ -13,13 +13,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "latency_probe_colab.ipynb")
 
 
+def _lines(text):
+    """Split into ipynb `source` form: every line keeps its trailing newline except
+    the last. Jupyter concatenates the array elements verbatim, so stripping the
+    newlines collapses the whole cell onto one line - which is a syntax error for
+    code and a wall of run-together prose for markdown."""
+    return text.splitlines(keepends=True)
+
+
 def md(text):
-    return {"cell_type": "markdown", "metadata": {}, "source": text.strip().split("\n")}
+    return {"cell_type": "markdown", "metadata": {}, "source": _lines(text.strip())}
 
 
 def code(src):
     return {"cell_type": "code", "metadata": {}, "execution_count": None,
-            "outputs": [], "source": src.strip("\n").split("\n")}
+            "outputs": [], "source": _lines(src.strip("\n"))}
 
 
 CELLS = [
@@ -162,11 +170,18 @@ def stub_magics(line):
 
 
 def main():
-    for cell in CELLS:
-        source = "\n".join(cell["source"])
+    for i, cell in enumerate(CELLS):
+        source = "".join(cell["source"])  # exactly how Jupyter reassembles it
         source.encode("ascii")  # fail loudly rather than shipping mojibake
+
+        # Every line but the last must carry its newline, or the cell collapses.
+        for line in cell["source"][:-1]:
+            assert line.endswith("\n"), f"cell {i}: source line missing trailing newline"
+        assert "\n" in source or len(cell["source"]) == 1, f"cell {i}: collapsed to one line"
+
         if cell["cell_type"] == "code":
-            compile("\n".join(stub_magics(l) for l in cell["source"]), "<cell>", "exec")
+            compile("".join(stub_magics(l) for l in source.splitlines(keepends=True)),
+                    "<cell>", "exec")
 
     with open(OUT, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(NOTEBOOK, fh, indent=1)
