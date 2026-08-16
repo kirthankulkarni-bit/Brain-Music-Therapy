@@ -155,6 +155,29 @@ class FeatureExtractor:
 
     # ---------------------------------------------------------------- public
 
+    def filter_signal(self, x: np.ndarray) -> np.ndarray:
+        """
+        Linear-detrend, band-pass, and notch a single channel. Raises ValueError if
+        the segment is too short for filtfilt.
+
+        THIS IS THE ONLY PLACE FILTERING IS DEFINED. Any code that judges signal
+        amplitude must call this first, because raw Muse EEG carries large slow
+        drift - electrode polarization and post-donning settling - that dwarfs the
+        neural signal. Mean subtraction does not remove drift; the 1 Hz high-pass
+        does. Amplitude thresholds applied to unfiltered data are therefore
+        measuring drift, not signal quality, and will condemn perfectly usable
+        channels.
+
+        scripts/contact_check.py calls this so its verdicts match what the pipeline
+        actually accepts. Those two disagreeing is a bug, not a conservative margin.
+        """
+        signal = detrend(np.asarray(x, dtype=np.float64), type="linear")
+        signal = sosfiltfilt(self._sos, signal)
+        if self._notch is not None:
+            b, a = self._notch
+            signal = filtfilt(b, a, signal)
+        return signal
+
     def extract(self, window: np.ndarray, timestamp: float = 0.0) -> BandFeatures:
         """
         window: array shaped (n_channels, n_samples) in microvolts, channel order
@@ -181,12 +204,8 @@ class FeatureExtractor:
         if float(np.std(raw_frontal)) < self.cfg.reject_flatline_uv:
             return BandFeatures(timestamp, False, "flatline (electrode not contacting)")
 
-        signal = detrend(raw_frontal, type="linear")
         try:
-            signal = sosfiltfilt(self._sos, signal)
-            if self._notch is not None:
-                b, a = self._notch
-                signal = filtfilt(b, a, signal)
+            signal = self.filter_signal(raw_frontal)
         except ValueError as exc:
             return BandFeatures(timestamp, False, f"filter failed: {exc}")
 

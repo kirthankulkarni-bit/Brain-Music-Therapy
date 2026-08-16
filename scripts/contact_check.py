@@ -50,7 +50,7 @@ from scipy.signal import welch
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 
-from eeg_features import MUSE_CHANNELS  # noqa: E402
+from eeg_features import MUSE_CHANNELS, FeatureConfig, FeatureExtractor  # noqa: E402
 from stream_utils import get_inlet  # noqa: E402
 
 # Thresholds. The frontal pair carries the arousal index, so AF7/AF8 are the two
@@ -74,28 +74,54 @@ class ChannelQuality:
     saturated_fraction: float
     verdict: str
     reason: str
+    drift_uv: float = float("nan")
 
     @property
     def is_usable(self) -> bool:
         return self.verdict in ("GOOD", "FAIR")
 
 
-def assess(signal: np.ndarray, sampling_rate: float, mains: float, name: str) -> ChannelQuality:
-    """Score one channel's most recent window."""
-    signal = np.asarray(signal, dtype=np.float64)
-    signal = signal - signal.mean()
+def assess(
+    signal: np.ndarray,
+    sampling_rate: float,
+    mains: float,
+    name: str,
+    extractor: FeatureExtractor,
+) -> ChannelQuality:
+    """
+    Score one channel's most recent window.
 
-    sd = float(signal.std())
-    rms = float(np.sqrt(np.mean(signal ** 2)))
-    saturated = float(np.mean(np.abs(signal) > SATURATION_LEVEL_UV))
+    Amplitude is judged on the BAND-PASSED signal, via the same filter the pipeline
+    uses (FeatureExtractor.filter_signal). Judging it on raw data measures electrode
+    drift rather than signal quality: unfiltered Muse EEG routinely swings hundreds
+    of microvolts from slow polarization and post-donning settling, none of which
+    survives the 1 Hz high-pass, and none of which the pipeline ever sees.
+
+    Raw drift is still reported, because a large value is a useful signal in its own
+    right - it usually means the headset has not settled yet.
+    """
+    raw = np.asarray(signal, dtype=np.float64)
+    drift = float(np.ptp(raw - raw.mean()))
+
+    try:
+        filtered = extractor.filter_signal(raw)
+    except ValueError as exc:
+        return ChannelQuality(name, float("nan"), float("nan"), float("nan"),
+                              "BAD", f"filter failed: {exc}", drift)
+
+    sd = float(filtered.std())
+    rms = float(np.sqrt(np.mean(filtered ** 2)))
+    saturated = float(np.mean(np.abs(filtered) > SATURATION_LEVEL_UV))
 
     if sd < FLATLINE_SD_UV:
-        return ChannelQuality(name, rms, float("nan"), saturated, "DEAD", "flatline, not contacting skin")
+        return ChannelQuality(name, rms, float("nan"), saturated, "DEAD",
+                              "flatline, not contacting skin", drift)
     if saturated > SATURATION_FRACTION:
-        return ChannelQuality(name, rms, float("nan"), saturated, "BAD", "amplifier saturating")
+        return ChannelQuality(name, rms, float("nan"), saturated, "BAD",
+                              "saturating even after filtering", drift)
 
-    nperseg = int(min(signal.size, sampling_rate * 2))
-    freqs, psd = welch(signal, fs=sampling_rate, nperseg=nperseg, detrend="constant")
+    nperseg = int(min(filtered.size, sampling_rate * 2))
+    freqs, psd = welch(filtered, fs=sampling_rate, nperseg=nperseg, detrend="constant")
 
     band = (freqs >= 1.0) & (freqs <= min(80.0, sampling_rate / 2 * 0.95))
     line = (freqs >= mains - 2.0) & (freqs <= mains + 2.0)
@@ -104,14 +130,14 @@ def assess(signal: np.ndarray, sampling_rate: float, mains: float, name: str) ->
     line_ratio = line_power / total if total > 0 else float("nan")
 
     if rms < RMS_MIN_UV:
-        return ChannelQuality(name, rms, line_ratio, saturated, "BAD", "amplitude too low, reseat sensor")
+        return ChannelQuality(name, rms, line_ratio, saturated, "BAD", "amplitude too low, reseat sensor", drift)
     if rms > RMS_MAX_UV:
-        return ChannelQuality(name, rms, line_ratio, saturated, "BAD", "amplitude too high, motion or loose")
+        return ChannelQuality(name, rms, line_ratio, saturated, "BAD", "amplitude too high, motion or loose", drift)
     if line_ratio > LINE_RATIO_FAIR:
-        return ChannelQuality(name, rms, line_ratio, saturated, "BAD", "heavy mains pickup, poor contact")
+        return ChannelQuality(name, rms, line_ratio, saturated, "BAD", "heavy mains pickup, poor contact", drift)
     if line_ratio > LINE_RATIO_GOOD:
-        return ChannelQuality(name, rms, line_ratio, saturated, "FAIR", "some mains pickup, usable")
-    return ChannelQuality(name, rms, line_ratio, saturated, "GOOD", "clean")
+        return ChannelQuality(name, rms, line_ratio, saturated, "FAIR", "some mains pickup, usable", drift)
+    return ChannelQuality(name, rms, line_ratio, saturated, "GOOD", "clean", drift)
 
 
 class DemoInlet:
@@ -161,6 +187,18 @@ def main() -> int:
             print("\nNo stream. Start BlueMuse, connect the headset, hit 'Start Streaming'.")
             return 1
 
+    # Deliberately NOT the pipeline's filter settings. Contact quality is measured
+    # from mains pickup, so the mains frequency must survive: no notch, and a pass
+    # band wide enough to include it. The pipeline's 1-45 Hz band-pass plus 60 Hz
+    # notch would remove exactly the signal being measured.
+    #
+    # The 1 Hz high-pass is the part that matters and is shared: it strips the slow
+    # electrode drift that would otherwise be mistaken for amplifier saturation.
+    contact_band = (1.0, min(80.0, sampling_rate / 2 * 0.9))
+    extractor = FeatureExtractor(FeatureConfig(sampling_rate=sampling_rate,
+                                               window_seconds=args.window,
+                                               bandpass=contact_band,
+                                               notch_hz=None))
     n_window = int(sampling_rate * args.window)
     buffers: List[List[float]] = [[] for _ in MUSE_CHANNELS]
 
@@ -190,7 +228,7 @@ def main() -> int:
             last_report = time.time()
 
             latest = [
-                assess(np.asarray(buffers[i]), sampling_rate, args.mains, name)
+                assess(np.asarray(buffers[i]), sampling_rate, args.mains, name, extractor)
                 for i, name in enumerate(MUSE_CHANNELS)
             ]
 
@@ -202,7 +240,8 @@ def main() -> int:
                 marker = "*" if q.name in CRITICAL_CHANNELS else " "
                 line = f"{q.line_ratio:.3f}" if np.isfinite(q.line_ratio) else "  -  "
                 print(f"    {marker} {q.name:<5} rms {q.rms_uv:6.1f} uV   "
-                      f"{args.mains:.0f}Hz ratio {line}   {q.verdict:<4} {q.reason}")
+                      f"{args.mains:.0f}Hz ratio {line}   drift {q.drift_uv:7.0f} uV   "
+                      f"{q.verdict:<4} {q.reason}")
             print()
 
     except KeyboardInterrupt:
@@ -221,6 +260,14 @@ def main() -> int:
     for q in latest:
         tag = " (drives the arousal index)" if q.name in CRITICAL_CHANNELS else ""
         print(f"  {q.name:<5} {q.verdict:<5} {q.reason}{tag}")
+
+    drifts = [q.drift_uv for q in latest if np.isfinite(q.drift_uv)]
+    if drifts and np.median(drifts) > 800.0:
+        print(f"\n  Note: raw drift is high (median {np.median(drifts):.0f} uV). That is normal for")
+        print("  the first 30-60 s after putting the headset on, while the electrodes")
+        print("  polarize and settle. It does not affect the verdicts above, which are")
+        print("  computed after filtering, but if contact is borderline, wait a minute")
+        print("  and rerun.")
 
     print()
     if bad_critical:
