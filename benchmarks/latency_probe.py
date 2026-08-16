@@ -46,6 +46,48 @@ from eeg_features import FeatureConfig, FeatureExtractor, ExponentialSmoother, l
 from music_engine import MusicConfig  # noqa: E402
 
 
+# GPUs that report compute capability 7.5 but have NO tensor cores. Nvidia stripped
+# the tensor and RT cores out of the GTX 16-series (TU116/TU117) while keeping the
+# same capability number as the RTX 20-series, so capability alone cannot be used to
+# predict whether fp16 autocast will help. This is exactly why fp16 gave no speedup
+# on the 1650 Ti and is expected to on a T4.
+_NO_TENSOR_CORE_PATTERNS = ("GTX 16", "GTX 10", "GTX 9", "MX", "GT 1")
+
+
+def hardware_fingerprint() -> dict:
+    """Identify the machine precisely enough to compare runs across hardware."""
+    info = {
+        "platform": f"{platform.system()} {platform.release()}",
+        "python": platform.python_version(),
+        "cpu": platform.processor() or "unknown",
+        "device": "cpu",
+    }
+    try:
+        import torch
+    except ImportError:
+        return info
+
+    info["torch"] = torch.__version__
+    if not torch.cuda.is_available():
+        return info
+
+    props = torch.cuda.get_device_properties(0)
+    name = torch.cuda.get_device_name(0)
+    capability = torch.cuda.get_device_capability(0)
+    has_tensor_cores = capability[0] >= 7 and not any(p in name for p in _NO_TENSOR_CORE_PATTERNS)
+
+    info.update({
+        "device": "cuda",
+        "gpu_name": name,
+        "gpu_vram_gb": round(props.total_memory / 1e9, 1),
+        "compute_capability": f"{capability[0]}.{capability[1]}",
+        "multiprocessors": props.multi_processor_count,
+        "has_tensor_cores": has_tensor_cores,
+        "cuda": torch.version.cuda,
+    })
+    return info
+
+
 def synth_eeg(sampling_rate: float, seconds: float, n_channels: int = 4, seed: int = 0) -> np.ndarray:
     """Pink-ish noise with an alpha bump and a mains line, so the DSP does real work."""
     rng = np.random.default_rng(seed)
@@ -151,13 +193,29 @@ def main() -> int:
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--model", default="facebook/musicgen-small")
     parser.add_argument("--skip-musicgen", action="store_true")
+    parser.add_argument("--label", default=None,
+                        help="short name for this machine, e.g. nitro5-1650ti or colab-t4")
     parser.add_argument("--out", default="benchmarks/latency_results.json")
     args = parser.parse_args()
 
+    hardware = hardware_fingerprint()
     results: dict = {
         "timestamp": datetime.now().isoformat(),
-        "platform": f"{platform.system()} {platform.release()} / Python {platform.python_version()}",
+        "label": args.label or hardware.get("gpu_name", hardware["platform"]),
+        "hardware": hardware,
     }
+
+    print("=" * 74)
+    print("HARDWARE")
+    print("=" * 74)
+    for key, value in hardware.items():
+        print(f"  {key:<22}: {value}")
+    if hardware.get("device") == "cuda" and not hardware.get("has_tensor_cores", True):
+        print()
+        print(f"  NOTE: this GPU reports compute capability "
+              f"{hardware.get('compute_capability')} but has no tensor cores,")
+        print("  so fp16 autocast pays casting overhead without the matmul speedup.")
+    print()
 
     print("=" * 74)
     print("A + B. ANALYSIS PATH")
