@@ -1,0 +1,92 @@
+{
+  "schema_version": 2,
+  "session_id": "20260816_150557",
+  "participant_id": "BASELINE2",
+  "condition": "adaptive",
+  "started_utc": "2026-08-16T19:06:02.805187+00:00",
+  "n_channels": 4,
+  "raw_dtype": "float32",
+  "raw_layout": "[lsl_timestamp, ch0..chN]",
+  "sampling_rate": 256.0,
+  "sampling_rate_source": "lsl_nominal_srate",
+  "feature_config": {
+    "sampling_rate": 256.0,
+    "window_seconds": 4.0,
+    "hop_seconds": 1.0,
+    "channels": [
+      "TP9",
+      "AF7",
+      "AF8",
+      "TP10"
+    ],
+    "frontal_channels": [
+      "TP9",
+      "TP10"
+    ],
+    "bandpass": [
+      1.0,
+      45.0
+    ],
+    "notch_hz": 60.0,
+    "notch_q": 30.0,
+    "filter_order": 4,
+    "bands": {
+      "delta": [
+        1.0,
+        4.0
+      ],
+      "theta": [
+        4.0,
+        8.0
+      ],
+      "alpha": [
+        8.0,
+        13.0
+      ],
+      "beta": [
+        13.0,
+        30.0
+      ],
+      "gamma": [
+        30.0,
+        45.0
+      ]
+    },
+    "reject_peak_to_peak_uv": 350.0,
+    "reject_flatline_uv": 0.1,
+    "reject_max_abs_uv": 500.0,
+    "window_samples": 1024,
+    "hop_samples": 256
+  },
+  "music_config": {
+    "segment_seconds": 8.0,
+    "continuation_seconds": 2.0,
+    "crossfade_seconds": 0.05,
+    "queue_depth": 1,
+    "model_name": "facebook/musicgen-small",
+    "use_fp16": true,
+    "top_k": 250,
+    "cfg_coef": 3.0,
+    "output_gain": 0.8,
+    "mock": true,
+    "mock_sample_rate": 32000,
+    "mock_generation_seconds": 1.0,
+    "envelope_rate_hz": 20.0
+  },
+  "smoother_tau_s": 3.0,
+  "target_z": -1.0,
+  "baseline_seconds": 120.0,
+  "intervention_seconds": 30.0,
+  "latency_budget": {
+    "window_centroid_delay_s": 2.0,
+    "hop_quantization_s": 0.5,
+    "smoother_group_delay_s": 3.0,
+    "total_analysis_latency_s": 5.5
+  },
+  "yoked_from": null,
+  "code_version": "v2-sample-rate-corrected",
+  "index_channels": [
+    "TP9",
+    "TP10"
+  ]
+}
