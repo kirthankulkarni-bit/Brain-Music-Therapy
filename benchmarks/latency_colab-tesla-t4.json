@@ -1,0 +1,92 @@
+{
+  "timestamp": "2026-08-16T22:01:05.794796",
+  "label": "colab-tesla-t4",
+  "backend": "transformers",
+  "hardware": {
+    "platform": "Linux 6.6.122+",
+    "python": "3.12.13",
+    "cpu": "x86_64",
+    "device": "cuda",
+    "torch": "2.11.0+cu128",
+    "gpu_name": "Tesla T4",
+    "gpu_vram_gb": 15.6,
+    "compute_capability": "7.5",
+    "multiprocessors": 40,
+    "has_tensor_cores": true,
+    "cuda": "12.8"
+  },
+  "analysis": [
+    {
+      "sampling_rate": 256.0,
+      "window_seconds": 5.0,
+      "hop_seconds": 2.0,
+      "smoother_tau_s": 4.0,
+      "dsp_median_ms": 7.651721499996711,
+      "dsp_p95_ms": 14.2351417000782,
+      "dsp_headroom_x": 261.3790896598706,
+      "window_centroid_delay_s": 2.5,
+      "hop_quantization_s": 1.0,
+      "smoother_group_delay_s": 4.0,
+      "total_analysis_latency_s": 7.5,
+      "label": "old (5 s window, 2 s hop, 5-tap boxcar)"
+    },
+    {
+      "sampling_rate": 256.0,
+      "window_seconds": 4.0,
+      "hop_seconds": 1.0,
+      "smoother_tau_s": 3.0,
+      "dsp_median_ms": 5.490415500162271,
+      "dsp_p95_ms": 14.344232000030383,
+      "dsp_headroom_x": 182.13557789395804,
+      "window_centroid_delay_s": 2.0,
+      "hop_quantization_s": 0.5,
+      "smoother_group_delay_s": 3.0,
+      "total_analysis_latency_s": 5.5,
+      "label": "new (4 s window, 1 s hop, tau=3 s)"
+    }
+  ],
+  "musicgen": [
+    {
+      "precision": "fp32",
+      "duration_s": 4.0,
+      "median_generation_s": 4.541114330291748,
+      "p95_generation_s": 4.968250107765198,
+      "realtime_factor": 1.135278582572937,
+      "faster_than_realtime": false,
+      "device": "cuda",
+      "backend": "transformers"
+    },
+    {
+      "precision": "fp32",
+      "duration_s": 8.0,
+      "median_generation_s": 9.784080266952515,
+      "p95_generation_s": 10.188688707351684,
+      "realtime_factor": 1.2230100333690643,
+      "faster_than_realtime": false,
+      "device": "cuda",
+      "backend": "transformers"
+    },
+    {
+      "precision": "fp16",
+      "duration_s": 4.0,
+      "median_generation_s": 6.079150438308716,
+      "p95_generation_s": 6.164215731620788,
+      "realtime_factor": 1.519787609577179,
+      "faster_than_realtime": false,
+      "device": "cuda",
+      "backend": "transformers"
+    },
+    {
+      "precision": "fp16",
+      "duration_s": 8.0,
+      "median_generation_s": 12.257662773132324,
+      "p95_generation_s": 12.414305496215821,
+      "realtime_factor": 1.5322078466415405,
+      "faster_than_realtime": false,
+      "device": "cuda",
+      "backend": "transformers"
+    }
+  ],
+  "audio_commitment_s": 8.0,
+  "end_to_end_worst_case_s": 13.5
+}
