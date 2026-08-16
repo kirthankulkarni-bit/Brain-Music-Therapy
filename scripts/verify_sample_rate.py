@@ -113,6 +113,28 @@ def main() -> int:
 
     print("\n" + "-" * 68)
     verified = empirical_rate
+
+    # A plausible EEG stream is at least ~100 Hz. Anything far below that is almost
+    # certainly a different Muse stream: accelerometer and gyroscope run at 52 Hz,
+    # PPG at 64 Hz. Fail loudly rather than printing a "verified" rate that is real
+    # but belongs to the wrong sensor.
+    if verified < 100.0:
+        print(f"  WRONG STREAM. Measured {verified:.2f} Hz, which is far too low for EEG.")
+        print()
+        print("  The Muse 2 publishes several LSL streams at once:")
+        print("    EEG            256 Hz, 4-5 channels   <- the one you want")
+        print("    PPG             64 Hz, 3 channels")
+        print("    Accelerometer   52 Hz, 3 channels")
+        print("    Gyroscope       52 Hz, 3 channels")
+        print()
+        print("  Your measured rate matches one of the motion/PPG streams, not EEG.")
+        print("  See exactly what is on the network with:")
+        print("      python src/stream_utils.py")
+        print()
+        print("  Then confirm EEG streaming is enabled in BlueMuse and restart the stream.")
+        print("=" * 68)
+        return 2
+
     print(f"  VERIFIED RATE: {verified:.2f} Hz")
     if best and best[1] < 2.0:
         print(f"  Mains check independently supports {best[0]:.0f} Hz.")
