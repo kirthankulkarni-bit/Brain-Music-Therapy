@@ -356,8 +356,11 @@ def main() -> int:
             print()
             print("  !! MUSICGEN BENCHMARK FAILED - section C has no data")
             print(f"  !! {type(exc).__name__}: {exc}")
-            print("  !! On Colab this is almost always audiocraft needing a runtime")
-            print("  !! restart after install. Restart the session and run again.")
+            print("  !! Common causes:")
+            print("  !!   OSError / cannot load model  -> interrupted weights download.")
+            print("  !!     Delete the model from ~/.cache/huggingface/hub and rerun.")
+            print("  !!   ImportError on audiocraft    -> it does not build on Python 3.12.")
+            print("  !!     Use --backend transformers instead.")
 
     cfg = MusicConfig()
     commitment = cfg.segment_seconds * cfg.queue_depth

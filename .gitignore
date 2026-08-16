@@ -7,5 +7,5 @@ mne_data/
 s01.dat
 
 # Session output: keep the event logs and metrics (small, and they are the data),
-# ignore the raw recordings (large binaries, ~4 MB per minute at 256 Hz x 4 ch).
+# ignore the raw recordings (binary, ~18 MB per hour at 256 Hz x 4 ch + timestamp).
 sessions/*/raw_eeg.f32
