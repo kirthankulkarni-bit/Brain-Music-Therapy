@@ -167,6 +167,9 @@ def main() -> int:
                         help="discard this long after each transition")
     parser.add_argument("--channels", default="AF7,AF8",
                         help="electrode pair to measure alpha from, e.g. TP9,TP10")
+    parser.add_argument("--reject-p2p", type=float, default=350.0,
+                                  help="artifact rejection threshold, uV peak-to-peak per window. "
+                                  "Derived from measured blink amplitudes; see FeatureConfig.")
     parser.add_argument("--window", type=float, default=4.0)
     parser.add_argument("--hop", type=float, default=1.0)
     parser.add_argument("--demo", action="store_true")
@@ -185,7 +188,8 @@ def main() -> int:
 
     pair = tuple(c.strip().upper() for c in args.channels.split(","))
     cfg = FeatureConfig(sampling_rate=sampling_rate, window_seconds=args.window,
-                        hop_seconds=args.hop, frontal_channels=pair)
+                        hop_seconds=args.hop, frontal_channels=pair,
+                        reject_peak_to_peak_uv=args.reject_p2p)
     print(f"Measuring alpha from: {'+'.join(pair)}")
     extractor = FeatureExtractor(cfg)
     buffers = [collections.deque(maxlen=cfg.window_samples) for _ in range(len(cfg.channels))]

@@ -139,6 +139,7 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
         window_seconds=args.window,
         hop_seconds=args.hop,
         frontal_channels=pair,
+        reject_peak_to_peak_uv=args.reject_p2p,
     )
     extractor = FeatureExtractor(cfg)
     smoother = ExponentialSmoother(hop_seconds=cfg.hop_seconds, tau_seconds=args.tau)
@@ -462,6 +463,9 @@ def parse_args():
                    help="electrode pair the arousal index is computed from, e.g. TP9,TP10. "
                         "Frontal (AF7,AF8) is the default and the pre-registered choice; "
                         "temporal (TP9,TP10) is the fallback when frontal contact will not hold.")
+    p.add_argument("--reject-p2p", type=float, default=350.0,
+                             help="artifact rejection threshold, uV peak-to-peak per window. "
+                             "Derived from measured blink amplitudes; see FeatureConfig.")
     p.add_argument("--window", type=float, default=4.0, help="analysis window, seconds")
     p.add_argument("--hop", type=float, default=1.0, help="hop between windows, seconds")
     p.add_argument("--tau", type=float, default=3.0, help="smoother time constant, seconds")

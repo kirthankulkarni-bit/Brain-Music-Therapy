@@ -75,8 +75,26 @@ class FeatureConfig:
     )
 
     # Artifact thresholds, applied to the band-passed signal in microvolts.
-    # Muse dry electrodes: blinks and jaw clenches routinely exceed 150 uV p2p.
-    reject_peak_to_peak_uv: float = 150.0
+    #
+    # 350 uV is derived from measurement, not chosen. From the 2026-08-16 alpha
+    # validation on TP9+TP10 (315 windows, 6 minutes), window peak-to-peak was:
+    #
+    #                  50%     95%     99%     max
+    #   eyes closed     94     163     199     201     <- clean signal ceiling
+    #   eyes open      158     325     947     961     <- long tail is blinks
+    #
+    # Normal variation tops out around 325 and real blinks start above 900, so 350
+    # sits in the gap. It keeps 96% of eyes-open windows and 100% of eyes-closed.
+    #
+    # The previous 150 uV was a guess, and it discarded 54% of eyes-open windows
+    # against 10% of eyes-closed - a differential rejection that inflated the
+    # measured alpha ratio from ~1.9x to 2.49x. See scripts/alpha_sensitivity.py.
+    #
+    # This value is MONTAGE-SPECIFIC (temporal sites run quieter than frontal) and
+    # PARTICIPANT-SPECIFIC. It must be fixed before pre-registration rather than
+    # tuned per session, otherwise the effect size is being chosen after seeing the
+    # data.
+    reject_peak_to_peak_uv: float = 350.0
     reject_flatline_uv: float = 0.1
     reject_max_abs_uv: float = 500.0
 
