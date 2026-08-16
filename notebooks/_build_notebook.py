@@ -83,8 +83,15 @@ this run against the laptop, rerun the laptop with `--backend transformers` too.
     code("""
 import os
 
-if not os.path.isdir("Brain-Music-Therapy"):
+# Sync rather than clone-if-missing. Colab keeps the working directory across
+# re-runs, so a clone guarded by isdir() silently pins you to whatever commit you
+# first fetched - and then new flags look like crashes and old results look fresh.
+if os.path.isdir("Brain-Music-Therapy"):
+    !cd Brain-Music-Therapy && git fetch -q origin && git reset -q --hard origin/main
+else:
     !git clone -q https://github.com/kirthankulkarni-bit/Brain-Music-Therapy.git
+
+!cd Brain-Music-Therapy && git log -1 --format="repo now at %h  %s"
 
 %pip install -q --upgrade transformers
 """),
@@ -123,15 +130,25 @@ Section C is the GPU-dependent part and is the reason for this notebook.
 T4 is tighter than a thermally throttled laptop is itself a result.
 """),
     code("""
+import os
 import re
 
 import torch
 
 label = "colab-" + re.sub(r"[^a-z0-9]+", "-", torch.cuda.get_device_name(0).lower()).strip("-")
 out = f"benchmarks/latency_{label}.json"
+path = f"Brain-Music-Therapy/{out}"
 print(f"label: {label}")
 
+# Delete any previous result first. Otherwise a probe that fails leaves the old
+# file in place and the cells below report stale numbers as if they were new.
+if os.path.exists(path):
+    os.remove(path)
+
 !cd Brain-Music-Therapy && python benchmarks/latency_probe.py --backend transformers --label "$label" --durations 4 8 --trials 3 --out "$out"
+
+if not os.path.exists(path):
+    raise RuntimeError("The probe wrote no output. Read the error above this line.")
 """),
 
     md("## 4. Results"),
@@ -140,8 +157,14 @@ import json
 
 import pandas as pd
 
-results = json.load(open(f"Brain-Music-Therapy/{out}"))
+results = json.load(open(path))
 hw = results["hardware"]
+
+if results.get("backend") != "transformers":
+    raise RuntimeError(
+        f"Result says backend={results.get('backend')!r}, expected 'transformers'. "
+        "The clone is stale - rerun cell 2."
+    )
 
 print(f"{hw['gpu_name']}  |  capability {hw['compute_capability']}"
       f"  |  tensor cores: {hw['has_tensor_cores']}")
@@ -190,7 +213,7 @@ whichever files are present.
     code("""
 from google.colab import files
 
-files.download(f"Brain-Music-Therapy/{out}")
+files.download(path)
 """),
 ]
 
