@@ -327,7 +327,7 @@ def main() -> int:
         print("  USABLE, BUT NOT CLEAN. The session will run; expect a higher artifact")
         print("  rejection rate. Worth two more minutes of adjustment first.")
         return 0
-    print("  GOOD TO GO. Both frontal electrodes are clean.")
+    print(f"  GOOD TO GO. Both {'+'.join(critical)} electrodes are clean.")
     print("  Next: python src/live_music.py --participant <ID> --duration 10")
     return 0
 
