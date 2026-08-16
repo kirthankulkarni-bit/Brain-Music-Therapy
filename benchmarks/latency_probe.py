@@ -144,36 +144,91 @@ def bench_analysis(sampling_rate: float, window_s: float, hop_s: float, tau_s: f
     }
 
 
-def bench_musicgen(durations: list[float], trials: int, model_name: str) -> list[dict]:
-    import torch
+PROMPT = "calm ambient piano with soft strings, gentle and spacious, no drums, 60 bpm"
+
+# MusicGen's audio tokenizer runs at 50 Hz, so N seconds of audio is N * 50 tokens.
+# The transformers backend needs this explicitly; audiocraft takes seconds directly.
+MUSICGEN_TOKENS_PER_SECOND = 50
+
+
+def _load_audiocraft(model_name: str, device: str):
+    """Reference backend. Matches the local development environment exactly."""
     from audiocraft.models import MusicGen
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"\nLoading {model_name} on {device}...")
-    t0 = time.time()
     model = MusicGen.get_pretrained(model_name, device=device)
+
+    def generate(duration: float, use_fp16: bool, torch_mod):
+        model.set_generation_params(duration=duration, top_k=250, cfg_coef=3.0)
+        ctx = (torch_mod.amp.autocast(device_type=device, dtype=torch_mod.float16)
+               if use_fp16 else _null_ctx())
+        with torch_mod.inference_mode(), ctx:
+            model.generate([PROMPT], progress=False)
+
+    return generate
+
+
+def _load_transformers(model_name: str, device: str):
+    """
+    Fallback backend, same facebook/musicgen-small weights via transformers.
+
+    Exists because audiocraft does not install on Python 3.12 - its build fails at
+    "Getting requirements to build wheel" - and Colab now ships 3.12. transformers
+    is preinstalled there and carries the same model.
+
+    The two backends are NOT interchangeable for absolute numbers: the sampling
+    loops and defaults differ. Compare transformers to transformers across machines,
+    never transformers on one to audiocraft on another.
+    """
+    from transformers import AutoProcessor, MusicgenForConditionalGeneration
+
+    processor = AutoProcessor.from_pretrained(model_name)
+    model = MusicgenForConditionalGeneration.from_pretrained(model_name).to(device)
+    model.eval()
+
+    def generate(duration: float, use_fp16: bool, torch_mod):
+        inputs = processor(text=[PROMPT], padding=True, return_tensors="pt").to(device)
+        ctx = (torch_mod.amp.autocast(device_type=device, dtype=torch_mod.float16)
+               if use_fp16 else _null_ctx())
+        with torch_mod.inference_mode(), ctx:
+            model.generate(
+                **inputs,
+                do_sample=True,
+                guidance_scale=3.0,
+                max_new_tokens=int(duration * MUSICGEN_TOKENS_PER_SECOND),
+            )
+
+    return generate
+
+
+class _null_ctx:
+    def __enter__(self):
+        return None
+
+    def __exit__(self, *args):
+        return False
+
+
+def bench_musicgen(durations: list[float], trials: int, model_name: str,
+                   backend: str = "audiocraft") -> list[dict]:
+    import torch
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"\nLoading {model_name} on {device} via {backend}...")
+    t0 = time.time()
+    loader = _load_audiocraft if backend == "audiocraft" else _load_transformers
+    generate = loader(model_name, device)
     print(f"  loaded in {time.time() - t0:.1f} s")
 
-    prompt = ["calm ambient piano with soft strings, gentle and spacious, no drums, 60 bpm"]
     rows = []
 
     for use_fp16 in (False, True):
         if use_fp16 and device != "cuda":
             continue
         for duration in durations:
-            model.set_generation_params(duration=duration)
-
-            # Untimed warm-up. The first generation after a config change pays for
-            # CUDA kernel autotuning and allocator growth, and with a small trial
-            # count that one slow run dominates the median: a trials=2 run measured
-            # 5-6x realtime where trials=3 with warm-up measures ~3.2x on the same
-            # hardware. Discard it explicitly rather than hoping the median absorbs it.
-            with torch.inference_mode():
-                if use_fp16:
-                    with torch.amp.autocast(device_type=device, dtype=torch.float16):
-                        model.generate(prompt, progress=False)
-                else:
-                    model.generate(prompt, progress=False)
+            # Untimed warm-up, to absorb CUDA kernel autotuning and allocator growth.
+            # Note this does NOT remove between-run variance on a thermally limited
+            # laptop GPU - see the module docstring. Run the probe several times.
+            generate(duration, use_fp16, torch)
             if device == "cuda":
                 torch.cuda.synchronize()
 
@@ -181,12 +236,7 @@ def bench_musicgen(durations: list[float], trials: int, model_name: str) -> list
             for trial in range(trials):
                 torch.cuda.synchronize() if device == "cuda" else None
                 t0 = time.time()
-                with torch.inference_mode():
-                    if use_fp16:
-                        with torch.amp.autocast(device_type=device, dtype=torch.float16):
-                            model.generate(prompt, progress=False)
-                    else:
-                        model.generate(prompt, progress=False)
+                generate(duration, use_fp16, torch)
                 torch.cuda.synchronize() if device == "cuda" else None
                 elapsed = time.time() - t0
                 times.append(elapsed)
@@ -204,6 +254,7 @@ def bench_musicgen(durations: list[float], trials: int, model_name: str) -> list
                     "realtime_factor": float(np.median(arr) / duration),
                     "faster_than_realtime": bool(np.median(arr) < duration),
                     "device": device,
+                    "backend": backend,
                 }
             )
     return rows
@@ -218,6 +269,10 @@ def main() -> int:
     parser.add_argument("--durations", type=float, nargs="+", default=[4.0, 8.0, 12.0])
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--model", default="facebook/musicgen-small")
+    parser.add_argument("--backend", default="audiocraft", choices=["audiocraft", "transformers"],
+                        help="audiocraft matches the local dev environment; transformers is the "
+                             "fallback for Python 3.12 / Colab where audiocraft will not build. "
+                             "Only compare like backend to like backend.")
     parser.add_argument("--skip-musicgen", action="store_true")
     parser.add_argument("--label", default=None,
                         help="short name for this machine, e.g. nitro5-1650ti or colab-t4")
@@ -228,6 +283,7 @@ def main() -> int:
     results: dict = {
         "timestamp": datetime.now().isoformat(),
         "label": args.label or hardware.get("gpu_name", hardware["platform"]),
+        "backend": args.backend,
         "hardware": hardware,
     }
 
@@ -278,7 +334,7 @@ def main() -> int:
         results["musicgen"] = None
     else:
         try:
-            results["musicgen"] = bench_musicgen(args.durations, args.trials, args.model)
+            results["musicgen"] = bench_musicgen(args.durations, args.trials, args.model, args.backend)
             musicgen_failed = False
             print(f"\n  {'precision':>9} | {'duration':>8} | {'median':>8} | {'p95':>7} | {'RT factor':>9} | faster than RT")
             print("  " + "-" * 68)

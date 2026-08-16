@@ -42,11 +42,11 @@ reimplemented here - this notebook only clones, installs, runs, and exports.
 
 Why a T4 specifically: it has tensor cores, and the development machine
 (GTX 1650 Ti) does not, even though both report CUDA compute capability 7.5 -
-Nvidia removed the tensor cores from the GTX 16-series. Locally, fp16 gave no
-speedup and was sometimes slower. If fp16 helps on a T4, that isolates the cause
-instead of leaving it an unexplained curiosity.
+Nvidia removed the tensor cores from the GTX 16-series. Locally fp16 gave no
+reliable speedup. If fp16 helps on a T4, that isolates the cause instead of
+leaving it an unexplained curiosity.
 
-Runtime: roughly 10 minutes, most of it installing audiocraft.
+Runtime: roughly 5 minutes, most of it downloading model weights.
 """),
 
     md("## 1. Confirm the GPU"),
@@ -68,12 +68,17 @@ print(f"Torch      : {torch.__version__}")
     md("""
 ## 2. Clone and install
 
-`audiocraft` pins older numpy and torch versions than Colab ships, so pip swaps
-them underneath a kernel that has already imported the originals. **A runtime
-restart is normally required**, and until you do it `import audiocraft` fails in
-ways that are not always obvious.
+**We do not install audiocraft here.** It targets Python 3.9, Colab now ships 3.12,
+and its build fails at "Getting requirements to build wheel" - one of its pinned
+dependencies has no wheel for 3.12 and cannot compile.
 
-Run this cell, then follow whatever the next cell tells you.
+The probe therefore has a second backend: `transformers`, which serves the same
+`facebook/musicgen-small` weights and is preinstalled on Colab. Nothing needs
+building, and no runtime restart is required.
+
+The catch: the two backends are **not** comparable in absolute terms - their
+sampling loops and defaults differ. Compare transformers to transformers. To place
+this run against the laptop, rerun the laptop with `--backend transformers` too.
 """),
     code("""
 import os
@@ -81,29 +86,27 @@ import os
 if not os.path.isdir("Brain-Music-Therapy"):
     !git clone -q https://github.com/kirthankulkarni-bit/Brain-Music-Therapy.git
 
-%pip install -q audiocraft
+%pip install -q --upgrade transformers
 """),
 
     md("""
-## 2b. Verify audiocraft actually imports
+## 2b. Verify the backend imports
 
-Do not skip this. Without it, the probe runs, silently records no GPU results, and
-the failure only surfaces later as a confusing empty table.
+Do not skip this. Without it the probe runs, records no GPU results, and the
+failure only surfaces later as a confusing empty table.
 """),
     code("""
 try:
-    import audiocraft
-    from audiocraft.models import MusicGen
-    print(f"audiocraft {audiocraft.__version__} imports cleanly - continue to cell 3.")
+    import transformers
+    from transformers import AutoProcessor, MusicgenForConditionalGeneration
+    print(f"transformers {transformers.__version__} with MusicGen - ready for cell 3.")
 except Exception as exc:
     print(f"IMPORT FAILED: {type(exc).__name__}: {exc}")
     print()
     print("=" * 68)
-    print("  RESTART THE RUNTIME, THEN RUN AGAIN FROM CELL 2.")
-    print("  Runtime > Restart session, then Runtime > Run all.")
-    print()
-    print("  This is expected once: pip changed numpy/torch under a kernel that")
-    print("  had already imported them. It should import cleanly after a restart.")
+    print("  Try Runtime > Restart session, then Run all again.")
+    print("  If it still fails, transformers is too old for MusicGen support:")
+    print("      %pip install -q --upgrade 'transformers>=4.31'")
     print("=" * 68)
 """),
 
@@ -113,6 +116,11 @@ except Exception as exc:
 Sections A and B measure the analysis path and DSP compute. No GPU is involved in
 those, so they should roughly match the local run - they are included as a control.
 Section C is the GPU-dependent part and is the reason for this notebook.
+
+**Run this cell more than once.** Between-run variance on the laptop GPU reached
+1.96x for the same configuration, so a single run is not a measurement. Change
+`label` each time, e.g. append `-run2`, and keep every JSON. Whether a datacenter
+T4 is tighter than a thermally throttled laptop is itself a result.
 """),
     code("""
 import re
@@ -123,7 +131,7 @@ label = "colab-" + re.sub(r"[^a-z0-9]+", "-", torch.cuda.get_device_name(0).lowe
 out = f"benchmarks/latency_{label}.json"
 print(f"label: {label}")
 
-!cd Brain-Music-Therapy && python benchmarks/latency_probe.py --label "$label" --durations 4 8 --trials 3 --out "$out"
+!cd Brain-Music-Therapy && python benchmarks/latency_probe.py --backend transformers --label "$label" --durations 4 8 --trials 3 --out "$out"
 """),
 
     md("## 4. Results"),
@@ -144,7 +152,7 @@ if not results.get("musicgen"):
     print("NO GPU RESULTS in this run.")
     print(f"reason: {results.get('musicgen_error', 'unknown')}")
     print()
-    print("Go back to cell 2b. Almost always audiocraft needs a runtime restart.")
+    print("Check cell 2b and the output of cell 3 for the underlying error.")
 else:
     display(pd.DataFrame(results["musicgen"])[
         ["precision", "duration_s", "median_generation_s", "realtime_factor", "faster_than_realtime"]
