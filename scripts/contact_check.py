@@ -271,8 +271,8 @@ def main() -> int:
     print("=" * 66)
     print("VERDICT")
     print("=" * 66)
-    critical = [q for q in latest if q.name in critical]
-    bad_critical = [q for q in critical if not q.is_usable]
+    critical_quality = [q for q in latest if q.name in critical]
+    bad_critical = [q for q in critical_quality if not q.is_usable]
 
     for q in latest:
         tag = " (drives the arousal index)" if q.name in critical else ""
@@ -323,7 +323,7 @@ def main() -> int:
             print("  legitimate fallback - rerun with --critical TP9,TP10 and pass")
             print("  --channels TP9,TP10 to alpha_test.py and live_music.py.")
         return 2
-    if any(q.verdict == "FAIR" for q in critical):
+    if any(q.verdict == "FAIR" for q in critical_quality):
         print("  USABLE, BUT NOT CLEAN. The session will run; expect a higher artifact")
         print("  rejection rate. Worth two more minutes of adjustment first.")
         return 0
