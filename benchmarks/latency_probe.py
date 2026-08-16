@@ -151,6 +151,21 @@ def bench_musicgen(durations: list[float], trials: int, model_name: str) -> list
             continue
         for duration in durations:
             model.set_generation_params(duration=duration)
+
+            # Untimed warm-up. The first generation after a config change pays for
+            # CUDA kernel autotuning and allocator growth, and with a small trial
+            # count that one slow run dominates the median: a trials=2 run measured
+            # 5-6x realtime where trials=3 with warm-up measures ~3.2x on the same
+            # hardware. Discard it explicitly rather than hoping the median absorbs it.
+            with torch.inference_mode():
+                if use_fp16:
+                    with torch.amp.autocast(device_type=device, dtype=torch.float16):
+                        model.generate(prompt, progress=False)
+                else:
+                    model.generate(prompt, progress=False)
+            if device == "cuda":
+                torch.cuda.synchronize()
+
             times = []
             for trial in range(trials):
                 torch.cuda.synchronize() if device == "cuda" else None

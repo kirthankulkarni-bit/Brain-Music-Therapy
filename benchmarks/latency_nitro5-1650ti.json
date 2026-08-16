@@ -1,0 +1,87 @@
+{
+  "timestamp": "2026-08-16T15:25:33.885789",
+  "label": "nitro5-1650ti",
+  "hardware": {
+    "platform": "Windows 10",
+    "python": "3.10.11",
+    "cpu": "Intel64 Family 6 Model 165 Stepping 2, GenuineIntel",
+    "device": "cuda",
+    "torch": "2.4.1+cu121",
+    "gpu_name": "NVIDIA GeForce GTX 1650 Ti",
+    "gpu_vram_gb": 4.3,
+    "compute_capability": "7.5",
+    "multiprocessors": 16,
+    "has_tensor_cores": false,
+    "cuda": "12.1"
+  },
+  "analysis": [
+    {
+      "sampling_rate": 256.0,
+      "window_seconds": 5.0,
+      "hop_seconds": 2.0,
+      "smoother_tau_s": 4.0,
+      "dsp_median_ms": 1.2960000894963741,
+      "dsp_p95_ms": 1.9304453395307062,
+      "dsp_headroom_x": 1543.2097699755564,
+      "window_centroid_delay_s": 2.5,
+      "hop_quantization_s": 1.0,
+      "smoother_group_delay_s": 4.0,
+      "total_analysis_latency_s": 7.5,
+      "label": "old (5 s window, 2 s hop, 5-tap boxcar)"
+    },
+    {
+      "sampling_rate": 256.0,
+      "window_seconds": 4.0,
+      "hop_seconds": 1.0,
+      "smoother_tau_s": 3.0,
+      "dsp_median_ms": 1.2833504006266594,
+      "dsp_p95_ms": 1.6545401886105533,
+      "dsp_headroom_x": 779.2104163537101,
+      "window_centroid_delay_s": 2.0,
+      "hop_quantization_s": 0.5,
+      "smoother_group_delay_s": 3.0,
+      "total_analysis_latency_s": 5.5,
+      "label": "new (4 s window, 1 s hop, tau=3 s)"
+    }
+  ],
+  "musicgen": [
+    {
+      "precision": "fp32",
+      "duration_s": 4.0,
+      "median_generation_s": 12.79969048500061,
+      "p95_generation_s": 14.559354996681213,
+      "realtime_factor": 3.1999226212501526,
+      "faster_than_realtime": false,
+      "device": "cuda"
+    },
+    {
+      "precision": "fp32",
+      "duration_s": 8.0,
+      "median_generation_s": 25.316835403442383,
+      "p95_generation_s": 29.36527028083801,
+      "realtime_factor": 3.164604425430298,
+      "faster_than_realtime": false,
+      "device": "cuda"
+    },
+    {
+      "precision": "fp16",
+      "duration_s": 4.0,
+      "median_generation_s": 12.081534624099731,
+      "p95_generation_s": 12.867283034324647,
+      "realtime_factor": 3.020383656024933,
+      "faster_than_realtime": false,
+      "device": "cuda"
+    },
+    {
+      "precision": "fp16",
+      "duration_s": 8.0,
+      "median_generation_s": 26.740955352783203,
+      "p95_generation_s": 28.09734179973602,
+      "realtime_factor": 3.3426194190979004,
+      "faster_than_realtime": false,
+      "device": "cuda"
+    }
+  ],
+  "audio_commitment_s": 8.0,
+  "end_to_end_worst_case_s": 13.5
+}

@@ -33,22 +33,28 @@ Two design decisions carry the closed-loop latency argument:
    worst-case (1 x segment) of commitment; depth 2 gives (2 x segment). Raise it
    only if you measure underruns. `worst_case_audio_latency_s` reports the number.
 
-MEASURED CONSTRAINT, 2026-08-14, GTX 1650 Ti (4 GB, no tensor cores):
+MEASURED CONSTRAINT, GTX 1650 Ti (4 GB, no tensor cores), 3 trials after warm-up:
 
-    fp32  4 s segment -> 25.1 s median   (6.3x realtime)
-    fp32  8 s segment -> 42.0 s median   (5.2x realtime)
-    fp16  4 s segment -> 18.0 s median   (4.5x realtime)
-    fp16  8 s segment -> 48.0 s median   (6.0x realtime)
+    fp32  4 s segment -> 12.8 s median   (3.2x realtime)
+    fp32  8 s segment -> 25.3 s median   (3.2x realtime)
+    fp16  4 s segment -> 12.1 s median   (3.0x realtime)
+    fp16  8 s segment -> 26.7 s median   (3.3x realtime)
 
-Generation is roughly 5x SLOWER than realtime on this hardware, not faster. The
+Generation is roughly 3x SLOWER than realtime on this hardware, not faster. The
 architecture below assumes generation hides behind playback; on this GPU it does
-not, and the queue starves permanently - about 8 s of audio per 48 s of wall time,
-a 17% duty cycle with silence in between.
+not, and the queue starves permanently - about 8 s of audio per 25 s of wall time,
+a 32% duty cycle with silence in between.
 
-Note also that fp16 is not reliably faster here. The GTX 16-series has no tensor
-cores, so autocast pays casting overhead without the matmul speedup an RTX card
-would give it. This is consistent with the June half_precision_test result
-(17.81 s -> 13.74 s, only 1.3x).
+fp16 buys essentially nothing here: 1.06x at 4 s and 0.95x at 8 s, both within noise
+of no change. The GTX 16-series has no tensor cores despite reporting compute
+capability 7.5, so autocast pays casting overhead without the matmul speedup an RTX
+or T4 card would provide. notebooks/latency_probe_colab.ipynb tests that directly.
+
+An earlier measurement of this same hardware reported 5-6x realtime. That run used
+trials=2, where the median is simply the mean of the two trials, so the un-warmed
+first generation dominated it. The probe now runs an untimed warm-up per
+configuration. The architectural conclusion is unchanged - 3x slower than realtime
+is still far too slow to stream - but these are the numbers to cite.
 
 Live generation therefore needs either a much faster model/GPU, or a precomputed
 segment library selected at runtime. Re-measure on any new machine with
