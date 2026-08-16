@@ -72,7 +72,7 @@ SATURATION_LEVEL_UV = 500.0
 ADC_FULL_SCALE_P2P_UV = 2000.0
 RAILING_FRACTION_OF_FULL_SCALE = 0.98
 
-CRITICAL_CHANNELS = ("AF7", "AF8")
+CRITICAL_CHANNELS_DEFAULT = ("AF7", "AF8")
 
 
 @dataclass
@@ -188,8 +188,12 @@ def main() -> int:
     parser.add_argument("--seconds", type=float, default=None, help="run for N seconds then stop")
     parser.add_argument("--mains", type=float, default=60.0, help="power line frequency")
     parser.add_argument("--window", type=float, default=4.0, help="assessment window, seconds")
+    parser.add_argument("--critical", default="AF7,AF8",
+                        help="the pair that must be good, matching --channels elsewhere")
     parser.add_argument("--demo", action="store_true", help="synthetic stream, no headset")
     args = parser.parse_args()
+
+    critical = tuple(c.strip().upper() for c in args.critical.split(","))
 
     if args.demo:
         inlet, sampling_rate = DemoInlet(), 256.0
@@ -250,7 +254,7 @@ def main() -> int:
                 f"{q.name}:{q.verdict:<4}" for q in latest
             ))
             for q in latest:
-                marker = "*" if q.name in CRITICAL_CHANNELS else " "
+                marker = "*" if q.name in critical else " "
                 line = f"{q.line_ratio:.3f}" if np.isfinite(q.line_ratio) else "  -  "
                 print(f"    {marker} {q.name:<5} rms {q.rms_uv:6.1f} uV   "
                       f"{args.mains:.0f}Hz ratio {line}   drift {q.drift_uv:7.0f} uV   "
@@ -267,11 +271,11 @@ def main() -> int:
     print("=" * 66)
     print("VERDICT")
     print("=" * 66)
-    critical = [q for q in latest if q.name in CRITICAL_CHANNELS]
+    critical = [q for q in latest if q.name in critical]
     bad_critical = [q for q in critical if not q.is_usable]
 
     for q in latest:
-        tag = " (drives the arousal index)" if q.name in CRITICAL_CHANNELS else ""
+        tag = " (drives the arousal index)" if q.name in critical else ""
         print(f"  {q.name:<5} {q.verdict:<5} {q.reason}{tag}")
 
     railing = [q for q in latest if q.verdict == "RAILING"]
@@ -308,10 +312,16 @@ def main() -> int:
     print()
     if bad_critical:
         print("  DO NOT START A SESSION.")
-        print(f"  Unusable: {', '.join(q.name for q in bad_critical)}. The frontal pair is averaged")
+        print(f"  Unusable: {', '.join(q.name for q in bad_critical)}. "
+              f"The {'+'.join(critical)} pair is averaged")
         print("  to produce the arousal index, so a bad channel there corrupts every")
         print("  downstream number. Reseat the headband, push hair aside, and dampen the")
         print("  sensors slightly with water. Then rerun this check.")
+        if set(critical) == {"AF7", "AF8"}:
+            print()
+            print("  If the frontal pair will not hold contact, the temporal pair is a")
+            print("  legitimate fallback - rerun with --critical TP9,TP10 and pass")
+            print("  --channels TP9,TP10 to alpha_test.py and live_music.py.")
         return 2
     if any(q.verdict == "FAIR" for q in critical):
         print("  USABLE, BUT NOT CLEAN. The session will run; expect a higher artifact")

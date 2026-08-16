@@ -165,6 +165,8 @@ def main() -> int:
     parser.add_argument("--block-seconds", type=float, default=60.0)
     parser.add_argument("--settle-seconds", type=float, default=3.0,
                         help="discard this long after each transition")
+    parser.add_argument("--channels", default="AF7,AF8",
+                        help="electrode pair to measure alpha from, e.g. TP9,TP10")
     parser.add_argument("--window", type=float, default=4.0)
     parser.add_argument("--hop", type=float, default=1.0)
     parser.add_argument("--demo", action="store_true")
@@ -181,7 +183,10 @@ def main() -> int:
             print("\nNo stream. Start BlueMuse, connect the headset, hit 'Start Streaming'.")
             return 1
 
-    cfg = FeatureConfig(sampling_rate=sampling_rate, window_seconds=args.window, hop_seconds=args.hop)
+    pair = tuple(c.strip().upper() for c in args.channels.split(","))
+    cfg = FeatureConfig(sampling_rate=sampling_rate, window_seconds=args.window,
+                        hop_seconds=args.hop, frontal_channels=pair)
+    print(f"Measuring alpha from: {'+'.join(pair)}")
     extractor = FeatureExtractor(cfg)
     buffers = [collections.deque(maxlen=cfg.window_samples) for _ in range(len(cfg.channels))]
 
@@ -191,6 +196,7 @@ def main() -> int:
         sampling_rate_source="demo" if args.demo else "lsl_nominal_srate",
         feature_config=cfg.to_dict(),
         protocol="alternating eyes-open / eyes-closed blocks",
+        index_channels=list(pair),
         blocks=args.blocks,
         block_seconds=args.block_seconds,
         settle_seconds=args.settle_seconds,

@@ -133,10 +133,12 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
             logger.note("no LSL stream found", level="error")
             return
 
+    pair = tuple(c.strip().upper() for c in args.channels.split(","))
     cfg = FeatureConfig(
         sampling_rate=sampling_rate,
         window_seconds=args.window,
         hop_seconds=args.hop,
+        frontal_channels=pair,
     )
     extractor = FeatureExtractor(cfg)
     smoother = ExponentialSmoother(hop_seconds=cfg.hop_seconds, tau_seconds=args.tau)
@@ -156,6 +158,7 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
         latency_budget=budget,
         yoked_from=args.yoke_from,
         code_version="v2-sample-rate-corrected",
+        index_channels=list(pair),
     )
 
     print(f"\n[eeg] {sampling_rate:g} Hz, {cfg.window_seconds:g} s window, {cfg.hop_seconds:g} s hop")
@@ -455,6 +458,10 @@ def parse_args():
                    help="target z of log(beta/alpha); -1.0 = one SD below own baseline (relaxation)")
     p.add_argument("--baseline-seconds", type=float, default=120.0)
     p.add_argument("--duration", type=float, default=10.0, help="intervention length, minutes")
+    p.add_argument("--channels", default="AF7,AF8",
+                   help="electrode pair the arousal index is computed from, e.g. TP9,TP10. "
+                        "Frontal (AF7,AF8) is the default and the pre-registered choice; "
+                        "temporal (TP9,TP10) is the fallback when frontal contact will not hold.")
     p.add_argument("--window", type=float, default=4.0, help="analysis window, seconds")
     p.add_argument("--hop", type=float, default=1.0, help="hop between windows, seconds")
     p.add_argument("--tau", type=float, default=3.0, help="smoother time constant, seconds")
