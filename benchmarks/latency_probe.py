@@ -22,10 +22,21 @@ Three components are measured separately:
      commitment term (queue_depth x segment_seconds), which is the real audio-side
      bottleneck once generation runs faster than realtime.
 
+RUN THIS MORE THAN ONCE. On a thermally limited laptop GPU, between-run variance
+dominates within-run variance by roughly an order of magnitude. Measured on a
+GTX 1650 Ti: within a single run p95/median is 1.01-1.11, but the same
+configuration across three separate runs varied by up to 1.96x. A single run is
+not a reproducible measurement, and `--trials` does not fix it because all trials
+in a run share the same thermal state.
+
+Use --label to give each run a distinct output file, run several, and report the
+range. Conclusions that survive the full spread are the ones worth publishing.
+
 Usage:
     python benchmarks/latency_probe.py --skip-musicgen     # A and B, seconds
     python benchmarks/latency_probe.py                     # everything
     python benchmarks/latency_probe.py --durations 4 8 12 --trials 3
+    python benchmarks/latency_probe.py --label run1 --out benchmarks/run1.json
 """
 
 from __future__ import annotations

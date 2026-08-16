@@ -33,28 +33,41 @@ Two design decisions carry the closed-loop latency argument:
    worst-case (1 x segment) of commitment; depth 2 gives (2 x segment). Raise it
    only if you measure underruns. `worst_case_audio_latency_s` reports the number.
 
-MEASURED CONSTRAINT, GTX 1650 Ti (4 GB, no tensor cores), 3 trials after warm-up:
+MEASURED CONSTRAINT, GTX 1650 Ti (4 GB, no tensor cores).
 
-    fp32  4 s segment -> 12.8 s median   (3.2x realtime)
-    fp32  8 s segment -> 25.3 s median   (3.2x realtime)
-    fp16  4 s segment -> 12.1 s median   (3.0x realtime)
-    fp16  8 s segment -> 26.7 s median   (3.3x realtime)
+Realtime factor across THREE independent runs of the same configuration on the same
+machine (benchmarks/latency_nitro5-1650ti_run*.json):
 
-Generation is roughly 3x SLOWER than realtime on this hardware, not faster. The
-architecture below assumes generation hides behind playback; on this GPU it does
-not, and the queue starves permanently - about 8 s of audio per 25 s of wall time,
-a 32% duty cycle with silence in between.
+                   min   median   max    max/min
+    fp32  4 s     3.20    4.51   6.27     1.96x
+    fp32  8 s     3.16    3.46   5.25     1.66x
+    fp16  4 s     3.02    3.14   4.51     1.49x
+    fp16  8 s     3.28    3.34   5.99     1.82x
 
-fp16 buys essentially nothing here: 1.06x at 4 s and 0.95x at 8 s, both within noise
-of no change. The GTX 16-series has no tensor cores despite reporting compute
+Report the RANGE, not a point estimate. Within any single run the spread is tight
+(p95/median 1.01-1.11), but between runs the same configuration varies by up to
+1.96x. Between-run variance dominates within-run variance by an order of magnitude,
+so a single run of this probe is not a reproducible measurement on this hardware.
+The likely cause is thermal: a laptop GPU that is also driving the display throttles
+under sustained load, and its clocks depend on thermal history rather than on
+anything the benchmark controls.
+
+A consequence worth knowing: adding an untimed warm-up generation made fp32 4 s
+SLOWER (12.8 s -> 18.1 s), because on a thermally limited part the warm-up mostly
+adds heat before the timed trials. Warm-up practice borrowed from server GPU
+benchmarking can be counterproductive here.
+
+What survives all of that: every measurement across every run lands between 3.0x
+and 6.3x realtime, and none is anywhere near 1.0x. Generation is unambiguously
+slower than realtime, the queue starves permanently, and the precomputed library is
+the right design. That conclusion is robust precisely because it does not depend on
+which run you believe.
+
+fp16 shows no reliable benefit - the medians overlap the fp32 range at both
+durations. The GTX 16-series has no tensor cores despite reporting compute
 capability 7.5, so autocast pays casting overhead without the matmul speedup an RTX
-or T4 card would provide. notebooks/latency_probe_colab.ipynb tests that directly.
-
-An earlier measurement of this same hardware reported 5-6x realtime. That run used
-trials=2, where the median is simply the mean of the two trials, so the un-warmed
-first generation dominated it. The probe now runs an untimed warm-up per
-configuration. The architectural conclusion is unchanged - 3x slower than realtime
-is still far too slow to stream - but these are the numbers to cite.
+or T4 would provide. notebooks/latency_probe_colab.ipynb tests that on a T4, where
+the prediction is a clear fp16 win.
 
 Live generation therefore needs either a much faster model/GPU, or a precomputed
 segment library selected at runtime. Re-measure on any new machine with

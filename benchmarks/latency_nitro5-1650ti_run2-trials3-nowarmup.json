@@ -1,0 +1,30 @@
+{
+  "label": "nitro5-1650ti",
+  "note": "trials=3, no warm-up",
+  "musicgen": [
+    {
+      "precision": "fp32",
+      "duration_s": 4.0,
+      "median_generation_s": 12.8,
+      "realtime_factor": 3.2
+    },
+    {
+      "precision": "fp32",
+      "duration_s": 8.0,
+      "median_generation_s": 25.32,
+      "realtime_factor": 3.16
+    },
+    {
+      "precision": "fp16",
+      "duration_s": 4.0,
+      "median_generation_s": 12.08,
+      "realtime_factor": 3.02
+    },
+    {
+      "precision": "fp16",
+      "duration_s": 8.0,
+      "median_generation_s": 26.74,
+      "realtime_factor": 3.34
+    }
+  ]
+}
