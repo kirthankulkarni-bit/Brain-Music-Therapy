@@ -18,12 +18,24 @@ numpy==1.26.4
 scipy==1.15.3
 
 # --- audio output -----------------------------------------------------------
-# sounddevice drives the gapless callback-based OutputStream in music_engine.py.
+# sounddevice drives the gapless callback-based OutputStream in both engines.
+# soundfile reads and writes the precomputed segment library, which is the DEFAULT
+# audio path (library_engine.py, scripts/build_library.py) - without it a fresh
+# install fails on the normal path, not an optional one.
 # pygame is retained only for the legacy scripts under testing/.
 sounddevice==0.4.6
+soundfile==0.13.1
 pygame==2.6.1
 
 # --- generative model -------------------------------------------------------
+# Only needed to BUILD the library; running sessions from an existing library needs
+# neither of these, nor a GPU. That asymmetry is the point of the library.
+#
+# transformers is the default backend for build_library.py and the one the
+# cross-machine benchmarks use, because audiocraft does not build on Python 3.12
+# (its wheel build fails at "Getting requirements to build wheel") and Colab ships
+# 3.12. audiocraft remains the reference backend for the local streaming engine.
+transformers==4.39.3
 audiocraft==1.3.0
 
 # --- dashboard --------------------------------------------------------------
