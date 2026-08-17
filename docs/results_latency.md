@@ -184,9 +184,24 @@ Verified by `scripts/verify_library.py` (14 checks).
 | | streaming | library |
 |---|---|---|
 | time to produce 8 s of audio | 15.5–27.7 s | **2.4 µs** (selection) |
-| worst-case prompt→audible | 8.0 s (queue_depth × segment) | **1.0 s** (one crossfade) |
+| worst-case prompt→audible (design bound) | 8.0 s (queue_depth × segment) | **1.0 s** (one crossfade) |
+| **measured** prompt→audible, median | up to 8.0 s | **11–13 ms** |
+| **measured** prompt→audible, p95 | up to 8.0 s | **967 ms** |
 | underruns | permanent starvation | 0 |
+| clipped samples | n/a | 0 |
 | coverage of controller output | n/a | 20/20 prompts, exact |
+
+Measured through the full closed loop (`live_music.py --engine library`) against
+synthetic EEG, 21 switches over a 36 s intervention.
+
+**The median and the p95 mean different things and both matter.** A prompt change
+normally takes effect on the next audio block — hence 11–13 ms. The 967 ms p95 is a
+change that arrives *while a crossfade is already running* and has to wait for it to
+finish. So 1.0 s is a real bound that is genuinely hit, not a theoretical worst case,
+and lowering `--crossfade` trades transition smoothness against that tail directly.
+
+Streaming has no equivalent distinction: a prompt change there was inaudible for up
+to a full segment with nothing happening in between.
 
 The 8× latency improvement is **not** because generation was slow. It is because
 streaming *committed*: once a segment entered the queue it played to completion, so
