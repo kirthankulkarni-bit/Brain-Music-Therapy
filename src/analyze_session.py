@@ -247,13 +247,32 @@ def _stitch_audio_envelope(session: Dict) -> Tuple[np.ndarray, np.ndarray]:
         rate = seg.get("envelope_rate_hz", 20.0)
         if not env:
             continue
+        step = 1.0 / rate
+
+        if seg.get("envelope_retrospective"):
+            # library_engine: the envelope is audio ALREADY HEARD, drained at the
+            # moment of logging, so it ends at elapsed_s rather than starting there.
+            # Anchoring it forward like a streaming segment would shift the entire
+            # audio timeline later by one segment tenure and bias every lag estimate.
+            start = float(seg["elapsed_s"]) - len(env) * step
+            times.extend(start + i * step for i in range(len(env)))
+            values.extend(float(v) for v in env)
+            cursor = float(seg["elapsed_s"])
+            continue
+
         if cursor is None:
             cursor = float(seg["elapsed_s"])  # first segment plays as soon as it exists
-        step = 1.0 / rate
         times.extend(cursor + i * step for i in range(len(env)))
         values.extend(float(v) for v in env)
         cursor += len(env) * step
-    return np.asarray(times, dtype=float), np.asarray(values, dtype=float)
+
+    # Retrospective drains can overlap slightly if a switch lands mid-bin, and the
+    # interpolation downstream needs a monotonic grid.
+    order = np.argsort(np.asarray(times, dtype=float), kind="stable")
+    t = np.asarray(times, dtype=float)[order]
+    v = np.asarray(values, dtype=float)[order]
+    keep = np.concatenate(([True], np.diff(t) > 0))
+    return t[keep], v[keep]
 
 
 def _prep(v: np.ndarray) -> np.ndarray:

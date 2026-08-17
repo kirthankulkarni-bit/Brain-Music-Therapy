@@ -302,6 +302,15 @@ class LibraryMusicEngine:
                     # corrupt the lagged audio-neural coupling index.
                     "envelope": self._drain_envelope(),
                     "envelope_rate_hz": self.cfg.envelope_rate_hz,
+                    # The two engines log envelopes with OPPOSITE time semantics, and
+                    # nothing downstream could tell them apart without this flag.
+                    # StreamingMusicEngine logs a segment it is about to play, so its
+                    # envelope runs FORWARD from the log timestamp. This one logs audio
+                    # already heard, so its envelope runs BACKWARD from the timestamp.
+                    # Treating them alike shifts the library's audio timeline by a
+                    # whole segment tenure, which lands directly on the lag estimate -
+                    # the one number the coupling analysis exists to produce.
+                    "envelope_retrospective": True,
                 })
             except Exception:  # noqa: BLE001 - logging must never stop the audio
                 pass
