@@ -157,10 +157,17 @@ def _load_audiocraft(model_name: str, device: str):
 
     model = MusicGen.get_pretrained(model_name, device=device)
 
-    def generate(duration: float, use_fp16: bool, torch_mod):
+    def generate(duration: float, precision: str, torch_mod):
+        if precision == "fp16-half":
+            # audiocraft wraps an LM and a separate EnCodec compression model.
+            # Half-converting both is known to produce NaNs in the codec, so the
+            # mode is refused here rather than reported as a bad measurement.
+            raise NotImplementedError(
+                "fp16-half is only implemented for --backend transformers"
+            )
         model.set_generation_params(duration=duration, top_k=250, cfg_coef=3.0)
         ctx = (torch_mod.amp.autocast(device_type=device, dtype=torch_mod.float16)
-               if use_fp16 else _null_ctx())
+               if precision == "fp16" else _null_ctx())
         with torch_mod.inference_mode(), ctx:
             model.generate([PROMPT], progress=False)
 
@@ -178,6 +185,9 @@ def _load_transformers(model_name: str, device: str):
     The two backends are NOT interchangeable for absolute numbers: the sampling
     loops and defaults differ. Compare transformers to transformers across machines,
     never transformers on one to audiocraft on another.
+
+    Supports all three precision modes, including fp16-half, which is why the
+    autocast-vs-half question is answered on this backend rather than audiocraft.
     """
     from transformers import AutoProcessor, MusicgenForConditionalGeneration
 
@@ -185,10 +195,20 @@ def _load_transformers(model_name: str, device: str):
     model = MusicgenForConditionalGeneration.from_pretrained(model_name).to(device)
     model.eval()
 
-    def generate(duration: float, use_fp16: bool, torch_mod):
+    # Weight dtype is a property of the model, not of a single call, so converting
+    # on every trial would time the conversion instead of the generation. Convert
+    # only when the mode actually changes, and do it before the warm-up.
+    state = {"half": False}
+
+    def generate(duration: float, precision: str, torch_mod):
+        want_half = precision == "fp16-half"
+        if want_half != state["half"]:
+            model.half() if want_half else model.float()
+            state["half"] = want_half
+
         inputs = processor(text=[PROMPT], padding=True, return_tensors="pt").to(device)
         ctx = (torch_mod.amp.autocast(device_type=device, dtype=torch_mod.float16)
-               if use_fp16 else _null_ctx())
+               if precision == "fp16" else _null_ctx())
         with torch_mod.inference_mode(), ctx:
             model.generate(
                 **inputs,
@@ -209,7 +229,24 @@ class _null_ctx:
 
 
 def bench_musicgen(durations: list[float], trials: int, model_name: str,
-                   backend: str = "audiocraft") -> list[dict]:
+                   backend: str = "audiocraft",
+                   precisions: tuple[str, ...] = ("fp32", "fp16")) -> list[dict]:
+    """
+    Time generation across precision modes.
+
+    THREE MODES, AND THE DIFFERENCE BETWEEN THE LAST TWO IS THE POINT.
+
+      fp32        weights and math in float32.
+      fp16        float32 weights, torch.amp.autocast wrapping the generate call.
+                  Autocast inserts a cast at every op it covers. It is designed for
+                  TRAINING, where the casts are amortized over large batched matmuls.
+      fp16-half   weights converted once via model.half(), no autocast. This is the
+                  inference-shaped way to use fp16 and pays no per-op cast.
+
+    Measuring only fp32 vs autocast cannot distinguish "fp16 does not help this
+    workload" from "autocast is the wrong tool for inference", because autocast
+    confounds the numeric format with its own overhead. fp16-half separates them.
+    """
     import torch
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -221,14 +258,20 @@ def bench_musicgen(durations: list[float], trials: int, model_name: str,
 
     rows = []
 
-    for use_fp16 in (False, True):
-        if use_fp16 and device != "cuda":
+    for precision in precisions:
+        if precision != "fp32" and device != "cuda":
             continue
         for duration in durations:
             # Untimed warm-up, to absorb CUDA kernel autotuning and allocator growth.
+            # It also absorbs the one-time .half() weight conversion, so fp16-half
+            # trials time generation rather than the dtype change.
             # Note this does NOT remove between-run variance on a thermally limited
             # laptop GPU - see the module docstring. Run the probe several times.
-            generate(duration, use_fp16, torch)
+            try:
+                generate(duration, precision, torch)
+            except NotImplementedError as exc:
+                print(f"  {precision}: skipped - {exc}")
+                break
             if device == "cuda":
                 torch.cuda.synchronize()
 
@@ -236,18 +279,18 @@ def bench_musicgen(durations: list[float], trials: int, model_name: str,
             for trial in range(trials):
                 torch.cuda.synchronize() if device == "cuda" else None
                 t0 = time.time()
-                generate(duration, use_fp16, torch)
+                generate(duration, precision, torch)
                 torch.cuda.synchronize() if device == "cuda" else None
                 elapsed = time.time() - t0
                 times.append(elapsed)
                 print(
-                    f"  {'fp16' if use_fp16 else 'fp32'} {duration:4.0f}s  "
+                    f"  {precision:>9} {duration:4.0f}s  "
                     f"trial {trial + 1}/{trials}: {elapsed:6.2f}s  ({elapsed / duration:.2f}x realtime)"
                 )
             arr = np.asarray(times)
             rows.append(
                 {
-                    "precision": "fp16" if use_fp16 else "fp32",
+                    "precision": precision,
                     "duration_s": duration,
                     "median_generation_s": float(np.median(arr)),
                     "p95_generation_s": float(np.percentile(arr, 95)),
@@ -273,6 +316,11 @@ def main() -> int:
                         help="audiocraft matches the local dev environment; transformers is the "
                              "fallback for Python 3.12 / Colab where audiocraft will not build. "
                              "Only compare like backend to like backend.")
+    parser.add_argument("--precisions", nargs="+", default=["fp32", "fp16"],
+                        choices=["fp32", "fp16", "fp16-half"],
+                        help="fp16 is autocast (per-op casts, built for training); "
+                             "fp16-half converts weights once via .half() and is the "
+                             "inference-shaped comparison. transformers backend only.")
     parser.add_argument("--skip-musicgen", action="store_true")
     parser.add_argument("--label", default=None,
                         help="short name for this machine, e.g. nitro5-1650ti or colab-t4")
@@ -284,6 +332,7 @@ def main() -> int:
         "timestamp": datetime.now().isoformat(),
         "label": args.label or hardware.get("gpu_name", hardware["platform"]),
         "backend": args.backend,
+        "precisions_requested": list(args.precisions),
         "hardware": hardware,
     }
 
@@ -334,7 +383,8 @@ def main() -> int:
         results["musicgen"] = None
     else:
         try:
-            results["musicgen"] = bench_musicgen(args.durations, args.trials, args.model, args.backend)
+            results["musicgen"] = bench_musicgen(args.durations, args.trials, args.model,
+                                                 args.backend, tuple(args.precisions))
             musicgen_failed = False
             print(f"\n  {'precision':>9} | {'duration':>8} | {'median':>8} | {'p95':>7} | {'RT factor':>9} | faster than RT")
             print("  " + "-" * 68)
