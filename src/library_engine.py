@@ -145,7 +145,7 @@ class LibraryMusicEngine:
         self.switch_latencies_s: list[float] = []
         self.missing_prompts: list[str] = []
         self.started_at: Optional[float] = None
-        self._envelope_accum: list[float] = []
+        self._env_raw: list[np.ndarray] = []
 
     # ---------------------------------------------------------------- loading
 
@@ -291,8 +291,16 @@ class LibraryMusicEngine:
                     "reason": reason,
                     "duration_s": segment.audio.size / self.sample_rate,
                     "generation_s": 0.0,     # precomputed; kept for schema parity
+                    "queue_depth": 0,        # ditto - SessionLogger requires the field
                     "segment_index": self.segments_played,
                     "start_offset_s": start / self.sample_rate,
+                    # Envelope of what was actually HEARD since the last switch, not
+                    # of the segment being left. Those differ here in a way they never
+                    # did for streaming: playback crossfades, and abandons segments
+                    # partway through. Logging the source segment's envelope would
+                    # feed analyze_session.py audio that was never played, and quietly
+                    # corrupt the lagged audio-neural coupling index.
+                    "envelope": self._drain_envelope(),
                     "envelope_rate_hz": self.cfg.envelope_rate_hz,
                 })
             except Exception:  # noqa: BLE001 - logging must never stop the audio
@@ -369,7 +377,32 @@ class LibraryMusicEngine:
         if clipped:
             self.clipped_samples += clipped
             np.clip(out, -1.0, 1.0, out=out)
+
+        self._env_raw.append(np.abs(out))
         return out
+
+    def _drain_envelope(self) -> list[float]:
+        """
+        Decimate the output heard since the last drain to envelope_rate_hz.
+
+        Rectify-and-box-average, identical to StreamingMusicEngine._envelope, because
+        analyze_session.py compares envelopes across engines and a different
+        estimator would show up as an engine effect. The sub-bin remainder is carried
+        forward so bins stay aligned across drains rather than drifting.
+        """
+        if not self._env_raw:
+            return []
+        joined = np.concatenate(self._env_raw)
+        self._env_raw.clear()
+
+        step = max(1, int(self.sample_rate / self.cfg.envelope_rate_hz))
+        n = (joined.size // step) * step
+        if n == 0:
+            self._env_raw.append(joined)
+            return []
+        if joined.size > n:
+            self._env_raw.append(joined[n:])
+        return joined[:n].reshape(-1, step).mean(axis=1).astype(float).tolist()
 
     def _read(self, head: _Playhead, n: int) -> np.ndarray:
         if head.segment is None:

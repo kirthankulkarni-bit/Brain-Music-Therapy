@@ -57,6 +57,7 @@ from eeg_features import (  # noqa: E402
     FeatureExtractor,
     latency_budget,
 )
+from library_engine import LibraryConfig, LibraryMusicEngine  # noqa: E402
 from music_engine import MusicConfig, StreamingMusicEngine, build_prompt  # noqa: E402
 from session_logger import SessionLogger, load_session  # noqa: E402
 from stream_utils import get_inlet  # noqa: E402
@@ -147,11 +148,26 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
     budget = latency_budget(cfg, args.tau)
 
     music_cfg = MusicConfig(mock=args.mock_audio or args.mock, segment_seconds=args.segment)
+
+    # Resolve the engine once, here, so the manifest records what actually ran rather
+    # than what was requested. The mock flags describe the EEG source AND the audio
+    # source, but the library needs no GPU, so an explicit --engine library stays
+    # honoured under --mock - otherwise the only realtime audio path would be
+    # untestable without a headset.
+    engine_kind = args.engine or ("streaming" if (args.mock or args.mock_audio) else "library")
     logger.write_manifest(
         sampling_rate=sampling_rate,
         sampling_rate_source="mock" if args.mock else "lsl_nominal_srate",
         feature_config=cfg.to_dict(),
         music_config=music_cfg.to_dict(),
+        # Which engine produced the audio changes the closed-loop latency by 8x, so
+        # it belongs in the manifest beside the analysis budget. Without it, two
+        # sessions with identical feature configs are not actually comparable.
+        engine=engine_kind,
+        engine_config=(
+            LibraryConfig(library_dir=args.library, crossfade_seconds=args.crossfade).to_dict()
+            if engine_kind == "library" else music_cfg.to_dict()
+        ),
         smoother_tau_s=args.tau,
         target_z=args.target,
         baseline_seconds=args.baseline_seconds,
@@ -240,15 +256,33 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
     if yoked_prompts:
         print(f"[eeg] SHAM (yoked): replaying {len(yoked_prompts)} prompts from {args.yoke_from}")
 
-    engine = StreamingMusicEngine(
-        music_cfg,
-        initial_prompt=build_prompt(0.0, args.target, None),
-        on_segment=lambda info: logger.log_audio_segment(**info),
-    )
+    initial_prompt = build_prompt(0.0, args.target, None)
+    if engine_kind == "library":
+        # Explicit failure, never a silent fallback to streaming. A session that
+        # quietly ran the 8 s-commitment engine when the operator asked for the
+        # 1.0 s one is unusable data that looks fine in the log.
+        manifest_path = os.path.join(args.library, "manifest.json")
+        if not os.path.exists(manifest_path):
+            print(f"[eeg] FATAL: no library at {manifest_path}")
+            print("[eeg]   build it:  python scripts/build_library.py")
+            print("[eeg]   or force generation:  --engine streaming")
+            return 2
+        engine = LibraryMusicEngine(
+            LibraryConfig(library_dir=args.library, crossfade_seconds=args.crossfade),
+            initial_prompt=initial_prompt,
+            on_segment=lambda info: logger.log_audio_segment(**info),
+        )
+    else:
+        engine = StreamingMusicEngine(
+            music_cfg,
+            initial_prompt=initial_prompt,
+            on_segment=lambda info: logger.log_audio_segment(**info),
+        )
     engine.start()
 
     state.phase = "intervention"
     print(f"\n[eeg] INTERVENTION: {args.duration:.0f} min, target z = {args.target:+.1f}")
+    print(f"[eeg] engine: {engine_kind}")
     print(f"[eeg] worst-case audio commitment: {engine.worst_case_audio_latency_s:.1f} s\n")
 
     t_start = time.time()
@@ -470,6 +504,17 @@ def parse_args():
     p.add_argument("--hop", type=float, default=1.0, help="hop between windows, seconds")
     p.add_argument("--tau", type=float, default=3.0, help="smoother time constant, seconds")
     p.add_argument("--segment", type=float, default=8.0, help="audio segment length, seconds")
+    p.add_argument("--engine", default=None, choices=["library", "streaming"],
+                   help="library selects precomputed segments (1.0 s worst-case latency); "
+                        "streaming generates live (8.0 s commitment, and measured slower "
+                        "than realtime on every GPU tested - see docs/results_latency.md). "
+                        "Default: streaming under --mock/--mock-audio, library otherwise. "
+                        "Passing it explicitly always wins, so --engine library --mock "
+                        "exercises the real audio path against synthetic EEG.")
+    p.add_argument("--library", default="library", help="library directory for --engine library")
+    p.add_argument("--crossfade", type=float, default=1.0,
+                   help="crossfade seconds; this is THE latency knob for --engine library, "
+                        "exactly as queue depth is for streaming")
     p.add_argument("--yoke-from", default=None, help="session dir to replay prompts from (yoked sham)")
     p.add_argument("--mock", action="store_true", help="synthetic EEG and synthetic audio, no hardware")
     p.add_argument("--mock-audio", action="store_true", help="real EEG, synthesized pads instead of MusicGen")
