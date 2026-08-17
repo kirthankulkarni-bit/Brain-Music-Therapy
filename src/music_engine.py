@@ -63,15 +63,32 @@ slower than realtime, the queue starves permanently, and the precomputed library
 the right design. That conclusion is robust precisely because it does not depend on
 which run you believe.
 
-fp16 shows no reliable benefit - the medians overlap the fp32 range at both
-durations. The GTX 16-series has no tensor cores despite reporting compute
-capability 7.5, so autocast pays casting overhead without the matmul speedup an RTX
-or T4 would provide. notebooks/latency_probe_colab.ipynb tests that on a T4, where
-the prediction is a clear fp16 win.
+fp16 shows no reliable benefit here, and the reason is NOT the one this docstring
+used to give. The original explanation was that the GTX 16-series has no tensor
+cores despite reporting compute capability 7.5, with the prediction that a T4 would
+show a clear fp16 win. The T4 run refuted it: fp16 autocast is about 25% SLOWER
+there, on a card that does have tensor cores.
 
-Live generation therefore needs either a much faster model/GPU, or a precomputed
-segment library selected at runtime. Re-measure on any new machine with
-benchmarks/latency_probe.py before assuming the streaming path is viable.
+What the follow-up experiment found instead (docs/results_latency.md section 4):
+autocast and .half() land on OPPOSITE SIDES of fp32. autocast is 8-12% slower,
+.half() is 6-8% faster. Autocast inserts a cast at every op, which is fine for
+training where the casts amortize over large batched matmuls, and pure overhead for
+batch-1 autoregressive decoding, which has no such matmuls. So the finding is about
+the workload class rather than the GPU: this loop is bound by memory bandwidth and
+kernel launch overhead, and there is little for tensor cores to accelerate.
+
+THIS ENGINE IS NO LONGER THE DEFAULT. library_engine.py plays a precomputed library
+instead, and live_music.py selects it with --engine library. The reason is not that
+generation is slow - it is that streaming COMMITS: once a segment is queued it plays
+to completion, so a prompt change waits up to queue_depth x segment_seconds no
+matter how fast the GPU gets. A resident library abandons the current segment
+mid-playback, cutting worst-case latency 8.0 s -> 1.0 s, with a measured 13 ms to
+first audible change.
+
+Keep this engine for the comparison arm, and for any future hardware fast enough to
+make streaming viable. Re-measure with benchmarks/latency_probe.py before assuming
+it is - and read section 3 of the results doc first, because a single run of that
+probe is not a measurement on a thermally limited laptop.
 
 Set mock=True to run the whole pipeline with procedurally synthesized pads and no
 GPU, model download, or audiocraft install. Use it to debug the control loop.
