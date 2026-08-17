@@ -1,5 +1,12 @@
 # Hardware validation session — runbook
 
+> **Status: this runbook describes the session of 2026-08-14 and has been kept as a
+> record of it. The audio path it defers is now built.** The segment library exists
+> (`scripts/build_library.py`), the library engine is the default audio path
+> (`--engine library`), and worst-case audio latency is 1.0 s rather than 8.0 s. See
+> [results_latency.md](results_latency.md) and the README. The sensing-path
+> procedure below is still current and still the right sequence to follow.
+
 **Goal for this session: prove the sensing path is trustworthy.** Not the audio path.
 Audio stays in mock mode throughout (`--mock-audio` synthesizes pads instead of
 calling MusicGen). Live MusicGen is known-infeasible on this GPU — measured at ~5×
@@ -222,3 +229,11 @@ data.
 Build the precomputed segment library: generate ~40 clips offline (5 ladder rungs ×
 8 variants × 8 s, roughly 50 minutes of one-time GPU time), and replace the
 streaming generator with runtime selection and crossfade.
+
+> **Done, 2026-08-16.** `scripts/build_library.py` renders 20 prompts × 4 variants =
+> 80 segments in ~25 min. The count differs from the estimate above because the
+> prompt space is 5 rungs × 4 *trend variants*, not 5 rungs alone — and of those 20,
+> only 12 are reachable under the current therapeutic targets. `src/library_engine.py`
+> does the runtime selection and crossfade. What actually changed is not the wait but
+> the *commitment*: playback can now abandon a segment mid-way, which is where the
+> 8.0 s → 1.0 s comes from.
