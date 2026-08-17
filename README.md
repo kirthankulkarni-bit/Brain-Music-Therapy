@@ -31,11 +31,22 @@ fast the GPU was. A resident library abandons the current segment mid-playback.
 
 ## Quick start
 
-Build the library once (~25 min on a GTX 1650 Ti, needs a GPU):
+Build the library once — 80 segments, needs a GPU. Resumable, so an interrupted run
+continues where it stopped:
 
 ```bash
 python scripts/build_library.py --variants 4
 ```
+
+Budget ~25 min on a GTX 1650 Ti *for the generation itself* (79 of 80 segments took
+14–35 s, median 17.9 s). The one observed build took **2h44m wall clock**, because
+the very first `generate()` call ran for 2h19m before the remaining 79 completed
+normally in 24.6 min. Cause not established; the most likely explanation is VRAM
+oversubscription on a 4 GB card immediately after another CUDA process released its
+context, with Windows WDDM paging to system RAM. The audio was unaffected — that
+segment is byte-for-byte normal (8.00 s, RMS 0.1000, all finite). If a build seems
+stuck on segment 1, it may genuinely be; it is resumable, so killing and rerunning
+costs nothing.
 
 Check it covers the controller and plays cleanly (no GPU needed):
 

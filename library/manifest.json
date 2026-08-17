@@ -1,0 +1,813 @@
+{
+  "created": "2026-08-16T20:04:22.567724",
+  "model": "facebook/musicgen-small",
+  "backend": "transformers",
+  "device": "cuda",
+  "sample_rate": 32000,
+  "segment_seconds": 8.0,
+  "variants_per_prompt": 4,
+  "target_rms": 0.1,
+  "prompts": [
+    {
+      "prompt": "sparse ambient drone, single sustained pad, very slow, no percussion, 50 bpm",
+      "rung": 0,
+      "variant": "base",
+      "reachable_default_targets": false,
+      "segments": [
+        {
+          "file": "segments/rung0_base_v0.wav",
+          "seed": 1004,
+          "duration_s": 8.0,
+          "generation_s": 8354.96,
+          "rms": 0.1,
+          "peak": 0.4191
+        },
+        {
+          "file": "segments/rung0_base_v1.wav",
+          "seed": 1021,
+          "duration_s": 8.0,
+          "generation_s": 35.11,
+          "rms": 0.1,
+          "peak": 0.3562
+        },
+        {
+          "file": "segments/rung0_base_v2.wav",
+          "seed": 1038,
+          "duration_s": 8.0,
+          "generation_s": 20.68,
+          "rms": 0.1,
+          "peak": 0.4711
+        },
+        {
+          "file": "segments/rung0_base_v3.wav",
+          "seed": 1055,
+          "duration_s": 8.0,
+          "generation_s": 20.0,
+          "rms": 0.1,
+          "peak": 0.3911
+        }
+      ]
+    },
+    {
+      "prompt": "sparse ambient drone, single sustained pad, very slow, no percussion, 50 bpm, gradually more present",
+      "rung": 0,
+      "variant": "emerging",
+      "reachable_default_targets": false,
+      "segments": [
+        {
+          "file": "segments/rung0_emerging_v0.wav",
+          "seed": 1008,
+          "duration_s": 8.0,
+          "generation_s": 19.32,
+          "rms": 0.1,
+          "peak": 0.3424
+        },
+        {
+          "file": "segments/rung0_emerging_v1.wav",
+          "seed": 1025,
+          "duration_s": 8.0,
+          "generation_s": 18.33,
+          "rms": 0.1,
+          "peak": 0.4283
+        },
+        {
+          "file": "segments/rung0_emerging_v2.wav",
+          "seed": 1042,
+          "duration_s": 8.0,
+          "generation_s": 18.53,
+          "rms": 0.1,
+          "peak": 0.3848
+        },
+        {
+          "file": "segments/rung0_emerging_v3.wav",
+          "seed": 1059,
+          "duration_s": 8.0,
+          "generation_s": 21.27,
+          "rms": 0.1,
+          "peak": 0.4973
+        }
+      ]
+    },
+    {
+      "prompt": "sparse ambient drone, single sustained pad, very slow, no percussion, 50 bpm, holding steady, minimal variation",
+      "rung": 0,
+      "variant": "holding",
+      "reachable_default_targets": false,
+      "segments": [
+        {
+          "file": "segments/rung0_holding_v0.wav",
+          "seed": 1007,
+          "duration_s": 8.0,
+          "generation_s": 20.67,
+          "rms": 0.1,
+          "peak": 0.3996
+        },
+        {
+          "file": "segments/rung0_holding_v1.wav",
+          "seed": 1024,
+          "duration_s": 8.0,
+          "generation_s": 19.11,
+          "rms": 0.1,
+          "peak": 0.3902
+        },
+        {
+          "file": "segments/rung0_holding_v2.wav",
+          "seed": 1041,
+          "duration_s": 8.0,
+          "generation_s": 18.24,
+          "rms": 0.1,
+          "peak": 0.328
+        },
+        {
+          "file": "segments/rung0_holding_v3.wav",
+          "seed": 1058,
+          "duration_s": 8.0,
+          "generation_s": 18.08,
+          "rms": 0.1,
+          "peak": 0.3979
+        }
+      ]
+    },
+    {
+      "prompt": "sparse ambient drone, single sustained pad, very slow, no percussion, 50 bpm, softer and slower, receding",
+      "rung": 0,
+      "variant": "receding",
+      "reachable_default_targets": false,
+      "segments": [
+        {
+          "file": "segments/rung0_receding_v0.wav",
+          "seed": 1008,
+          "duration_s": 8.0,
+          "generation_s": 20.49,
+          "rms": 0.1,
+          "peak": 0.355
+        },
+        {
+          "file": "segments/rung0_receding_v1.wav",
+          "seed": 1025,
+          "duration_s": 8.0,
+          "generation_s": 19.52,
+          "rms": 0.1,
+          "peak": 0.4019
+        },
+        {
+          "file": "segments/rung0_receding_v2.wav",
+          "seed": 1042,
+          "duration_s": 8.0,
+          "generation_s": 23.35,
+          "rms": 0.1,
+          "peak": 0.3376
+        },
+        {
+          "file": "segments/rung0_receding_v3.wav",
+          "seed": 1059,
+          "duration_s": 8.0,
+          "generation_s": 19.29,
+          "rms": 0.1,
+          "peak": 0.4735
+        }
+      ]
+    },
+    {
+      "prompt": "calm ambient piano with soft strings, gentle and spacious, no drums, 60 bpm",
+      "rung": 1,
+      "variant": "base",
+      "reachable_default_targets": true,
+      "segments": [
+        {
+          "file": "segments/rung1_base_v0.wav",
+          "seed": 2004,
+          "duration_s": 8.0,
+          "generation_s": 17.25,
+          "rms": 0.1,
+          "peak": 0.6378
+        },
+        {
+          "file": "segments/rung1_base_v1.wav",
+          "seed": 2021,
+          "duration_s": 8.0,
+          "generation_s": 18.86,
+          "rms": 0.1,
+          "peak": 0.5427
+        },
+        {
+          "file": "segments/rung1_base_v2.wav",
+          "seed": 2038,
+          "duration_s": 8.0,
+          "generation_s": 19.11,
+          "rms": 0.1,
+          "peak": 0.5622
+        },
+        {
+          "file": "segments/rung1_base_v3.wav",
+          "seed": 2055,
+          "duration_s": 8.0,
+          "generation_s": 17.94,
+          "rms": 0.1,
+          "peak": 0.7636
+        }
+      ]
+    },
+    {
+      "prompt": "calm ambient piano with soft strings, gentle and spacious, no drums, 60 bpm, gradually more present",
+      "rung": 1,
+      "variant": "emerging",
+      "reachable_default_targets": true,
+      "segments": [
+        {
+          "file": "segments/rung1_emerging_v0.wav",
+          "seed": 2008,
+          "duration_s": 8.0,
+          "generation_s": 17.72,
+          "rms": 0.1,
+          "peak": 0.5243
+        },
+        {
+          "file": "segments/rung1_emerging_v1.wav",
+          "seed": 2025,
+          "duration_s": 8.0,
+          "generation_s": 17.21,
+          "rms": 0.1,
+          "peak": 0.5894
+        },
+        {
+          "file": "segments/rung1_emerging_v2.wav",
+          "seed": 2042,
+          "duration_s": 8.0,
+          "generation_s": 17.91,
+          "rms": 0.1,
+          "peak": 0.5033
+        },
+        {
+          "file": "segments/rung1_emerging_v3.wav",
+          "seed": 2059,
+          "duration_s": 8.0,
+          "generation_s": 17.97,
+          "rms": 0.1,
+          "peak": 0.5918
+        }
+      ]
+    },
+    {
+      "prompt": "calm ambient piano with soft strings, gentle and spacious, no drums, 60 bpm, holding steady, minimal variation",
+      "rung": 1,
+      "variant": "holding",
+      "reachable_default_targets": true,
+      "segments": [
+        {
+          "file": "segments/rung1_holding_v0.wav",
+          "seed": 2007,
+          "duration_s": 8.0,
+          "generation_s": 20.43,
+          "rms": 0.1,
+          "peak": 0.4533
+        },
+        {
+          "file": "segments/rung1_holding_v1.wav",
+          "seed": 2024,
+          "duration_s": 8.0,
+          "generation_s": 16.62,
+          "rms": 0.1,
+          "peak": 0.3902
+        },
+        {
+          "file": "segments/rung1_holding_v2.wav",
+          "seed": 2041,
+          "duration_s": 8.0,
+          "generation_s": 16.78,
+          "rms": 0.1,
+          "peak": 0.5694
+        },
+        {
+          "file": "segments/rung1_holding_v3.wav",
+          "seed": 2058,
+          "duration_s": 8.0,
+          "generation_s": 16.89,
+          "rms": 0.1,
+          "peak": 0.5346
+        }
+      ]
+    },
+    {
+      "prompt": "calm ambient piano with soft strings, gentle and spacious, no drums, 60 bpm, softer and slower, receding",
+      "rung": 1,
+      "variant": "receding",
+      "reachable_default_targets": true,
+      "segments": [
+        {
+          "file": "segments/rung1_receding_v0.wav",
+          "seed": 2008,
+          "duration_s": 8.0,
+          "generation_s": 16.79,
+          "rms": 0.0924,
+          "peak": 0.99
+        },
+        {
+          "file": "segments/rung1_receding_v1.wav",
+          "seed": 2025,
+          "duration_s": 8.0,
+          "generation_s": 18.94,
+          "rms": 0.1,
+          "peak": 0.4877
+        },
+        {
+          "file": "segments/rung1_receding_v2.wav",
+          "seed": 2042,
+          "duration_s": 8.0,
+          "generation_s": 17.48,
+          "rms": 0.1,
+          "peak": 0.4478
+        },
+        {
+          "file": "segments/rung1_receding_v3.wav",
+          "seed": 2059,
+          "duration_s": 8.0,
+          "generation_s": 17.41,
+          "rms": 0.1,
+          "peak": 0.5606
+        }
+      ]
+    },
+    {
+      "prompt": "warm downtempo ambient with a soft pulse, light texture, 70 bpm",
+      "rung": 2,
+      "variant": "base",
+      "reachable_default_targets": true,
+      "segments": [
+        {
+          "file": "segments/rung2_base_v0.wav",
+          "seed": 3004,
+          "duration_s": 8.0,
+          "generation_s": 16.88,
+          "rms": 0.1,
+          "peak": 0.5055
+        },
+        {
+          "file": "segments/rung2_base_v1.wav",
+          "seed": 3021,
+          "duration_s": 8.0,
+          "generation_s": 16.75,
+          "rms": 0.1,
+          "peak": 0.3851
+        },
+        {
+          "file": "segments/rung2_base_v2.wav",
+          "seed": 3038,
+          "duration_s": 8.0,
+          "generation_s": 16.44,
+          "rms": 0.1,
+          "peak": 0.4435
+        },
+        {
+          "file": "segments/rung2_base_v3.wav",
+          "seed": 3055,
+          "duration_s": 8.0,
+          "generation_s": 17.0,
+          "rms": 0.1,
+          "peak": 0.6773
+        }
+      ]
+    },
+    {
+      "prompt": "warm downtempo ambient with a soft pulse, light texture, 70 bpm, gradually more present",
+      "rung": 2,
+      "variant": "emerging",
+      "reachable_default_targets": true,
+      "segments": [
+        {
+          "file": "segments/rung2_emerging_v0.wav",
+          "seed": 3008,
+          "duration_s": 8.0,
+          "generation_s": 16.13,
+          "rms": 0.1,
+          "peak": 0.4447
+        },
+        {
+          "file": "segments/rung2_emerging_v1.wav",
+          "seed": 3025,
+          "duration_s": 8.0,
+          "generation_s": 16.95,
+          "rms": 0.1,
+          "peak": 0.5254
+        },
+        {
+          "file": "segments/rung2_emerging_v2.wav",
+          "seed": 3042,
+          "duration_s": 8.0,
+          "generation_s": 18.42,
+          "rms": 0.1,
+          "peak": 0.639
+        },
+        {
+          "file": "segments/rung2_emerging_v3.wav",
+          "seed": 3059,
+          "duration_s": 8.0,
+          "generation_s": 17.6,
+          "rms": 0.1,
+          "peak": 0.4812
+        }
+      ]
+    },
+    {
+      "prompt": "warm downtempo ambient with a soft pulse, light texture, 70 bpm, holding steady, minimal variation",
+      "rung": 2,
+      "variant": "holding",
+      "reachable_default_targets": true,
+      "segments": [
+        {
+          "file": "segments/rung2_holding_v0.wav",
+          "seed": 3007,
+          "duration_s": 8.0,
+          "generation_s": 17.03,
+          "rms": 0.1,
+          "peak": 0.5823
+        },
+        {
+          "file": "segments/rung2_holding_v1.wav",
+          "seed": 3024,
+          "duration_s": 8.0,
+          "generation_s": 24.06,
+          "rms": 0.1,
+          "peak": 0.3984
+        },
+        {
+          "file": "segments/rung2_holding_v2.wav",
+          "seed": 3041,
+          "duration_s": 8.0,
+          "generation_s": 20.81,
+          "rms": 0.1,
+          "peak": 0.4284
+        },
+        {
+          "file": "segments/rung2_holding_v3.wav",
+          "seed": 3058,
+          "duration_s": 8.0,
+          "generation_s": 24.75,
+          "rms": 0.1,
+          "peak": 0.4293
+        }
+      ]
+    },
+    {
+      "prompt": "warm downtempo ambient with a soft pulse, light texture, 70 bpm, softer and slower, receding",
+      "rung": 2,
+      "variant": "receding",
+      "reachable_default_targets": true,
+      "segments": [
+        {
+          "file": "segments/rung2_receding_v0.wav",
+          "seed": 3008,
+          "duration_s": 8.0,
+          "generation_s": 17.84,
+          "rms": 0.1,
+          "peak": 0.6768
+        },
+        {
+          "file": "segments/rung2_receding_v1.wav",
+          "seed": 3025,
+          "duration_s": 8.0,
+          "generation_s": 17.75,
+          "rms": 0.1,
+          "peak": 0.369
+        },
+        {
+          "file": "segments/rung2_receding_v2.wav",
+          "seed": 3042,
+          "duration_s": 8.0,
+          "generation_s": 16.63,
+          "rms": 0.1,
+          "peak": 0.3901
+        },
+        {
+          "file": "segments/rung2_receding_v3.wav",
+          "seed": 3059,
+          "duration_s": 8.0,
+          "generation_s": 20.48,
+          "rms": 0.1,
+          "peak": 0.4361
+        }
+      ]
+    },
+    {
+      "prompt": "flowing melodic electronica, steady gentle rhythm, 85 bpm",
+      "rung": 3,
+      "variant": "base",
+      "reachable_default_targets": true,
+      "segments": [
+        {
+          "file": "segments/rung3_base_v0.wav",
+          "seed": 4004,
+          "duration_s": 8.0,
+          "generation_s": 21.9,
+          "rms": 0.1,
+          "peak": 0.3578
+        },
+        {
+          "file": "segments/rung3_base_v1.wav",
+          "seed": 4021,
+          "duration_s": 8.0,
+          "generation_s": 19.78,
+          "rms": 0.1,
+          "peak": 0.7753
+        },
+        {
+          "file": "segments/rung3_base_v2.wav",
+          "seed": 4038,
+          "duration_s": 8.0,
+          "generation_s": 24.6,
+          "rms": 0.1,
+          "peak": 0.584
+        },
+        {
+          "file": "segments/rung3_base_v3.wav",
+          "seed": 4055,
+          "duration_s": 8.0,
+          "generation_s": 23.78,
+          "rms": 0.1,
+          "peak": 0.2848
+        }
+      ]
+    },
+    {
+      "prompt": "flowing melodic electronica, steady gentle rhythm, 85 bpm, gradually more present",
+      "rung": 3,
+      "variant": "emerging",
+      "reachable_default_targets": true,
+      "segments": [
+        {
+          "file": "segments/rung3_emerging_v0.wav",
+          "seed": 4008,
+          "duration_s": 8.0,
+          "generation_s": 21.43,
+          "rms": 0.1,
+          "peak": 0.5977
+        },
+        {
+          "file": "segments/rung3_emerging_v1.wav",
+          "seed": 4025,
+          "duration_s": 8.0,
+          "generation_s": 24.42,
+          "rms": 0.1,
+          "peak": 0.3876
+        },
+        {
+          "file": "segments/rung3_emerging_v2.wav",
+          "seed": 4042,
+          "duration_s": 8.0,
+          "generation_s": 19.33,
+          "rms": 0.1,
+          "peak": 0.4407
+        },
+        {
+          "file": "segments/rung3_emerging_v3.wav",
+          "seed": 4059,
+          "duration_s": 8.0,
+          "generation_s": 29.51,
+          "rms": 0.1,
+          "peak": 0.5433
+        }
+      ]
+    },
+    {
+      "prompt": "flowing melodic electronica, steady gentle rhythm, 85 bpm, holding steady, minimal variation",
+      "rung": 3,
+      "variant": "holding",
+      "reachable_default_targets": true,
+      "segments": [
+        {
+          "file": "segments/rung3_holding_v0.wav",
+          "seed": 4007,
+          "duration_s": 8.0,
+          "generation_s": 21.97,
+          "rms": 0.1,
+          "peak": 0.4843
+        },
+        {
+          "file": "segments/rung3_holding_v1.wav",
+          "seed": 4024,
+          "duration_s": 8.0,
+          "generation_s": 16.8,
+          "rms": 0.1,
+          "peak": 0.4113
+        },
+        {
+          "file": "segments/rung3_holding_v2.wav",
+          "seed": 4041,
+          "duration_s": 8.0,
+          "generation_s": 19.06,
+          "rms": 0.1,
+          "peak": 0.5859
+        },
+        {
+          "file": "segments/rung3_holding_v3.wav",
+          "seed": 4058,
+          "duration_s": 8.0,
+          "generation_s": 17.3,
+          "rms": 0.1,
+          "peak": 0.4827
+        }
+      ]
+    },
+    {
+      "prompt": "flowing melodic electronica, steady gentle rhythm, 85 bpm, softer and slower, receding",
+      "rung": 3,
+      "variant": "receding",
+      "reachable_default_targets": true,
+      "segments": [
+        {
+          "file": "segments/rung3_receding_v0.wav",
+          "seed": 4008,
+          "duration_s": 8.0,
+          "generation_s": 18.2,
+          "rms": 0.1,
+          "peak": 0.5648
+        },
+        {
+          "file": "segments/rung3_receding_v1.wav",
+          "seed": 4025,
+          "duration_s": 8.0,
+          "generation_s": 17.46,
+          "rms": 0.1,
+          "peak": 0.5728
+        },
+        {
+          "file": "segments/rung3_receding_v2.wav",
+          "seed": 4042,
+          "duration_s": 8.0,
+          "generation_s": 17.77,
+          "rms": 0.1,
+          "peak": 0.4698
+        },
+        {
+          "file": "segments/rung3_receding_v3.wav",
+          "seed": 4059,
+          "duration_s": 8.0,
+          "generation_s": 17.74,
+          "rms": 0.0899,
+          "peak": 0.99
+        }
+      ]
+    },
+    {
+      "prompt": "bright rhythmic electronic music, clear driving pulse, 100 bpm",
+      "rung": 4,
+      "variant": "base",
+      "reachable_default_targets": false,
+      "segments": [
+        {
+          "file": "segments/rung4_base_v0.wav",
+          "seed": 5004,
+          "duration_s": 8.0,
+          "generation_s": 18.76,
+          "rms": 0.0932,
+          "peak": 0.99
+        },
+        {
+          "file": "segments/rung4_base_v1.wav",
+          "seed": 5021,
+          "duration_s": 8.0,
+          "generation_s": 18.31,
+          "rms": 0.1,
+          "peak": 0.4827
+        },
+        {
+          "file": "segments/rung4_base_v2.wav",
+          "seed": 5038,
+          "duration_s": 8.0,
+          "generation_s": 14.27,
+          "rms": 0.1,
+          "peak": 0.7315
+        },
+        {
+          "file": "segments/rung4_base_v3.wav",
+          "seed": 5055,
+          "duration_s": 8.0,
+          "generation_s": 15.03,
+          "rms": 0.0806,
+          "peak": 0.99
+        }
+      ]
+    },
+    {
+      "prompt": "bright rhythmic electronic music, clear driving pulse, 100 bpm, gradually more present",
+      "rung": 4,
+      "variant": "emerging",
+      "reachable_default_targets": false,
+      "segments": [
+        {
+          "file": "segments/rung4_emerging_v0.wav",
+          "seed": 5008,
+          "duration_s": 8.0,
+          "generation_s": 16.03,
+          "rms": 0.1,
+          "peak": 0.5674
+        },
+        {
+          "file": "segments/rung4_emerging_v1.wav",
+          "seed": 5025,
+          "duration_s": 8.0,
+          "generation_s": 14.66,
+          "rms": 0.1,
+          "peak": 0.6103
+        },
+        {
+          "file": "segments/rung4_emerging_v2.wav",
+          "seed": 5042,
+          "duration_s": 8.0,
+          "generation_s": 15.07,
+          "rms": 0.1,
+          "peak": 0.3982
+        },
+        {
+          "file": "segments/rung4_emerging_v3.wav",
+          "seed": 5059,
+          "duration_s": 8.0,
+          "generation_s": 17.51,
+          "rms": 0.1,
+          "peak": 0.3916
+        }
+      ]
+    },
+    {
+      "prompt": "bright rhythmic electronic music, clear driving pulse, 100 bpm, holding steady, minimal variation",
+      "rung": 4,
+      "variant": "holding",
+      "reachable_default_targets": false,
+      "segments": [
+        {
+          "file": "segments/rung4_holding_v0.wav",
+          "seed": 5007,
+          "duration_s": 8.0,
+          "generation_s": 15.74,
+          "rms": 0.1,
+          "peak": 0.7193
+        },
+        {
+          "file": "segments/rung4_holding_v1.wav",
+          "seed": 5024,
+          "duration_s": 8.0,
+          "generation_s": 15.19,
+          "rms": 0.1,
+          "peak": 0.8826
+        },
+        {
+          "file": "segments/rung4_holding_v2.wav",
+          "seed": 5041,
+          "duration_s": 8.0,
+          "generation_s": 14.69,
+          "rms": 0.1,
+          "peak": 0.6529
+        },
+        {
+          "file": "segments/rung4_holding_v3.wav",
+          "seed": 5058,
+          "duration_s": 8.0,
+          "generation_s": 14.67,
+          "rms": 0.1,
+          "peak": 0.7693
+        }
+      ]
+    },
+    {
+      "prompt": "bright rhythmic electronic music, clear driving pulse, 100 bpm, softer and slower, receding",
+      "rung": 4,
+      "variant": "receding",
+      "reachable_default_targets": false,
+      "segments": [
+        {
+          "file": "segments/rung4_receding_v0.wav",
+          "seed": 5008,
+          "duration_s": 8.0,
+          "generation_s": 15.02,
+          "rms": 0.1,
+          "peak": 0.8327
+        },
+        {
+          "file": "segments/rung4_receding_v1.wav",
+          "seed": 5025,
+          "duration_s": 8.0,
+          "generation_s": 15.61,
+          "rms": 0.1,
+          "peak": 0.7992
+        },
+        {
+          "file": "segments/rung4_receding_v2.wav",
+          "seed": 5042,
+          "duration_s": 8.0,
+          "generation_s": 14.8,
+          "rms": 0.1,
+          "peak": 0.8206
+        },
+        {
+          "file": "segments/rung4_receding_v3.wav",
+          "seed": 5059,
+          "duration_s": 8.0,
+          "generation_s": 14.56,
+          "rms": 0.1,
+          "peak": 0.5296
+        }
+      ]
+    }
+  ],
+  "segment_count": 80
+}
