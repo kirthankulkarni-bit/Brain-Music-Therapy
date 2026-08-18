@@ -1,0 +1,117 @@
+{
+  "timestamp": "2026-08-18T03:18:35.071575",
+  "label": "colab-tesla-t4-run2",
+  "backend": "transformers",
+  "precisions_requested": [
+    "fp32",
+    "fp16",
+    "fp16-half"
+  ],
+  "hardware": {
+    "platform": "Linux 6.6.122+",
+    "python": "3.12.13",
+    "cpu": "x86_64",
+    "device": "cuda",
+    "torch": "2.11.0+cu128",
+    "gpu_name": "Tesla T4",
+    "gpu_vram_gb": 15.6,
+    "compute_capability": "7.5",
+    "multiprocessors": 40,
+    "has_tensor_cores": true,
+    "cuda": "12.8"
+  },
+  "analysis": [
+    {
+      "sampling_rate": 256.0,
+      "window_seconds": 5.0,
+      "hop_seconds": 2.0,
+      "smoother_tau_s": 4.0,
+      "dsp_median_ms": 2.1368669999901613,
+      "dsp_p95_ms": 2.348245050009723,
+      "dsp_headroom_x": 935.9496870929303,
+      "window_centroid_delay_s": 2.5,
+      "hop_quantization_s": 1.0,
+      "smoother_group_delay_s": 4.0,
+      "total_analysis_latency_s": 7.5,
+      "label": "old (5 s window, 2 s hop, 5-tap boxcar)"
+    },
+    {
+      "sampling_rate": 256.0,
+      "window_seconds": 4.0,
+      "hop_seconds": 1.0,
+      "smoother_tau_s": 3.0,
+      "dsp_median_ms": 2.129507500001182,
+      "dsp_p95_ms": 3.3467776500117448,
+      "dsp_headroom_x": 469.5921474798492,
+      "window_centroid_delay_s": 2.0,
+      "hop_quantization_s": 0.5,
+      "smoother_group_delay_s": 3.0,
+      "total_analysis_latency_s": 5.5,
+      "label": "new (4 s window, 1 s hop, tau=3 s)"
+    }
+  ],
+  "musicgen": [
+    {
+      "precision": "fp32",
+      "duration_s": 4.0,
+      "median_generation_s": 4.190929412841797,
+      "p95_generation_s": 4.819175720214844,
+      "realtime_factor": 1.0477323532104492,
+      "faster_than_realtime": false,
+      "device": "cuda",
+      "backend": "transformers"
+    },
+    {
+      "precision": "fp32",
+      "duration_s": 8.0,
+      "median_generation_s": 9.003400325775146,
+      "p95_generation_s": 9.10915424823761,
+      "realtime_factor": 1.1254250407218933,
+      "faster_than_realtime": false,
+      "device": "cuda",
+      "backend": "transformers"
+    },
+    {
+      "precision": "fp16",
+      "duration_s": 4.0,
+      "median_generation_s": 5.609906911849976,
+      "p95_generation_s": 5.98092143535614,
+      "realtime_factor": 1.402476727962494,
+      "faster_than_realtime": false,
+      "device": "cuda",
+      "backend": "transformers"
+    },
+    {
+      "precision": "fp16",
+      "duration_s": 8.0,
+      "median_generation_s": 11.466667890548706,
+      "p95_generation_s": 11.54418694972992,
+      "realtime_factor": 1.4333334863185883,
+      "faster_than_realtime": false,
+      "device": "cuda",
+      "backend": "transformers"
+    },
+    {
+      "precision": "fp16-half",
+      "duration_s": 4.0,
+      "median_generation_s": 4.507226467132568,
+      "p95_generation_s": 4.967027044296264,
+      "realtime_factor": 1.126806616783142,
+      "faster_than_realtime": false,
+      "device": "cuda",
+      "backend": "transformers"
+    },
+    {
+      "precision": "fp16-half",
+      "duration_s": 8.0,
+      "median_generation_s": 9.452673435211182,
+      "p95_generation_s": 9.466208720207215,
+      "realtime_factor": 1.1815841794013977,
+      "faster_than_realtime": false,
+      "device": "cuda",
+      "backend": "transformers"
+    }
+  ],
+  "audio_commitment_s": 8.0,
+  "end_to_end_worst_case_s": 13.5
+}

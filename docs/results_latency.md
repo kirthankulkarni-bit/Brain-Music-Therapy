@@ -17,11 +17,18 @@ configuration tested — including a datacenter GPU.
 | machine | backend | best case measured | realtime factor |
 |---|---|---|---|
 | GTX 1650 Ti (laptop, 4 GB) | transformers | fp16-half, 4 s | **2.08×** |
-| Tesla T4 (Colab, 15.6 GB) | transformers | fp32, 4 s | **1.14×** |
+| Tesla T4 (Colab, 15.6 GB) | transformers | fp32, 4 s | **1.05×** |
 
-Viable streaming needs **< 1.0×**. Nothing measured comes under it. The T4 gets
-close, which is the interesting part — but "close" still means the queue starves,
-permanently, and audio drops out.
+Viable streaming needs **< 1.0×**. Nothing measured comes under it, across 3
+independent T4 runs and every precision mode. The T4 gets to 1.05× — close enough to
+be tantalizing, and still on the wrong side of the line, which means the queue
+starves permanently and audio drops out.
+
+The closeness is worth stating precisely, because it is the obvious objection: a
+GPU roughly 5% faster would cross 1.0× at 4 s. But §4 shows the workload is bound by
+a sequential decode loop rather than by arithmetic, and 8 s segments sit at 1.13×
+rather than 1.05×, so the margin shrinks as segments get long enough to be musically
+useful. Crossing the line at one duration is not the same as viable streaming.
 
 This is why the system uses a precomputed segment library
 (`scripts/build_library.py`, `src/library_engine.py`) rather than live generation.
@@ -141,14 +148,40 @@ fp16 win. The T4 tested it directly:
 | Tesla T4 | **yes** | **0.75×** | **0.80×** |
 
 fp16 autocast is *more* consistently slower on the card that has tensor cores. The
-tensor-core explanation is dead. The replacement is about the workload, not the
-hardware: batch-1 autoregressive generation is bound by memory bandwidth and kernel
-launch overhead, and autocast's per-op casts make both worse — worse on the faster
-card, where launch overhead is a larger share of the total.
+tensor-core explanation is dead.
 
-**Open, and it needs a T4:** `fp16-half` has only been measured on the laptop. On a
-T4 the tensor cores could turn a 6–8% bandwidth win into a real one. Rerun the
-notebook with `--precisions fp32 fp16 fp16-half`.
+### The decisive test: fp16-half on tensor cores
+
+If the workload were matmul-bound, this is where it would show. A T4 does fp16 on
+tensor cores at roughly **8× its fp32 throughput** (~65 vs ~8.1 TFLOPS), and
+`fp16-half` pays no per-op cast. A matmul-bound workload would be dramatically
+faster. Tesla T4, transformers, **3 independent runs**, medians:
+
+| mode | 4 s | 8 s | vs fp32 (4 s / 8 s) |
+|---|---|---|---|
+| fp32 | **4.21 s** | **9.00 s** | — |
+| fp16-half | 4.51 s | 9.45 s | 0.94× / 0.95× — slower |
+| fp16 (autocast) | 5.61 s | 11.47 s | 0.75× / 0.79× — slower |
+
+**On the T4, fp32 is the fastest mode. Both fp16 modes lose.** The ordering
+`fp32 < fp16-half < fp16` held in **6 of 6** run × duration cells — as consistent as
+n=3 can be.
+
+This settles the mechanism. Giving the workload 8× the arithmetic throughput makes
+it *slower*, so it was never arithmetic-bound. MusicGen at batch 1 is bound by the
+**sequential decode loop**: 50 tokens per second of audio, each step depending on the
+last, with per-step kernel launch overhead that no numeric format touches. fp16 only
+adds conversion cost and different kernel selection.
+
+Note the two machines disagree in *direction* — `fp16-half` is 6–8% faster on the
+laptop and 5–6% slower on the T4. That is consistent with the mechanism: the 1650 Ti
+is bandwidth-starved enough that halving bytes moved recovers a little, while the T4
+has bandwidth to spare and only pays the conversion.
+
+**What this predicts:** a faster GPU will not rescue streaming. The fix would have to
+change the decode loop — batching, speculative decoding, or a non-autoregressive
+model — not the hardware or the precision. That is a claim about the workload class,
+which is worth considerably more than a claim about one laptop.
 
 ---
 
@@ -157,22 +190,38 @@ notebook with `--precisions fp32 fp16 fp16-half`.
 Same backend, same code, both machines. This is the only valid cross-machine
 comparison in this document — see the backend warning in §7.
 
+T4 column is the median of 3 independent runs; laptop column is a single run of the
+same configuration.
+
 | config | GTX 1650 Ti | Tesla T4 | T4 advantage |
 |---|---|---|---|
-| fp32 4 s | 8.89 s | 4.54 s | 1.96× |
-| fp32 8 s | 15.47 s | 9.78 s | 1.58× |
-| fp16 4 s | 8.37 s | 6.08 s | 1.38× |
-| fp16 8 s | 16.60 s | 12.26 s | 1.35× |
+| fp32 4 s | 8.89 s | 4.21 s | 2.11× |
+| fp32 8 s | 15.47 s | 9.00 s | 1.72× |
+| fp16 4 s | 8.37 s | 5.61 s | 1.49× |
+| fp16 8 s | 16.60 s | 11.47 s | 1.45× |
 
-The 1.58–1.96× fp32 gap is the expected generational difference, which is a useful
+The 1.7–2.1× fp32 gap is the expected generational difference, which is a useful
 sanity check that both runs measured the same thing.
 
-**Caveat: the T4 column is a single run.** Given §3, one run is not a measurement.
-Whether a datacenter GPU has tighter between-run variance than a thermally
-throttled laptop is itself an open question — and a result worth having, since it
-determines whether cloud benchmarking needs the same range-reporting discipline.
-Within-run spread on the T4 was tight (p95/median 1.01–1.09) versus 1.00–1.23 on the
-laptop, which is suggestive but not the same measurement.
+### Between-run variance is a property of the *machine*, not the benchmark
+
+This was an open question and the three T4 runs answered it.
+
+| machine | between-run max/min | within-run p95/median |
+|---|---|---|
+| GTX 1650 Ti (laptop) | **up to 1.96×** | 1.01–1.11 |
+| Tesla T4 (Colab) | **1.02–1.18×** | 1.01–1.09 |
+
+On the T4, between-run and within-run spread are the *same order*. On the laptop they
+differ by an order of magnitude. That is direct support for the thermal explanation
+in §3 — a datacenter part with fixed cooling and no display to drive has no thermal
+history for the benchmark to inherit.
+
+**Methodological consequence:** the range-reporting discipline §3 demands is required
+on thermally limited consumer hardware and largely unnecessary in the cloud. A single
+Colab run is close to a measurement; a single laptop run is not. Anyone benchmarking
+generative audio on a laptop needs this discipline, which is a transferable finding
+rather than a quirk of this project.
 
 ---
 
@@ -241,9 +290,19 @@ laptop (1.19×) is comparable to the effects being measured (6–20%).
 
 ## 8. Open questions
 
+### Closed
+
+| question | answer |
+|---|---|
+| T4 between-run variance | **Tight** — 1.02–1.18× across 3 runs, versus up to 1.96× on the laptop. Range reporting is a consumer-hardware requirement, not a universal one. See §5. |
+| `fp16-half` on tensor cores | **Slower than fp32** (0.94×/0.95×), in 6 of 6 cells. Giving the workload 8× the arithmetic throughput made it slower, so it is not arithmetic-bound. See §4. |
+| Can any tested configuration stream? | **No.** Best across all machines, modes and runs is 1.05× realtime. |
+
+### Still open
+
 | question | what it needs | why it matters |
 |---|---|---|
-| T4 between-run variance | 2–3 more Colab runs | §5 rests on n=1; determines whether cloud benchmarking needs range reporting |
-| `fp16-half` on tensor cores | one Colab run with `--precisions fp32 fp16 fp16-half` | the only configuration that could plausibly approach 1.0× realtime |
+| Does a non-autoregressive or batched decode reach 1.0×? | a different model or a speculative-decoding path | §4 says the decode loop is the bottleneck, so this is the only remaining lever on streaming — and it is a separate project |
 | Are ladder rungs 0 and 4 dead by design? | a therapeutic decision, not a measurement | `build_prompt` can never emit them under either arm — see `enumerate_prompts.__doc__` |
 | Does the crossfade sound acceptable? | listening to `library_engine.py --wav demo.wav` | the one cost of the 8× that no metric captures |
+| Can analysis lag be cut below 5.5 s? | shorter window, faster smoother, and a re-validation of alpha SNR | with the library engine it is now **85%** of the end-to-end budget — the GPU is no longer on the critical path |

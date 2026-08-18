@@ -412,16 +412,39 @@ def main() -> int:
             print("  !!   ImportError on audiocraft    -> it does not build on Python 3.12.")
             print("  !!     Use --backend transformers instead.")
 
+    # Both engines' commitment, because the system default changed. Reporting only
+    # the streaming number overstates the shipped configuration by 7 s: live_music.py
+    # now defaults to the library engine, whose commitment is one crossfade rather
+    # than one whole segment.
     cfg = MusicConfig()
     commitment = cfg.segment_seconds * cfg.queue_depth
-    print(f"\n  Queue commitment (depth {cfg.queue_depth} x {cfg.segment_seconds:g} s segment): {commitment:.1f} s worst case")
-    print("  Every extra unit of queue depth adds one full segment to closed-loop latency.")
-    results["audio_commitment_s"] = commitment
+    try:
+        from library_engine import LibraryConfig  # noqa: PLC0415
+        library_commitment = LibraryConfig().crossfade_seconds
+    except Exception:  # noqa: BLE001 - probe must run without the library present
+        library_commitment = None
 
-    total = analysis_rows[1]["total_analysis_latency_s"] + commitment
+    print(f"\n  Streaming commitment (depth {cfg.queue_depth} x {cfg.segment_seconds:g} s segment): "
+          f"{commitment:.1f} s worst case")
+    print("  Every extra unit of queue depth adds one full segment to closed-loop latency.")
+    if library_commitment is not None:
+        print(f"  Library commitment (one crossfade): {library_commitment:.1f} s worst case "
+              f"= {commitment / library_commitment:.0f}x better, and it is the default engine.")
+    results["audio_commitment_s"] = commitment
+    results["audio_commitment_library_s"] = library_commitment
+
+    analysis_lag = analysis_rows[1]["total_analysis_latency_s"]
+    total = analysis_lag + commitment
     print("\n" + "=" * 74)
-    print(f"  END-TO-END WORST CASE: {total:.1f} s "
-          f"({analysis_rows[1]['total_analysis_latency_s']:.1f} s analysis + {commitment:.1f} s audio commitment)")
+    print(f"  END-TO-END WORST CASE, streaming: {total:.1f} s "
+          f"({analysis_lag:.1f} s analysis + {commitment:.1f} s audio commitment)")
+    if library_commitment is not None:
+        total_library = analysis_lag + library_commitment
+        print(f"  END-TO-END WORST CASE, library:   {total_library:.1f} s "
+              f"({analysis_lag:.1f} s analysis + {library_commitment:.1f} s audio commitment)  <- DEFAULT")
+        print(f"  Analysis lag is now {analysis_lag / total_library:.0%} of the budget, so it is "
+              f"the term worth attacking next.")
+        results["end_to_end_worst_case_library_s"] = total_library
     print("=" * 74)
     results["end_to_end_worst_case_s"] = total
 
