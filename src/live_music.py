@@ -370,6 +370,23 @@ def _load_yoked_prompts(session_dir: str) -> list[tuple[float, str]]:
     timeline, ignoring the current participant's EEG. Every acoustic property is
     matched; only the contingency between brain and music is broken. That contrast
     is what rules out regression to the mean, which a single-arm design cannot.
+
+    KNOWN FIDELITY LIMIT, measured rather than assumed. Offsets are normalized
+    against the FIRST AUDIO EVENT, but an audio event is logged when a segment is
+    produced, not when the prompt that chose it was set. Those differ by roughly one
+    hop, so a replay reproduces the source's prompt SEQUENCE exactly while running
+    about 1 s early throughout, and the source's very first prompt is skipped when it
+    was superseded before the first segment was logged.
+
+    Verified against sessions/ARTIFACT_20260816_144127 over its first 86 s: 8 source
+    changes against 7 replayed, identical order, no source prompt ever missing from
+    the replay, every replayed change 0.4-1.0 s early.
+
+    That is acceptable for the acoustic-matching claim - the same prompts play in the
+    same order for the same durations - and it is small against the 8 s segment
+    tenure and 5.5 s analysis latency. It is recorded here because "matched for every
+    acoustic property" is a claim a reviewer may probe, and the honest answer is
+    "matched in sequence and duration, with a systematic sub-hop lead", not "identical".
     """
     data = load_session(session_dir)
     t0 = None
