@@ -135,7 +135,14 @@ import re
 
 import torch
 
-label = "colab-" + re.sub(r"[^a-z0-9]+", "-", torch.cuda.get_device_name(0).lower()).strip("-")
+# CHANGE THIS AND RE-RUN THIS CELL: 1, then 2, then 3.
+# Between-run variance is the thing being measured, so the runs must be separate
+# executions - raising --trials instead does NOT substitute, because all trials in
+# one run share a thermal and allocator state.
+RUN = 1
+
+gpu = re.sub(r"[^a-z0-9]+", "-", torch.cuda.get_device_name(0).lower()).strip("-")
+label = f"colab-{gpu}-run{RUN}"
 out = f"benchmarks/latency_{label}.json"
 path = f"Brain-Music-Therapy/{out}"
 print(f"label: {label}")
@@ -145,7 +152,7 @@ print(f"label: {label}")
 if os.path.exists(path):
     os.remove(path)
 
-!cd Brain-Music-Therapy && python benchmarks/latency_probe.py --backend transformers --label "$label" --durations 4 8 --trials 3 --out "$out"
+!cd Brain-Music-Therapy && python benchmarks/latency_probe.py --backend transformers --precisions fp32 fp16 fp16-half --label "$label" --durations 4 8 --trials 3 --out "$out"
 
 if not os.path.exists(path):
     raise RuntimeError("The probe wrote no output. Read the error above this line.")
@@ -183,10 +190,25 @@ else:
 """),
 
     md("""
-## 5. Compare fp16 against fp32
+## 5. Compare the three precision modes
 
-The single number this notebook exists to produce. On the GTX 1650 Ti the speedup
-was about 1.0x or worse; a tensor-core GPU should be clearly above 1.0x.
+The numbers this notebook exists to produce.
+
+An earlier version of this cell predicted that a tensor-core GPU would show a clear
+fp16 win. **That prediction was tested and refuted**: on this T4, fp16 autocast came
+out about 25% SLOWER than fp32, which is worse than on the laptop that has no tensor
+cores at all. So tensor cores were never the explanation.
+
+The live question is what replaced it. Autocast inserts a cast at every operation and
+is built for training, where those casts amortize over large batched matmuls; batch-1
+autoregressive decoding has none to amortize against. `fp16-half` converts the weights
+once and pays no per-op cast, and on the laptop it beat fp32 by 6-8% while autocast
+lost 8-12%. The two fp16 modes landed on opposite sides of fp32.
+
+What this run decides: whether `fp16-half` on real tensor cores turns that 6-8%
+bandwidth win into something large enough to matter - and specifically whether
+anything here reaches 1.0x realtime, which is the threshold that would make streaming
+viable on a T4 and change the architectural conclusion.
 """),
     code("""
 if not results.get("musicgen"):
@@ -194,13 +216,28 @@ if not results.get("musicgen"):
 
 rows = {(r["precision"], r["duration_s"]): r["median_generation_s"] for r in results["musicgen"]}
 durations = sorted({d for _, d in rows})
+modes = [m for m in ("fp32", "fp16", "fp16-half") if any(p == m for p, _ in rows)]
 
-print(f"{'duration':>9} {'fp32':>9} {'fp16':>9} {'speedup':>9}")
-print("-" * 39)
+print(f"{'duration':>9}" + "".join(f"{m:>12}" for m in modes)
+      + f"{'autocast':>11}{'half':>9}")
+print(f"{'':>9}" + "".join(f"{'':>12}" for m in modes) + f"{'vs fp32':>11}{'vs fp32':>9}")
+print("-" * (9 + 12 * len(modes) + 20))
 for d in durations:
-    fp32, fp16 = rows.get(("fp32", d)), rows.get(("fp16", d))
-    if fp32 and fp16:
-        print(f"{d:>8.0f}s {fp32:>8.2f}s {fp16:>8.2f}s {fp32 / fp16:>8.2f}x")
+    line = f"{d:>8.0f}s"
+    for m in modes:
+        v = rows.get((m, d))
+        line += f"{v:>11.2f}s" if v else f"{'-':>12}"
+    base = rows.get(("fp32", d))
+    for m in ("fp16", "fp16-half"):
+        v = rows.get((m, d))
+        line += f"{base / v:>10.2f}x" if (base and v) else f"{'-':>11}"
+    print(line)
+
+print()
+best = min(((v, p, d) for (p, d), v in rows.items()), key=lambda r: r[0] / r[2])
+print(f"fastest config: {best[1]} at {best[2]:.0f}s -> {best[0] / best[2]:.2f}x realtime")
+print("REALTIME REACHED - streaming is viable here" if best[0] / best[2] < 1.0
+      else "still slower than realtime; the precomputed library remains necessary")
 """),
 
     md("""
