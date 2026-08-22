@@ -391,23 +391,87 @@ def report(session_dir: str, skip_aci: bool = False) -> Dict:
     return metrics
 
 
+COMPARE_KEYS = (
+    "condition", "z_mean", "time_in_band_fraction", "time_to_target_s", "z_drift",
+    "aci_peak_r", "aci_peak_lag_s", "aci_p_circular_shift",
+    "elr_effect_z", "elr_p_permutation", "elr_pre_slope_z_per_s",
+    "rejection_rate_intervention",
+)
+
+# Contrasts where adaptive minus sham is the quantity of interest, and the sign that
+# would support the hypothesis. Sign is +1 when adaptive should EXCEED sham.
+CONTRASTS = {
+    "z_mean": (-1, "adaptive should sit closer to (below) target"),
+    "time_in_band_fraction": (+1, "adaptive should spend more time in band"),
+    "elr_effect_z": (+1, "adaptive should show more brain-follows-music than sham"),
+    "aci_peak_r": (+1, "adaptive should couple more strongly than sham"),
+}
+
+
 def compare(dirs: List[str]) -> None:
+    """
+    Side-by-side arms, plus the contrasts that are actually interpretable.
+
+    The table alone was misleading. Several metrics here mean nothing within a single
+    arm - the event-locked effect in particular is positive whenever the loop is
+    closed, whether or not the music does anything, because rung changes are
+    triggered by z moving. Only the DIFFERENCE between arms removes that, since the
+    yoked sham reproduces the same trigger structure with the contingency broken.
+
+    So the difference is computed and labelled rather than left for the reader to do
+    in their head, with the direction that would support the hypothesis stated
+    explicitly - written down before the data rather than chosen after it.
+    """
     rows = [report(d) for d in dirs]
-    print("=" * 74)
+    print("=" * 78)
     print("ARM COMPARISON")
-    print("=" * 74)
+    print("=" * 78)
     header = f"  {'metric':<26}" + "".join(f"{os.path.basename(d)[:16]:>18}" for d in dirs)
     print(header)
     print("  " + "-" * (len(header) - 2))
-    for key in ("condition", "time_in_band_fraction", "z_mean", "z_drift",
-                "time_to_target_s", "aci_peak_r", "aci_peak_lag_s", "aci_p_circular_shift",
-                "rejection_rate_intervention"):
+    for key in COMPARE_KEYS:
         cells = ""
         for row in rows:
             value = row.get(key, float("nan"))
             cells += f"{value:>18.3f}" if isinstance(value, (int, float)) else f"{str(value):>18}"
         print(f"  {key:<26}{cells}")
-    print("=" * 74)
+
+    by_condition: Dict[str, List[Dict]] = {}
+    for row in rows:
+        by_condition.setdefault(str(row.get("condition")), []).append(row)
+
+    adaptive = by_condition.get("adaptive") or by_condition.get("pilot") or []
+    sham = by_condition.get("sham") or []
+
+    if not adaptive or not sham:
+        print()
+        print("  No adaptive/sham pair here, so no contrast is computed.")
+        print("  The yoked sham is what makes any of these numbers causal; without it")
+        print("  every row above is descriptive only.")
+        print("=" * 78)
+        return
+
+    print()
+    print("  CONTRAST (adaptive - sham)")
+    print("  " + "-" * 74)
+    for key, (sign, expectation) in CONTRASTS.items():
+        a = np.nanmean([r.get(key, np.nan) for r in adaptive])
+        s = np.nanmean([r.get(key, np.nan) for r in sham])
+        if not (np.isfinite(a) and np.isfinite(s)):
+            continue
+        diff = a - s
+        supports = (diff * sign) > 0
+        print(f"    {key:<24} {diff:+8.3f}   {'supports' if supports else 'against '} - {expectation}")
+
+    n_a, n_s = len(adaptive), len(sham)
+    print()
+    print(f"  n = {n_a} adaptive, {n_s} sham.")
+    if min(n_a, n_s) < 6:
+        print("  THIS IS NOT A TEST. With this few sessions the contrast is a description of")
+        print("  these particular runs and nothing more - no p-value is computed because none")
+        print("  would be meaningful. scripts/power_analysis.py gives the n these effects")
+        print("  need: roughly 60 per arm independent, or 8 paired, for a 0.3 z effect.")
+    print("=" * 78)
 
 
 def main() -> int:

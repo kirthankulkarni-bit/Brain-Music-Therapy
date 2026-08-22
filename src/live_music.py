@@ -463,7 +463,56 @@ def _load_yoked_prompts(session_dir: str) -> list[tuple[float, str]]:
         if t0 is None:
             t0 = event["elapsed_s"]
         schedule.append((event["elapsed_s"] - t0, event["prompt"]))
+
+    _warn_if_source_chatters(session_dir, schedule)
     return schedule
+
+
+# Below this, consecutive prompt changes are closer together than a crossfade can
+# resolve, which is the signature of the pre-2026-08-16 controller chatter.
+_YOKE_MIN_MEDIAN_GAP_S = 2.0
+
+
+def _warn_if_source_chatters(session_dir: str, schedule: list[tuple[float, str]]) -> None:
+    """
+    Refuse to silently yoke to a session recorded before the chatter fix.
+
+    A yoked sham is only a control if it is acoustically matched to the adaptive arm.
+    PILOT01 was recorded with the pre-hysteresis controller, which changed the prompt
+    491 times in 20 minutes with 30% of switches closer together than the crossfade.
+    Replaying that schedule into a post-fix study produces a sham that audibly
+    CHATTERS while the adaptive arm does not - so the arms differ in an obvious
+    acoustic property, which is precisely what the yoking exists to prevent.
+
+    Caught by running it: a mock sham yoked to PILOT01 reported
+    sub_crossfade_fraction 0.353, against 0.0 for a post-fix adaptive session.
+
+    This warns rather than aborts, because there are legitimate reasons to replay an
+    old schedule - reproducing a prior analysis, or testing - and because a hard
+    failure mid-session is worse than an informed operator. It is loud enough not to
+    be missed in a log.
+    """
+    changes = [t for i, (t, p) in enumerate(schedule)
+               if i == 0 or p != schedule[i - 1][1]]
+    if len(changes) < 3:
+        return
+    gaps = np.diff(np.asarray(changes, dtype=float))
+    median_gap = float(np.median(gaps))
+    if median_gap >= _YOKE_MIN_MEDIAN_GAP_S:
+        return
+
+    print()
+    print("[eeg] " + "!" * 66)
+    print(f"[eeg] WARNING: {os.path.basename(session_dir)} looks like a PRE-FIX session.")
+    print(f"[eeg]   median gap between prompt changes: {median_gap:.2f} s "
+          f"({len(changes)} changes)")
+    print(f"[eeg]   below {_YOKE_MIN_MEDIAN_GAP_S:g} s means the source was chattering, and the sham will")
+    print("[eeg]   reproduce that chatter while a current adaptive arm will not.")
+    print("[eeg]   The arms would then differ in an audible acoustic property, which")
+    print("[eeg]   is exactly what yoking is supposed to rule out.")
+    print("[eeg]   Yoke to a session recorded after the hysteresis fix instead.")
+    print("[eeg] " + "!" * 66)
+    print()
 
 
 def _yoked_prompt_at(schedule: list[tuple[float, str]], elapsed: float) -> str:
