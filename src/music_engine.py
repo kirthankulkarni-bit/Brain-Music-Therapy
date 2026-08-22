@@ -132,7 +132,8 @@ def state_rung(z: float) -> int:
     return int(np.clip(round(_LADDER_CENTRE + z), 0, len(_ENERGY_LADDER) - 1))
 
 
-def build_prompt(z: float, target_z: float = -1.0, trend: Optional[float] = None) -> str:
+def build_prompt(z: float, target_z: float = -1.0, trend: Optional[float] = None,
+                 previous_prompt: Optional[str] = None) -> str:
     """
     Map the normalized arousal index onto a graded musical prompt.
 
@@ -169,14 +170,91 @@ def build_prompt(z: float, target_z: float = -1.0, trend: Optional[float] = None
 
     base = _ENERGY_LADDER[level]
 
-    if trend is None or not math.isfinite(trend) or abs(trend) < 0.05:
-        return base
+    return base + _trend_suffix(trend, error, previous_prompt)
 
-    # trend is dz/step; moving toward the target means error is shrinking.
+
+# Suffix strings, named so the hysteresis can recover its own previous state from a
+# prompt string rather than needing a stateful object. build_prompt stays pure: same
+# inputs give the same output, which is what lets build_library enumerate its range
+# by sweeping it.
+_SUFFIX_NONE = ""
+_SUFFIX_HOLDING = ", holding steady, minimal variation"
+_SUFFIX_RECEDING = ", softer and slower, receding"
+_SUFFIX_EMERGING = ", gradually more present"
+_ALL_SUFFIXES = (_SUFFIX_HOLDING, _SUFFIX_RECEDING, _SUFFIX_EMERGING)
+
+# Hysteresis band, in z units per hop, calibrated against MEASURED noise rather than
+# guessed. On PILOT01 the trend estimator's own sd was 0.275 at one hop and 0.068
+# over a 20-hop regression window, while the genuine drift being described was
+# 0.00088 per hop - a signal-to-noise ratio of 0.013. The old single threshold of
+# 0.05 sat five times BELOW the one-hop noise, so it was thresholding noise and the
+# suffix flipped on 24% of hops.
+#
+# ENTER is ~5 sd of the 20-hop estimator, EXIT ~2.5 sd. The gap between them is the
+# hysteresis: once a trend is asserted it persists until the estimate falls well
+# back, so an estimate hovering near a single threshold cannot flap across it.
+#
+# ENTER was first set to 0.20, at 3 sd. That turned out to sit exactly on the
+# largest slope PILOT01 ever produced - 0.1998 against a 0.2000 threshold. It fired
+# zero times out of 1023 windows, but by a margin of 0.0002, which is an accident
+# rather than a decision: another session would cross it arbitrarily. 0.35 sits
+# clearly above the observed ceiling, so "never fires" is a property of the
+# calibration instead of a coincidence.
+#
+# THE CONSEQUENCE IS THAT THE SUFFIX IS NOW INERT IN A NORMAL SESSION, and that is
+# a finding rather than a workaround. No plausible physiological excursion produces
+# a 20-hop slope this large: PILOT01's full z range was 4.8 units over 20 minutes,
+# and even a 3-unit move compressed into 20 s only reaches 0.15. Large enough
+# artifacts are rejected upstream before they ever reach here. Whether a branch
+# that cannot fire should remain in the code is a design call - see the note in
+# docs/results_latency.md - but it is at least now honestly calibrated rather than
+# firing on noise, which is what the pilot recorded it doing.
+_TREND_ENTER = 0.35
+_TREND_EXIT = 0.175
+
+
+def _previous_suffix(previous_prompt: Optional[str]) -> str:
+    """Recover the last suffix decision from the last prompt string."""
+    if not previous_prompt:
+        return _SUFFIX_NONE
+    for suffix in _ALL_SUFFIXES:
+        if previous_prompt.endswith(suffix):
+            return suffix
+    return _SUFFIX_NONE
+
+
+def _trend_suffix(trend: Optional[float], error: float,
+                  previous_prompt: Optional[str]) -> str:
+    """
+    Which trend suffix to append, with hysteresis against the previous decision.
+
+    Three states - none, moving toward the target, moving away from it - and a
+    transition needs |trend| >= _TREND_ENTER. Staying in a state only needs
+    |trend| > _TREND_EXIT. With no previous prompt there is no state to hold, so the
+    stricter ENTER threshold applies, which keeps the reachable prompt set unchanged
+    and therefore keeps the library's coverage guarantee intact.
+    """
+    if trend is None or not math.isfinite(trend):
+        return _SUFFIX_NONE
+
+    previous = _previous_suffix(previous_prompt)
+    magnitude = abs(trend)
+
+    # Below the exit threshold nothing is assertable, whatever was asserted before.
+    if magnitude < _TREND_EXIT:
+        return _SUFFIX_NONE
+
+    # Between EXIT and ENTER, hold whatever was already asserted but never start
+    # something new. This band is the hysteresis.
     moving_toward_target = (trend < 0) if error > 0 else (trend > 0)
-    if moving_toward_target:
-        return base + ", holding steady, minimal variation"
-    return base + (", softer and slower, receding" if error > 0 else ", gradually more present")
+    desired = _SUFFIX_HOLDING if moving_toward_target else (
+        _SUFFIX_RECEDING if error > 0 else _SUFFIX_EMERGING
+    )
+
+    if magnitude < _TREND_ENTER:
+        return previous
+
+    return desired
 
 
 # -------------------------------------------------------------------- config

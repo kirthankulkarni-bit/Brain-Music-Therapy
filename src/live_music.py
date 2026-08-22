@@ -64,6 +64,9 @@ from stream_utils import get_inlet  # noqa: E402
 
 PLOT_POINTS = 120  # at a 1 s hop this is a 2-minute rolling view
 
+# Hops of z used for the least-squares trend estimate. 20 s at the default 1 s hop.
+_TREND_WINDOW_HOPS = 20
+
 
 class SessionState:
     """Shared between the EEG worker and the Qt dashboard. Writes are single-producer."""
@@ -78,6 +81,7 @@ class SessionState:
         self.windows_total = 0
         self.windows_rejected = 0
         self.last_reject_reason: Optional[str] = None
+        self.last_error: Optional[str] = None
         self.baseline_progress = 0.0
         self.z_history = collections.deque([float("nan")] * PLOT_POINTS, maxlen=PLOT_POINTS)
         self.reject_history = collections.deque([0.0] * PLOT_POINTS, maxlen=PLOT_POINTS)
@@ -288,6 +292,7 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
     t_start = time.time()
     next_hop = t_start
     previous_z: Optional[float] = None
+    trend_history: collections.deque = collections.deque(maxlen=_TREND_WINDOW_HOPS)
     smoother.reset()
 
     try:
@@ -318,14 +323,28 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
 
             smoothed = smoother.update(feats.log_beta_alpha)
             z = normalizer.normalize(smoothed)
-            trend = (z - previous_z) if previous_z is not None else None
+
+            # Trend as a least-squares slope over a window, not a one-hop difference.
+            # PILOT01 measured the one-hop estimator's sd at 0.275 z-units per hop
+            # against a genuine drift of 0.00088 - it was almost entirely noise, and
+            # it drove 491 prompt changes in 20 minutes. A 20-hop regression cuts the
+            # estimator noise to 0.068. That is still well above the drift, which is
+            # why build_prompt also applies hysteresis rather than trusting this.
+            trend_history.append(z)
+            trend = None
+            if len(trend_history) >= _TREND_WINDOW_HOPS:
+                window = np.asarray(trend_history, dtype=float)
+                trend = float(np.polyfit(np.arange(window.size, dtype=float), window, 1)[0])
             previous_z = z
 
             if yoked_prompts is not None:
                 elapsed = now - t_start
                 prompt = _yoked_prompt_at(yoked_prompts, elapsed)
             else:
-                prompt = build_prompt(z, target_z=args.target, trend=trend)
+                # Previous prompt threaded through so build_prompt can apply
+                # hysteresis while staying a pure function.
+                prompt = build_prompt(z, target_z=args.target, trend=trend,
+                                      previous_prompt=engine.get_target_prompt())
 
             changed = engine.set_target_prompt(prompt)
 
@@ -353,14 +372,33 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
                 f"rej={state.rejection_rate:5.1%}  {'* ' if changed else '  '}{prompt[:52]}",
                 end="\r",
             )
+    except BaseException as exc:  # noqa: BLE001 - re-raised below, see comment
+        # A crash in this worker used to be invisible. The thread died, the finally
+        # block still wrote "session complete", and the result was a session
+        # directory that looked successful while containing no intervention data at
+        # all. A NameError introduced on 8/16 did exactly that: baseline logged
+        # normally, the loop died on its first intervention window, and the manifest
+        # and completion note were written as if the run had finished.
+        #
+        # With a participant in the chair that is the worst possible failure mode -
+        # you would not find out until analysis, by which point the session cannot
+        # be repeated. Record the failure in the session itself, and re-raise so it
+        # reaches the console instead of being swallowed by the thread.
+        failure = f"{type(exc).__name__}: {exc}"
+        logger.note("session FAILED", level="error", error=failure,
+                    phase=state.phase, windows_total=state.windows_total)
+        state.last_error = failure
+        print(f"\n\n[eeg] SESSION FAILED during {state.phase}: {failure}")
+        raise
     finally:
         stats = engine.stats()
         engine.stop()
-        logger.note("session complete", level="info", engine_stats=stats,
-                    rejection_rate=state.rejection_rate, windows_total=state.windows_total)
-        print("\n\n[eeg] engine stats:", stats)
+        if state.last_error is None:
+            logger.note("session complete", level="info", engine_stats=stats,
+                        rejection_rate=state.rejection_rate, windows_total=state.windows_total)
+            print("\n\n[eeg] engine stats:", stats)
         print(f"[eeg] session written to {logger.dir}")
-        state.phase = "done"
+        state.phase = "done" if state.last_error is None else "failed"
         state.running = False
 
 
