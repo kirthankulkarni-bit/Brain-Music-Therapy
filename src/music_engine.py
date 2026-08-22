@@ -108,9 +108,22 @@ import numpy as np
 
 # ------------------------------------------------------------------ prompting
 
-# Five graded energy levels replacing the old binary ambient/focus switch. Binary
-# states needed hysteresis to stop chattering; graded levels do not, because a
-# small change in z produces a small change in the prompt instead of a hard flip.
+# Five graded energy levels replacing the old binary ambient/focus switch.
+#
+# This comment used to claim that graded levels need no hysteresis, because a small
+# change in z produces a small change in the prompt rather than a hard flip. The
+# claim holds for the LADDER and PILOT01 confirmed it - the rung was stable for
+# 95.9% of a 20-minute session. It did NOT hold for the trend suffix appended in
+# build_prompt, which is a hard threshold plus a sign test and chattered on 24% of
+# hops. Hysteresis lives there now; see _trend_suffix.
+#
+# ONLY RUNGS 1-3 ARE REACHABLE. level is either goal or here +/- 1, and goal is
+# state_rung(target_z), which is rung 1 for the relaxation arm and rung 3 for the
+# focus arm. Rung 0 needs goal == 0 and rung 4 needs goal == 4, which no supported
+# target produces. Measured on PILOT01: the music used rung 1 for 96% of the session
+# and rung 2 for 4%, so in practice this is closer to a two-level system than a
+# five-level one. Do not describe it as five graded levels in a methods section.
+# See enumerate_prompts.__doc__ in scripts/build_library.py.
 #
 # Index 0 is the sparsest, index 4 the most energetic. One rung corresponds to
 # roughly one SD of the participant's own baseline arousal, so rung 2 is where

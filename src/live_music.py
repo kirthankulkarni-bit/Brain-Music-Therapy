@@ -18,11 +18,26 @@ are deliberate and worth stating plainly:
    session on purpose - it means bad electrode contact, and catching that before
    the intervention is the whole point.
 
-2. HYSTERESIS IS GONE. The 0.35/0.55 thresholds existed to debounce a binary
-   ambient/focus switch, and they were tuned on a signal that was mostly 60 Hz
-   mains hum. Graded prompts need no debouncing, and the exponential smoother
-   already suppresses blink-driven jumps. Any deadband that remains is defined in
-   z units, so it transfers across participants.
+2. HYSTERESIS IS BACK, ON THE TREND SUFFIX ONLY. This entry used to read
+   "hysteresis is gone", on the reasoning that the old 0.35/0.55 thresholds existed
+   to debounce a BINARY ambient/focus switch, and that graded prompts need no
+   debouncing because a small change in z produces a small change in the prompt.
+
+   That reasoning was right about the ladder and wrong about the suffix, and
+   PILOT01 showed the difference. The rung was stable - one rung for 95.9% of a
+   20-minute session, exactly as the graded design predicts. But the trend suffix
+   bolted on top of it is a hard threshold plus a sign test, and it flipped on 24%
+   of hops, driving 491 prompt changes and putting the audio in near-continuous
+   crossfade.
+
+   The cause was that trend was z minus previous_z, a one-hop difference whose sd
+   (0.275) was five times its own decision threshold (0.05). It was thresholding
+   noise. Trend is now a least-squares slope over _TREND_WINDOW_HOPS, and
+   build_prompt applies a dual-threshold hysteresis band on top of that. Replayed
+   against the pilot's own z, prompt changes drop from 477 to 24, all of them
+   genuine rung changes.
+
+   Any deadband is still defined in z units, so it transfers across participants.
 
 3. INVALID WINDOWS DO NOT UPDATE THE SMOOTHER. The old loop had no concept of
    validity, so one blink propagated through five subsequent chunks of the moving
