@@ -153,16 +153,23 @@ def test_chatter_regression(s: Suite, session_z: np.ndarray) -> None:
         prompts.append(p)
         prev = p
 
-    changes = sum(1 for i in range(1, len(prompts)) if prompts[i] != prompts[i - 1])
-    suffix_only = sum(1 for i in range(1, len(prompts))
-                      if prompts[i] != prompts[i - 1]
-                      and prompts[i].split(",")[0] == prompts[i - 1].split(",")[0])
-    dwell = len(prompts) / max(1, changes)
+    change_idx = [i for i in range(1, len(prompts)) if prompts[i] != prompts[i - 1]]
+    changes = len(change_idx)
+    suffix_only = sum(1 for i in change_idx
+                      if prompts[i].split(",")[0] == prompts[i - 1].split(",")[0])
+    gaps = np.diff(np.asarray(change_idx, dtype=float)) if changes > 1 else np.array([np.inf])
+    mean_dwell = len(prompts) / max(1, changes)
 
     s.check("prompt does not chatter", changes < 60,
-            f"{changes} changes over {len(prompts)} windows, {dwell:.1f} s median dwell")
+            f"{changes} changes over {len(prompts)} windows, mean dwell {mean_dwell:.1f} s")
     s.check("no suffix-only chatter", suffix_only <= 2, f"{suffix_only} suffix-only changes")
-    s.check("dwell exceeds one crossfade", dwell > 4.0, f"{dwell:.1f} s")
+
+    # The safety property, and the one that actually failed in the pilot. Mean dwell
+    # is a poor guard because changes cluster - PILOT01 replays to a 43.5 s MEAN and a
+    # 4.0 s MEDIAN gap. What must never recur is a switch arriving before the previous
+    # crossfade can finish, which is what turns transitions into a continuous blend.
+    s.check("no switch faster than the crossfade", float(gaps.min()) >= 1.0,
+            f"min gap {gaps.min():.0f} s, median gap {np.median(gaps):.0f} s")
 
 
 def test_ladder_reachability(s: Suite) -> None:

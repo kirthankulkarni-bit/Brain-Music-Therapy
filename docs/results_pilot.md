@@ -78,10 +78,18 @@ not create this defect; it removed the thing hiding it.
 `build_prompt` applies a dual-threshold hysteresis band. Replayed against the pilot's
 own z:
 
-| | changes | rung | suffix-only | median dwell |
-|---|---|---|---|---|
-| before | 477 | 24 | 453 | 2.2 s |
-| after | **24** | 24 | **0** | **43.5 s** |
+| | changes | rung | suffix-only | mean dwell | median gap | gaps < crossfade |
+|---|---|---|---|---|---|---|
+| before | 477 | 24 | 453 | 2.2 s | 1.4 s | **30%** |
+| after | **24** | 24 | **0** | 43.5 s | 4.0 s | **0%** |
+
+Read the two dwell columns together. Mean dwell rises to 43.5 s, but the remaining
+rung changes **cluster** — the median gap between consecutive changes is 4.0 s, and 13
+of 23 gaps still fall inside a single 8 s segment. What the fix guarantees is the
+property that actually failed: **no switch arrives before the previous crossfade can
+finish**, down from 30% of switches. Clustered genuine changes are the controller
+tracking a participant who is genuinely moving; sub-crossfade switching was the
+controller tracking noise.
 
 **The suffix is now inert in a normal session, and that is a finding rather than a
 workaround.** No plausible excursion reaches a 20-hop slope of 0.35: the pilot's
