@@ -308,6 +308,7 @@ def report(session_dir: str, skip_aci: bool = False) -> Dict:
     metrics = basic_metrics(session)
     if not skip_aci:
         metrics.update(coupling_index(session))
+        metrics.update(event_locked_response(session))
 
     print("=" * 74)
     print(f"SESSION: {session_dir}")
@@ -352,6 +353,20 @@ def report(session_dir: str, skip_aci: bool = False) -> Dict:
               f"(null peak mean {metrics['aci_null_mean']:.3f})")
     elif "aci_error" in metrics:
         print(f"\n  coupling index unavailable: {metrics['aci_error']}")
+
+    if "elr_effect_z" in metrics:
+        print("\n  EVENT-LOCKED RESPONSE (rung changes)")
+        print(f"    events / epochs       : {metrics['elr_n_events']} / {metrics['elr_n_epochs']}")
+        print(f"    effect                : {metrics['elr_effect_z']:+.3f} z "
+              f"(positive = z moved the way the music asked)")
+        print(f"    p (shuffled onsets)   : {metrics['elr_p_permutation']:.3f} "
+              f"(null sd {metrics['elr_null_sd']:.3f})")
+        print("    NOT causal on its own : rung changes are TRIGGERED by z moving, so a")
+        print("                            positive effect is what a loop with no effect")
+        print("                            also produces. Only adaptive minus yoked sham")
+        print("                            is interpretable. See the docstring.")
+    elif "elr_error" in metrics:
+        print(f"\n  event-locked response unavailable: {metrics['elr_error']}")
 
     reasons = metrics.get("rejection_reasons") or {}
     if reasons:
@@ -404,6 +419,182 @@ def main() -> int:
         return 1
     report(session_dir, skip_aci=args.skip_aci)
     return 0
+
+
+# ------------------------------------------------- event-locked coupling
+
+
+EVENT_PRE_S = 10.0    # baseline window before a rung change
+EVENT_POST_S = 30.0   # response window after it
+EVENT_MIN_SEPARATION_S = 15.0
+
+
+def event_locked_response(session: Dict, n_permutations: int = 500) -> Dict:
+    """
+    Brain response time-locked to rung changes, as a companion to coupling_index.
+
+    WHY THIS EXISTS, AND WHY THE CONTINUOUS INDEX IS NOT ENOUGH
+
+    coupling_index cross-correlates the whole session. That has a perverse property
+    which PILOT01 made concrete: a participant who reaches target and stays there
+    keeps the controller on a single rung, so the audio stops varying in the way the
+    controller drives, and there is almost nothing left for a continuous correlation
+    to find. The pilot returned r = -0.054, p = 0.795 while sitting on rung 1 for
+    95.9% of the session. The estimator was not failing - it is validated to recover
+    known lags at r ~ 0.85 - there was simply no controller-driven variation in the
+    window it was given.
+
+    So the continuous index is weakest exactly when the intervention is working
+    best. That is a bad property for a primary outcome, and it is not fixable by
+    improving the estimator.
+
+    This conditions on the events instead. A rung change is a discrete, timestamped
+    moment when the music demonstrably changed; the question is whether the brain
+    moved afterward. Standard event-related logic, and it stays powered when the
+    session is mostly stable because it only ever looks at the moments that carry
+    information.
+
+    DIRECTION IS FOLDED IN, NOT AVERAGED OUT. Changes up and down the ladder predict
+    opposite responses, so averaging them raw would cancel the effect. Each epoch is
+    signed by its direction, and the reported effect is "did z move the way the
+    music asked", positive meaning it did.
+
+    The null shuffles event times within the intervention rather than shuffling the
+    data, which preserves the autocorrelation of z. A naive t-test against zero
+    would be badly anticonservative on a signal this smooth.
+
+    THIS NUMBER IS NOT INTERPRETABLE ON ITS OWN. READ THIS BEFORE REPORTING IT.
+
+    A rung change happens BECAUSE z moved. z then keeps moving, because z is
+    autocorrelated and whatever was driving it did not stop. So a positive effect is
+    exactly what a closed loop with no therapeutic effect whatsoever would produce:
+    the music follows the brain, the brain continues on its existing trajectory, and
+    time-locking to the follow makes it look like a lead. Baseline-correcting on the
+    pre-window does not remove this, because z was already moving during that window
+    - that movement is what triggered the event.
+
+    On PILOT01 this returns +0.41 z at p = 0.104 where the continuous index found
+    nothing. That is a demonstration that the method has power, NOT evidence of an
+    effect, and the two must not be confused in writing.
+
+    The yoked sham is what makes it causal. In the sham arm the same rung changes
+    occur at the same times, driven by a DIFFERENT participant's brain, so the sham's
+    event-locked effect is an estimate of this confound with the contingency removed.
+    Adaptive minus sham is the causal quantity. A single-arm number is uninterpretable
+    and reporting one would be a serious error.
+    """
+    hop = session["manifest"].get("feature_config", {}).get("hop_seconds", 1.0)
+
+    windows = [w for w in session["windows"]
+               if w.get("phase") == "intervention" and w.get("valid")
+               and isinstance(w.get("z"), (int, float)) and np.isfinite(w["z"])]
+    if len(windows) < 60 or not session["audio"]:
+        return {"elr_error": "not enough valid intervention windows or no audio events"}
+
+    t_brain = np.asarray([w["elapsed_s"] for w in windows], dtype=float)
+    z = np.asarray([w["z"] for w in windows], dtype=float)
+
+    events = _rung_change_events(session)
+    if len(events) < 4:
+        return {"elr_error": f"only {len(events)} rung changes; need at least 4"}
+
+    grid = np.arange(-EVENT_PRE_S, EVENT_POST_S + hop, hop)
+    epochs, directions = [], []
+    for onset, direction in events:
+        seg = np.interp(onset + grid, t_brain, z, left=np.nan, right=np.nan)
+        if np.isnan(seg).mean() > 0.25:
+            continue
+        pre = seg[grid < 0]
+        if not np.isfinite(pre).any():
+            continue
+        # Baseline-correct so the epoch measures CHANGE, not the level the
+        # participant happened to be at when the music switched.
+        epochs.append(seg - np.nanmean(pre))
+        directions.append(direction)
+
+    if len(epochs) < 4:
+        return {"elr_error": f"only {len(epochs)} usable epochs after rejection"}
+
+    stack = np.asarray(epochs, dtype=float)
+    sign = np.asarray(directions, dtype=float).reshape(-1, 1)
+
+    # A change UP the ladder asks for more arousal, so agreement means z rises.
+    # Multiplying by the direction makes "agrees with the music" positive for both.
+    aligned = stack * sign
+    mean_curve = np.nanmean(aligned, axis=0)
+    post = mean_curve[grid > 0]
+    effect = float(np.nanmean(post))
+
+    rng = np.random.default_rng(0)
+    span = (t_brain[0] + EVENT_PRE_S, t_brain[-1] - EVENT_POST_S)
+    null = np.empty(n_permutations)
+    for i in range(n_permutations):
+        fake = rng.uniform(span[0], span[1], size=len(epochs))
+        vals = []
+        for onset, direction in zip(fake, directions):
+            seg = np.interp(onset + grid, t_brain, z, left=np.nan, right=np.nan)
+            pre = seg[grid < 0]
+            if not np.isfinite(pre).any():
+                continue
+            vals.append((seg - np.nanmean(pre)) * direction)
+        null[i] = np.nanmean(np.asarray(vals)[:, grid > 0]) if vals else np.nan
+
+    finite_null = null[np.isfinite(null)]
+    p_value = (float((np.abs(finite_null) >= abs(effect)).mean())
+               if finite_null.size else float("nan"))
+
+    return {
+        "elr_n_events": int(len(events)),
+        "elr_n_epochs": int(len(epochs)),
+        "elr_effect_z": effect,
+        "elr_p_permutation": p_value,
+        "elr_null_sd": float(np.std(finite_null)) if finite_null.size else float("nan"),
+        "elr_peak_z": float(np.nanmax(np.abs(post))) if post.size else float("nan"),
+        "elr_window_s": [-EVENT_PRE_S, EVENT_POST_S],
+        "elr_curve": [round(float(v), 4) for v in mean_curve],
+        "elr_note": (
+            "Positive effect means z moved the way the music asked. Companion to "
+            "the continuous ACI, which loses power when the session is stable."
+        ),
+    }
+
+
+def _rung_change_events(session: Dict) -> List[Tuple[float, int]]:
+    """
+    (onset_seconds, direction) for each rung change, direction +1 up / -1 down.
+
+    Keys on the RUNG, not the prompt string. Before the hysteresis fix the trend
+    suffix rewrote the prompt hundreds of times per session without the music's
+    energy level changing at all, and treating those as events would swamp the real
+    ones with noise. Closely spaced changes are also dropped: overlapping epochs are
+    not independent, and the pilot has runs of rung changes 1-3 s apart.
+    """
+    events: List[Tuple[float, int]] = []
+    previous_rung: Optional[int] = None
+    for seg in session["audio"]:
+        rung = seg.get("rung")
+        if rung is None:
+            rung = _rung_from_prompt(seg.get("prompt", ""))
+        if rung is None:
+            continue
+        if previous_rung is not None and rung != previous_rung:
+            direction = 1 if rung > previous_rung else -1
+            onset = float(seg["elapsed_s"])
+            if not events or onset - events[-1][0] >= EVENT_MIN_SEPARATION_S:
+                events.append((onset, direction))
+        previous_rung = rung
+    return events
+
+
+def _rung_from_prompt(prompt: str) -> Optional[int]:
+    """Recover the ladder position from a prompt string, for streaming-engine logs."""
+    if not prompt:
+        return None
+    from music_engine import _ENERGY_LADDER  # noqa: PLC0415 - avoids a cycle at import
+    for i, base in enumerate(_ENERGY_LADDER):
+        if prompt.startswith(base):
+            return i
+    return None
 
 
 if __name__ == "__main__":
