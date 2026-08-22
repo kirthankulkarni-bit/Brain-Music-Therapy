@@ -237,7 +237,7 @@ def fig_power(session_dir: str, out: str, sims: int) -> str:
             label="paired (crossover)")
 
     ax.axhline(60, color=MUTED, lw=0.8, ls=":")
-    ax.text(0.81, 62, "search ceiling", fontsize=7, color=MUTED, ha="right")
+    ax.text(0.21, 63, "search ceiling", fontsize=7, color=MUTED, ha="left")
     ax.set_yscale("log")
     ax.set_yticks([4, 6, 10, 20, 40, 60])
     ax.set_yticklabels(["4", "6", "10", "20", "40", ">60"])

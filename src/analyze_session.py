@@ -361,10 +361,18 @@ def report(session_dir: str, skip_aci: bool = False) -> Dict:
               f"(positive = z moved the way the music asked)")
         print(f"    p (shuffled onsets)   : {metrics['elr_p_permutation']:.3f} "
               f"(null sd {metrics['elr_null_sd']:.3f})")
+        slope = metrics.get("elr_pre_slope_z_per_s", float("nan"))
+        print(f"    pre-onset slope       : {slope:+.4f} z/s "
+              f"({'FLAT - good' if abs(slope) < 0.01 else 'RISING BEFORE THE EVENT'})")
+        print(f"    at onset / late half  : {metrics.get('elr_at_onset_z', float('nan')):+.2f} z"
+              f"  ->  {metrics.get('elr_late_half_z', float('nan')):+.2f} z"
+              f"{'   DECAYS' if metrics.get('elr_decays_after_onset') else ''}")
         print("    NOT causal on its own : rung changes are TRIGGERED by z moving, so a")
         print("                            positive effect is what a loop with no effect")
-        print("                            also produces. Only adaptive minus yoked sham")
-        print("                            is interpretable. See the docstring.")
+        print("                            also produces. A curve that rises BEFORE onset")
+        print("                            and decays after is that confound, not a")
+        print("                            response. Only adaptive minus yoked sham is")
+        print("                            interpretable. See the docstring.")
     elif "elr_error" in metrics:
         print(f"\n  event-locked response unavailable: {metrics['elr_error']}")
 
@@ -543,6 +551,21 @@ def event_locked_response(session: Dict, n_permutations: int = 500) -> Dict:
     p_value = (float((np.abs(finite_null) >= abs(effect)).mean())
                if finite_null.size else float("nan"))
 
+    # Quantify the confound instead of only warning about it. If z was already
+    # climbing before the music changed, the "response" is partly the tail of the
+    # excursion that TRIGGERED the change. PILOT01 shows this plainly: the curve
+    # rises from -0.45 to +1.0 across the pre-window, peaks at onset, then decays.
+    # A genuine audio-driven response would be flat before onset and rise after it.
+    pre_curve = mean_curve[grid < 0]
+    pre_slope = float("nan")
+    if pre_curve.size > 2 and np.isfinite(pre_curve).sum() > 2:
+        idx = np.arange(pre_curve.size, dtype=float)
+        ok_pre = np.isfinite(pre_curve)
+        pre_slope = float(np.polyfit(idx[ok_pre], pre_curve[ok_pre], 1)[0] / hop)
+
+    at_onset = float(mean_curve[np.argmin(np.abs(grid))])
+    late = float(np.nanmean(mean_curve[grid > EVENT_POST_S / 2]))
+
     return {
         "elr_n_events": int(len(events)),
         "elr_n_epochs": int(len(epochs)),
@@ -550,11 +573,21 @@ def event_locked_response(session: Dict, n_permutations: int = 500) -> Dict:
         "elr_p_permutation": p_value,
         "elr_null_sd": float(np.std(finite_null)) if finite_null.size else float("nan"),
         "elr_peak_z": float(np.nanmax(np.abs(post))) if post.size else float("nan"),
+        # Confound diagnostics. A large pre_slope, or a curve that peaks at onset and
+        # decays, means the effect is dominated by the excursion that caused the event.
+        "elr_pre_slope_z_per_s": pre_slope,
+        "elr_at_onset_z": at_onset,
+        "elr_late_half_z": late,
+        "elr_decays_after_onset": bool(np.isfinite(at_onset) and np.isfinite(late)
+                                       and abs(late) < abs(at_onset) / 2),
         "elr_window_s": [-EVENT_PRE_S, EVENT_POST_S],
         "elr_curve": [round(float(v), 4) for v in mean_curve],
         "elr_note": (
             "Positive effect means z moved the way the music asked. Companion to "
-            "the continuous ACI, which loses power when the session is stable."
+            "the continuous ACI, which loses power when the session is stable. "
+            "Check elr_pre_slope_z_per_s and elr_decays_after_onset before reading "
+            "the effect as a response: a pre-onset rise that decays afterward is the "
+            "trigger confound, not an audio-driven effect."
         ),
     }
 
