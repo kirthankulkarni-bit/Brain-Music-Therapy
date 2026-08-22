@@ -32,5 +32,9 @@
   "median_realtime_factor": 0.12513898313045502,
   "generation_slower_than_realtime_pct": 0.0,
   "underruns": 0,
-  "unique_prompts": 1
+  "unique_prompts": 1,
+  "switch_median_gap_s": 7.004500000000007,
+  "switch_under_crossfade_fraction": 0.0,
+  "prompt_changes": 0,
+  "audio_chattering": false
 }

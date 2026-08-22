@@ -163,6 +163,44 @@ def audio_metrics(session: Dict) -> Dict:
         "generation_slower_than_realtime_pct": float((gen > duration).mean() * 100) if gen.size else float("nan"),
         "underruns": int(max((s.get("underruns", 0) for s in segments), default=0)),
         "unique_prompts": len({s.get("prompt") for s in segments}),
+        **_switch_rate_metrics(segments),
+    }
+
+
+# A crossfade shorter than this cannot resolve, so switches closer together than it
+# blend rather than transition. 1.0 s is LibraryConfig's default.
+_ASSUMED_CROSSFADE_S = 1.0
+
+
+def _switch_rate_metrics(segments: List[Dict]) -> Dict:
+    """
+    How often the audio actually changed, computed from the log rather than trusted
+    from engine stats.
+
+    Recomputed here because engine stats only exist for sessions whose engine
+    reported them, while every session has audio events. It is the fastest way to
+    tell whether a session predates the 2026-08-16 chatter fix: PILOT01 shows a
+    median gap of 1.35 s and 30% of switches under the crossfade, where a post-fix
+    session shows neither.
+    """
+    if len(segments) < 3:
+        return {}
+    t = np.asarray([s.get("elapsed_s", np.nan) for s in segments], dtype=float)
+    t = t[np.isfinite(t)]
+    if t.size < 3:
+        return {}
+    gaps = np.diff(t)
+    gaps = gaps[gaps > 0]
+    if gaps.size == 0:
+        return {}
+
+    changes = [i for i in range(1, len(segments))
+               if segments[i].get("prompt") != segments[i - 1].get("prompt")]
+    return {
+        "switch_median_gap_s": float(np.median(gaps)),
+        "switch_under_crossfade_fraction": float((gaps < _ASSUMED_CROSSFADE_S).mean()),
+        "prompt_changes": len(changes),
+        "audio_chattering": bool(np.median(gaps) < 2.0),
     }
 
 
@@ -342,6 +380,15 @@ def report(session_dir: str, skip_aci: bool = False) -> Dict:
         print(f"    realtime factor       : {metrics.get('median_realtime_factor', float('nan')):.2f}x "
               f"({metrics.get('generation_slower_than_realtime_pct', float('nan')):.0f}% of segments slower than RT)")
         print(f"    buffer underruns      : {metrics.get('underruns')}")
+        if metrics.get("switch_median_gap_s") is not None:
+            print(f"    switch median gap     : {metrics['switch_median_gap_s']:.2f} s "
+                  f"({metrics.get('prompt_changes', 0)} prompt changes)")
+            if metrics.get("audio_chattering"):
+                print(f"    !! AUDIO CHATTERING   : "
+                      f"{metrics['switch_under_crossfade_fraction']:.0%} of switches faster")
+                print("                            than a crossfade. Pre-2026-08-16 controller.")
+                print("                            NOT acoustically representative, and must not")
+                print("                            be used as a --yoke-from source.")
 
     if "aci_peak_r" in metrics:
         print("\n  LAGGED AUDIO-NEURAL COUPLING")
