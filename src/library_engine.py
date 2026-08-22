@@ -141,6 +141,8 @@ class LibraryMusicEngine:
         self.switches = 0
         self.underruns = 0
         self.clipped_samples = 0
+        self.sub_crossfade_switches = 0
+        self._last_switch_at: Optional[float] = None
         self.selection_times_ms: list[float] = []
         self.switch_latencies_s: list[float] = []
         self.missing_prompts: list[str] = []
@@ -274,6 +276,23 @@ class LibraryMusicEngine:
         self._nxt = _Playhead(segment=segment, pos=start)
         self._xfade_i = 0
         self.switches += 1
+
+        # Diagnostic only, deliberately not a behavioural limit. If switches arrive
+        # faster than a crossfade can finish, the output is a continuous blend of two
+        # independent renders rather than music with transitions in it - audible as
+        # mush, and it flattens the amplitude envelope the coupling index depends on.
+        #
+        # PILOT01 hit this hard: 491 of 629 switches were prompt changes, 30% of them
+        # spaced closer than the 1.0 s crossfade. The cause was upstream, in
+        # build_prompt's trend suffix, which re-decides every hop from a raw one-hop
+        # difference whose sd (0.275) is five times its own 0.05 threshold. Rate
+        # limiting here would have hidden that rather than surfacing it, and would
+        # have raised worst-case latency from one crossfade to dwell + crossfade.
+        now = time.time()
+        if reason == "prompt-change" and self._last_switch_at is not None:
+            if now - self._last_switch_at < self.cfg.crossfade_seconds:
+                self.sub_crossfade_switches += 1
+        self._last_switch_at = now
 
         with self._prompt_lock:
             changed_at = self._prompt_changed_at
@@ -489,6 +508,9 @@ class LibraryMusicEngine:
             "switches": int(self.switches),
             "underruns": int(self.underruns),
             "clipped_samples": int(self.clipped_samples),
+            "sub_crossfade_switches": int(self.sub_crossfade_switches),
+            "sub_crossfade_fraction": (float(self.sub_crossfade_switches / self.switches)
+                                       if self.switches else 0.0),
             "median_selection_ms": float(np.median(sel)) if sel.size else float("nan"),
             "p95_selection_ms": float(np.percentile(sel, 95)) if sel.size else float("nan"),
             "median_switch_latency_s": float(np.median(lat)) if lat.size else float("nan"),
