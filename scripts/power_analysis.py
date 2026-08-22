@@ -28,6 +28,30 @@ across a plausible range instead of guessed at. Read the table as "if between-
 participant SD turns out to be X, you need N", not as a single answer. Narrowing that
 range is the main thing the first two or three real participants buy you.
 
+CHOOSE z_mean AS THE PRIMARY OUTCOME, NOT time_in_band
+
+Both are available via --outcome, and the difference is large enough to matter. n per
+arm for 80% power, between-participant SD 0.5, from 3000 simulated studies each:
+
+    effect (z)      0.2    0.3    0.5    0.8
+    z_mean          >60     60     20     10
+    time_in_band    >60    >60    >60     20
+
+time_in_band costs roughly a factor of three in effect size for the same n. Two
+reasons, both structural rather than incidental:
+
+  It dichotomises. "Inside the band or not" throws away how far inside or outside,
+  and thresholding a continuous measure always loses power. This is the standard
+  cost of dichotomisation, not a quirk of this simulation.
+
+  It saturates. A participant whose mean sits well outside the band scores near zero
+  in BOTH arms, so their contribution to the contrast collapses. This also removes
+  most of the paired design's advantage - participant offsets cancel exactly in a
+  difference of means, and do not cancel through a nonlinear saturating function.
+
+Report time_in_band descriptively, because it is the interpretable clinical quantity.
+Power the study on z_mean.
+
 DESIGNS
 
   independent   different people in each arm. The yoked sham replays participant A's

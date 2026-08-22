@@ -181,6 +181,27 @@ Switching means yoking each participant to their own earlier session rather than
 different person's. `--yoke-from` already supports it; what changes is the protocol
 and the counterbalancing, not the code.
 
+### Outcome choice costs more than design tuning
+
+n per arm, between-participant SD 0.5, 3000 simulated studies per cell:
+
+| effect (z) | 0.2 | 0.3 | 0.5 | 0.8 |
+|---|---|---|---|---|
+| `z_mean` | >60 | 60 | 20 | 10 |
+| `time_in_band` | >60 | >60 | >60 | 20 |
+
+**Powering on time-in-band costs roughly a factor of three in detectable effect.** It
+dichotomises — "inside the band or not" discards how far inside or outside, and
+thresholding a continuous measure always loses power — and it saturates, because a
+participant sitting well outside the band scores near zero in *both* arms.
+
+Saturation also removes most of the paired design's advantage: offsets cancel exactly
+in a difference of means and do not cancel through a nonlinear function. So the
+crossover recommendation above is specific to `z_mean`.
+
+Report time-in-band descriptively, since it is the interpretable clinical quantity.
+Power the study on mean z.
+
 Two caveats that belong next to the table:
 
 - **Between-participant SD is swept, not estimated.** One participant cannot estimate
