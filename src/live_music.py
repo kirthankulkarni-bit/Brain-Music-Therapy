@@ -256,33 +256,48 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
 
     # --------------------------------------------------- PHASE 2: intervention
 
-    yoked_prompts = _load_yoked_prompts(args.yoke_from) if args.yoke_from else None
-    if yoked_prompts:
-        print(f"[eeg] SHAM (yoked): replaying {len(yoked_prompts)} prompts from {args.yoke_from}")
+    # Setup is guarded separately from the control loop below, because the loop's
+    # finally block calls engine.stats() and the engine does not exist yet here.
+    # Everything in this block - yoke loading, prompt construction, engine
+    # construction, opening the audio device - can fail, and an unrecorded failure
+    # leaves a session directory holding a manifest and nothing else.
+    try:
+        yoked_prompts = _load_yoked_prompts(args.yoke_from) if args.yoke_from else None
+        if yoked_prompts:
+            print(f"[eeg] SHAM (yoked): replaying {len(yoked_prompts)} prompts from {args.yoke_from}")
 
-    initial_prompt = build_prompt(0.0, args.target, None)
-    if engine_kind == "library":
-        # Explicit failure, never a silent fallback to streaming. A session that
-        # quietly ran the 8 s-commitment engine when the operator asked for the
-        # 1.0 s one is unusable data that looks fine in the log.
-        manifest_path = os.path.join(args.library, "manifest.json")
-        if not os.path.exists(manifest_path):
-            print(f"[eeg] FATAL: no library at {manifest_path}")
-            print("[eeg]   build it:  python scripts/build_library.py")
-            print("[eeg]   or force generation:  --engine streaming")
-            return 2
-        engine = LibraryMusicEngine(
-            LibraryConfig(library_dir=args.library, crossfade_seconds=args.crossfade),
-            initial_prompt=initial_prompt,
-            on_segment=lambda info: logger.log_audio_segment(**info),
-        )
-    else:
-        engine = StreamingMusicEngine(
-            music_cfg,
-            initial_prompt=initial_prompt,
-            on_segment=lambda info: logger.log_audio_segment(**info),
-        )
-    engine.start()
+        initial_prompt = build_prompt(0.0, args.target, None)
+        if engine_kind == "library":
+            # Explicit failure, never a silent fallback to streaming. A session that
+            # quietly ran the 8 s-commitment engine when the operator asked for the
+            # 1.0 s one is unusable data that looks fine in the log.
+            manifest_path = os.path.join(args.library, "manifest.json")
+            if not os.path.exists(manifest_path):
+                raise FileNotFoundError(
+                    f"no library at {manifest_path}. Build it with "
+                    "'python scripts/build_library.py', or force generation with "
+                    "'--engine streaming'."
+                )
+            engine = LibraryMusicEngine(
+                LibraryConfig(library_dir=args.library, crossfade_seconds=args.crossfade),
+                initial_prompt=initial_prompt,
+                on_segment=lambda info: logger.log_audio_segment(**info),
+            )
+        else:
+            engine = StreamingMusicEngine(
+                music_cfg,
+                initial_prompt=initial_prompt,
+                on_segment=lambda info: logger.log_audio_segment(**info),
+            )
+        engine.start()
+    except BaseException as exc:  # noqa: BLE001 - recorded then re-raised
+        failure = f"{type(exc).__name__}: {exc}"
+        logger.note("session FAILED", level="error", error=failure, phase="setup")
+        state.last_error = failure
+        state.phase = "failed"
+        state.running = False
+        print(f"\n[eeg] SESSION FAILED during setup: {failure}")
+        raise
 
     state.phase = "intervention"
     print(f"\n[eeg] INTERVENTION: {args.duration:.0f} min, target z = {args.target:+.1f}")

@@ -1,0 +1,29 @@
+{
+  "session_dir": "C:\\Users\\KingKirthan\\OneDrive\\Desktop\\BrainMusicProject\\sessions\\alphatest_20260816_015511",
+  "participant": "alphatest",
+  "condition": "alpha_validation",
+  "sampling_rate": 256.0,
+  "target_z": -1.0,
+  "hop_seconds": 1.0,
+  "baseline_duration_s": 0.0,
+  "intervention_duration_s": 0.0,
+  "windows_baseline": 0,
+  "windows_intervention": 0,
+  "rejection_rate_baseline": NaN,
+  "rejection_rate_intervention": NaN,
+  "rejection_reasons": {
+    "amplitude artifact (blink/jaw/motion)": 127
+  },
+  "z_mean": NaN,
+  "z_median": NaN,
+  "z_sd": NaN,
+  "z_min": NaN,
+  "z_max": NaN,
+  "time_in_band_fraction": NaN,
+  "time_in_band_s": NaN,
+  "time_to_target_s": NaN,
+  "first_half_z_mean": NaN,
+  "second_half_z_mean": NaN,
+  "z_drift": NaN,
+  "segments": 0
+}

@@ -1,5 +1,5 @@
 {
-  "session_dir": "sessions\\PILOT01_20260822_153652",
+  "session_dir": "C:\\Users\\KingKirthan\\OneDrive\\Desktop\\BrainMusicProject\\sessions\\PILOT01_20260822_153652",
   "participant": "PILOT01",
   "condition": "pilot",
   "sampling_rate": 256.0,
@@ -32,16 +32,5 @@
   "median_realtime_factor": 0.0,
   "generation_slower_than_realtime_pct": 0.0,
   "underruns": 0,
-  "unique_prompts": 8,
-  "aci_peak_r": -0.054493646411271655,
-  "aci_peak_lag_s": 15.0,
-  "aci_p_circular_shift": 0.795,
-  "aci_r_at_zero_lag": -0.036644613765836144,
-  "aci_null_mean": 0.06875849800220958,
-  "aci_n_points": 1043,
-  "aci_lag_range_s": [
-    -5.0,
-    20.0
-  ],
-  "aci_note": "Both series on the analysis hop grid; the 0.5-4 Hz band is not recoverable at this rate, so this is slow-envelope coupling."
+  "unique_prompts": 8
 }
