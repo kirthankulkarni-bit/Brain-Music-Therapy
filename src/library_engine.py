@@ -69,7 +69,21 @@ import numpy as np
 class LibraryConfig:
     library_dir: str = "library"
     crossfade_seconds: float = 1.0   # THE latency knob - see module docstring
-    output_gain: float = 0.8
+    # 0.7, derived rather than chosen. Two uncorrelated segments summed under
+    # equal-power ramps reach at most sqrt(2) x the louder one's peak, and the
+    # library's peak ceiling is 0.99 (build_library's limiter), so the gain must
+    # satisfy gain <= 1 / (0.99 * sqrt(2)) = 0.714 for a crossfade never to clip.
+    #
+    # This was 0.8 while the library held 80 segments with a max peak of 0.482 - the
+    # bound was 0.681 and nothing came near it. Enlarging the library to 220 pulled
+    # in peakier renders (max peak 0.990, crest factor 12.3), and 13 of them can take
+    # a crossfade past 1.0. The 90 s verification render peaked at 0.792 and clipped
+    # nothing, so the risk is occasional rather than constant - which is exactly the
+    # kind of fault that survives testing and appears in a session.
+    #
+    # Costs about 1.2 dB, which is inaudible here: absolute volume is set on the
+    # playback device at the start of a session and never touched again.
+    output_gain: float = 0.7
     envelope_rate_hz: float = 20.0   # matches MusicConfig, for the coupling analysis
     random_start: bool = True        # enter new segments at a random offset, for variety
     seed: Optional[int] = None
@@ -165,9 +179,11 @@ class LibraryMusicEngine:
         sample_rate = int(manifest["sample_rate"])
         by_prompt: dict[str, list[_Segment]] = {}
 
-        # Everything is loaded up front and held in RAM. The whole library is about
-        # 80 segments x 8 s x 32 kHz float32 = ~80 MB, and keeping it resident is
-        # what lets the audio callback switch segments without touching the disk.
+        # Everything is loaded up front and held in RAM. At 220 segments x 8 s x
+        # 32 kHz float32 that is about 225 MB, and keeping it resident is what lets
+        # the audio callback switch segments without ever touching the disk. If the
+        # library grows much past this, memory-map instead of reading eagerly - the
+        # callback needs random access, not the whole array.
         for entry in manifest.get("prompts", []):
             loaded = []
             for seg in entry.get("segments", []):

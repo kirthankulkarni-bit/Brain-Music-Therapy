@@ -42,12 +42,17 @@ fast the GPU was. A resident library abandons the current segment mid-playback.
 
 ## Quick start
 
-Build the library once — 80 segments, needs a GPU. Resumable, so an interrupted run
+Build the library once — 220 segments, needs a GPU. Resumable, so an interrupted run
 continues where it stopped:
 
 ```bash
-python scripts/build_library.py --variants 4
+python scripts/build_library.py
 ```
+
+Renders are allocated by how much a prompt actually plays: 32 for each of the five
+suffix-free base prompts, which carry essentially the whole session, and 4 for the
+suffixed ones as insurance. A uniform 32 across all 20 would cost three hours of GPU
+to produce audio the controller cannot select.
 
 Budget ~25 min on a GTX 1650 Ti *for the generation itself* (79 of 80 segments took
 14–35 s, median 17.9 s). The one observed build took **2h44m wall clock**, because

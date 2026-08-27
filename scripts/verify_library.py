@@ -180,6 +180,20 @@ def main() -> int:
     checks.check("nothing was clipped", engine.clipped_samples == 0,
                  f"{engine.clipped_samples} samples clipped")
 
+    # The bound, not just this render. A 90 s render samples a fraction of the
+    # possible crossfade pairs, so "did not clip" is weaker than "cannot clip".
+    # Two uncorrelated segments under equal-power ramps sum to at most sqrt(2) x the
+    # louder peak. This caught a real regression: enlarging the library from 80 to
+    # 220 segments raised the max peak from 0.482 to 0.990 and pushed the bound to
+    # 1.120 at the then-current gain of 0.8, while the render itself still passed.
+    import json as _json
+    _man = _json.load(open(os.path.join(library, "manifest.json"), encoding="utf-8"))
+    _peaks = [seg["peak"] for e in _man["prompts"] for seg in e["segments"]]
+    _bound = max(_peaks) * (2 ** 0.5) * engine.cfg.output_gain
+    checks.check("crossfade CANNOT clip, not merely did not", _bound <= 1.0,
+                 f"bound {_bound:.3f} = peak {max(_peaks):.3f} x sqrt(2) x gain "
+                 f"{engine.cfg.output_gain}")
+
     # Headroom against the sqrt(2) worst case of summing two uncorrelated segments
     # under equal-power ramps. Passing on quiet synthetic tones proves nothing about
     # real renders, so report it rather than only asserting.

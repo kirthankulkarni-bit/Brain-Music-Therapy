@@ -91,6 +91,15 @@ finish**, down from 30% of switches. Clustered genuine changes are the controlle
 tracking a participant who is genuinely moving; sub-crossfade switching was the
 controller tracking noise.
 
+The fix had a consequence I did not check for at the time. With the suffix inert, the
+controller reaches only the base prompts — and the library had been built with 4
+renders of each of 20 prompts on the assumption all 20 were live. A 17-minute session
+therefore reached **12 of 80 segments**: 32 seconds of unique audio, looping. That is
+arguably a worse failure than the chatter it replaced. The library was rebuilt with
+renders allocated by actual use (32 per base prompt, 220 total), taking the dominant
+prompt from 32 s to 256 s of unique audio, each segment heard about 4 times in a
+20-minute session and entered at a random offset.
+
 **The suffix is now inert in a normal session, and that is a finding rather than a
 workaround.** No plausible excursion reaches a 20-hop slope of 0.35: the pilot's
 entire z range was 4.8 units over 20 minutes, and a 3-unit move compressed into 20 s
