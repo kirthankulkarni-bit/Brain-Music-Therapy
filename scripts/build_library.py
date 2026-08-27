@@ -189,9 +189,36 @@ def load_generator(model_name: str, backend: str):
     return generate, sample_rate, device
 
 
+def variants_for(entry: dict, base_count: int, suffix_count: int) -> int:
+    """
+    How many renders a prompt gets, allocated by how much it actually plays.
+
+    WHY THIS IS NOT UNIFORM. The library was first built with 4 renders of each of
+    the 20 prompts, on the assumption that all 20 were live. After the 2026-08-16
+    hysteresis fix the trend suffix is calibrated above the measured noise ceiling
+    and cannot fire in a normal session, so the controller only ever emits the five
+    SUFFIX-FREE base prompts - and under the default targets, only rungs 1-3 of those.
+
+    Replaying PILOT01 through the fixed controller, a 17-minute session reached 12 of
+    80 segments. The prompt covering 96% of it had 4 renders: 32 seconds of unique
+    audio looping for sixteen minutes. That is a worse failure than the chatter it
+    replaced, for a relaxation intervention.
+
+    So base prompts get the renders and suffixed prompts stay at the low count as
+    insurance against a future target_z or a change to the hysteresis thresholds.
+    Rendering 32 of all 20 prompts would cost three hours of GPU to produce audio the
+    controller cannot select.
+    """
+    return base_count if entry["variant"] == "base" else suffix_count
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Render the precomputed segment library")
     parser.add_argument("--out", default="library", help="library root directory")
+    parser.add_argument("--variants-base", type=int, default=32,
+                        help="renders for the suffix-free BASE prompts, which are the only "
+                             "ones the controller reaches once hysteresis is applied. These "
+                             "carry essentially the whole session, so they need the variety.")
     parser.add_argument("--variants", type=int, default=4,
                         help="independent renders per prompt. Raising this and re-running "
                              "adds only the new ones - existing segments are kept.")
@@ -221,8 +248,12 @@ def main() -> int:
         print(f"  ladder rungs {dead} are unreachable under the current design - see "
               f"enumerate_prompts.__doc__")
     print()
-    print(f"  {len(prompts)} prompts x {args.variants} variants = "
-          f"{len(prompts) * args.variants} segments, {args.seconds:g} s each")
+    planned = sum(variants_for(p, args.variants_base, args.variants) for p in prompts)
+    n_base = sum(1 for p in prompts if p["variant"] == "base")
+    print(f"  {n_base} base prompts x {args.variants_base} renders + "
+          f"{len(prompts) - n_base} suffixed x {args.variants} = {planned} segments, "
+          f"{args.seconds:g} s each")
+    print(f"  base prompts carry the session; suffixed ones are insurance (see variants_for)")
 
     if args.dry_run:
         return 0
@@ -243,7 +274,8 @@ def main() -> int:
                         existing[seg["file"]] = seg
         print(f"  resuming: {len(existing)} segments already rendered")
 
-    todo = sum(1 for p in prompts for v in range(args.variants)
+    todo = sum(1 for p in prompts
+               for v in range(variants_for(p, args.variants_base, args.variants))
                if f"segments/rung{p['rung']}_{p['variant']}_v{v}.wav" not in existing)
     if todo == 0:
         print("  nothing to render; library is already complete")
@@ -267,6 +299,7 @@ def main() -> int:
         "sample_rate": sample_rate,
         "segment_seconds": args.seconds,
         "variants_per_prompt": args.variants,
+        "variants_per_base_prompt": args.variants_base,
         "target_rms": _TARGET_RMS,
         "prompts": [],
     }
@@ -277,7 +310,7 @@ def main() -> int:
 
     for entry in prompts:
         segments = []
-        for variant_index in range(args.variants):
+        for variant_index in range(variants_for(entry, args.variants_base, args.variants)):
             rel = f"segments/rung{entry['rung']}_{entry['variant']}_v{variant_index}.wav"
 
             if rel in existing:
@@ -320,10 +353,10 @@ def main() -> int:
 
     _write_manifest(manifest_path, manifest, prompts)
 
-    total_audio = len(prompts) * args.variants * args.seconds
+    total_audio = planned * args.seconds
     print()
     print("=" * 74)
-    print(f"  {len(prompts) * args.variants} segments, {total_audio / 60:.1f} minutes of audio")
+    print(f"  {planned} segments, {total_audio / 60:.1f} minutes of audio")
     print(f"  rendered {done} this run in {(time.time() - build_started) / 60:.1f} minutes")
     print(f"  manifest: {manifest_path}")
     print("=" * 74)
