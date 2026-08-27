@@ -54,15 +54,23 @@ suffix-free base prompts, which carry essentially the whole session, and 4 for t
 suffixed ones as insurance. A uniform 32 across all 20 would cost three hours of GPU
 to produce audio the controller cannot select.
 
-Budget ~25 min on a GTX 1650 Ti *for the generation itself* (79 of 80 segments took
-14–35 s, median 17.9 s). The one observed build took **2h44m wall clock**, because
-the very first `generate()` call ran for 2h19m before the remaining 79 completed
-normally in 24.6 min. Cause not established; the most likely explanation is VRAM
-oversubscription on a 4 GB card immediately after another CUDA process released its
-context, with Windows WDDM paging to system RAM. The audio was unaffected — that
-segment is byte-for-byte normal (8.00 s, RMS 0.1000, all finite). If a build seems
-stuck on segment 1, it may genuinely be; it is resumable, so killing and rerunning
-costs nothing.
+Budget roughly **16 s per segment** on a GTX 1650 Ti. Two builds measured:
+
+| build | segments | wall clock | note |
+|---|---|---|---|
+| first | 80 | 2h44m | one 2h19m stall on segment 1 |
+| second | 140 | **37.8 min** | no stall |
+
+The first build's stall has never been explained. Its very first `generate()` ran for
+2h19m while the remaining 79 completed normally in 24.6 min; the audio was unaffected
+and is byte-for-byte normal. The leading hypothesis was VRAM oversubscription on a 4 GB
+card immediately after another CUDA process released its context, with Windows WDDM
+paging to system RAM — and the second build is weak support for it, since it started
+with no other CUDA process running and stalled not at all. One clean run is not proof,
+so treat it as a hypothesis still.
+
+If a build appears stuck on segment 1, it may genuinely be. It is resumable, so killing
+and rerunning costs nothing.
 
 Check everything checkable without hardware — 24 tests, no GPU, no headset:
 
@@ -92,7 +100,7 @@ python src/live_music.py --mock --headless --duration 1 --baseline-seconds 20
 | `src/library_engine.py` | precomputed-library playback, crossfading — **the default audio path** |
 | `src/analyze_session.py` | post-hoc analysis, including lagged audio-neural coupling |
 | `scripts/build_library.py` | renders every prompt the controller can emit |
-| `scripts/verify_library.py` | 14 checks on coverage, mixing, and latency |
+| `scripts/verify_library.py` | 15 checks on coverage, mixing, clipping bounds, and latency |
 | `scripts/run_tests.py` | every hardware-free check in one command |
 | `scripts/validate_coupling.py` | ground-truth validation of the coupling estimator |
 | `scripts/power_analysis.py` | simulated sample size, using the measured autocorrelation |
@@ -134,4 +142,5 @@ size or a permutation null that preserves the autocorrelation.
   arm independently, or **8** paired. `scripts/power_analysis.py` has the full table.
 - Does the crossfade sound acceptable? `python src/library_engine.py --wav demo.wav`
   renders a scripted arousal trajectory to listen to. This is the one cost of the 8×
-  that no metric captures.
+  that no metric captures, and PILOT01's audio was chattering, so it has never been
+  judged on a representative session.
