@@ -60,10 +60,13 @@ blinded, because the sham requires passing `--yoke-from`. Record this as a limit
 it is not solvable with the current implementation.
 
 **Yoking.** Each sham session replays a prior adaptive session's prompt schedule on its
-original timeline. Known fidelity limit, measured rather than assumed: the replay
-reproduces the source's prompt sequence exactly but runs **0.4–1.0 s early throughout**,
-and the source's first prompt is skipped. Describe the arms as *matched in sequence and
-duration with a known sub-hop lead*, never as identical.
+original timeline, reproducing the prompt-decision timeline exactly — verified to 0.00 s
+across PILOT01's 492 changes. Sham resolution is bounded by the source's analysis hop
+(1 s by default), which is well inside a crossfade.
+
+Sessions recorded before 2026-08-16 replayed against the wrong origin and ran 7.06 s
+early. That bias is baked into their logs and cannot be corrected retrospectively, so
+those sessions are disqualified as yoke sources — as are any flagged `audio_chattering`.
 
 ---
 

@@ -439,30 +439,61 @@ def _load_yoked_prompts(session_dir: str) -> list[tuple[float, str]]:
     matched; only the contingency between brain and music is broken. That contrast
     is what rules out regression to the mean, which a single-arm design cannot.
 
-    KNOWN FIDELITY LIMIT, measured rather than assumed. Offsets are normalized
-    against the FIRST AUDIO EVENT, but an audio event is logged when a segment is
-    produced, not when the prompt that chose it was set. Those differ by roughly one
-    hop, so a replay reproduces the source's prompt SEQUENCE exactly while running
-    about 1 s early throughout, and the source's very first prompt is skipped when it
-    was superseded before the first segment was logged.
+    FIDELITY. The replay now reproduces the source's prompt-decision timeline
+    EXACTLY - same prompts, same offsets, verified to 0.00 s against PILOT01's 492
+    changes.
 
-    Verified against sessions/ARTIFACT_20260816_144127 over its first 86 s: 8 source
-    changes against 7 replayed, identical order, no source prompt ever missing from
-    the replay, every replayed change 0.4-1.0 s early.
+    It did not before. Offsets were normalized against the first AUDIO EVENT, while
+    the prompts themselves were decided at window boundaries; the two timelines have
+    different origins because the engine takes time to produce and log its first
+    segment. On PILOT01 the first intervention window is at 126.18 s and the first
+    audio event at 133.24 s, so every replayed prompt landed 7.06 s EARLY - most of a
+    segment, on a loop whose entire latency budget is 6.5 s. Reading from windows also
+    fixes a dropped first prompt: one superseded before the first segment was logged
+    had no audio event at all, so it never appeared in the replay.
 
-    That is acceptable for the acoustic-matching claim - the same prompts play in the
-    same order for the same durations - and it is small against the 8 s segment
-    tenure and 5.5 s analysis latency. It is recorded here because "matched for every
-    acoustic property" is a claim a reviewer may probe, and the honest answer is
-    "matched in sequence and duration, with a systematic sub-hop lead", not "identical".
+    The remaining honest caveat is resolution, not offset: prompts are replayed on the
+    source's hop grid, so a sham cannot be finer-grained in time than the analysis hop
+    that produced it. At the default 1 s hop that is well inside a crossfade.
     """
     data = load_session(session_dir)
-    t0 = None
+
+    # Built from the WINDOW log, not the audio log. Windows record the prompt at the
+    # moment the controller decided it; audio events record it when a segment was
+    # produced and logged, which is later by however long the engine took.
+    #
+    # The old version read audio events and normalised against the first one, so the
+    # two timelines were anchored to different origins. Measured on PILOT01: the
+    # first intervention window is at 126.18 s and the first audio event at 133.24 s,
+    # so every prompt in the replay landed 7.06 s EARLY relative to when the source
+    # had actually decided it. That is most of a segment, on a loop whose whole
+    # latency budget is 6.5 s.
+    #
+    # Windows also fix the dropped first prompt: a prompt superseded before the first
+    # segment was logged simply had no audio event, and so never appeared in the
+    # replay at all.
+    windows = [w for w in data["windows"]
+               if w.get("phase") == "intervention" and w.get("prompt")]
     schedule: list[tuple[float, str]] = []
-    for event in data["audio"]:
-        if t0 is None:
-            t0 = event["elapsed_s"]
-        schedule.append((event["elapsed_s"] - t0, event["prompt"]))
+
+    if windows:
+        t0 = windows[0]["elapsed_s"]
+        last = None
+        for window in windows:
+            prompt = window["prompt"]
+            if prompt != last:
+                schedule.append((float(window["elapsed_s"]) - t0, prompt))
+                last = prompt
+    else:
+        # Sessions logged before windows carried a prompt field. Fall back rather
+        # than refuse, and say so, because the offset is a known bias not a crash.
+        print(f"[eeg] NOTE: {os.path.basename(session_dir)} has no per-window prompts; "
+              "falling back to the audio-event timeline, which runs several seconds early.")
+        t0 = None
+        for event in data["audio"]:
+            if t0 is None:
+                t0 = event["elapsed_s"]
+            schedule.append((event["elapsed_s"] - t0, event["prompt"]))
 
     _warn_if_source_chatters(session_dir, schedule)
     return schedule

@@ -101,11 +101,19 @@ The sham replays a prior session's prompt schedule on its original timeline, ign
 the current participant's EEG. Every acoustic property is matched; only the
 contingency is broken.
 
-Known fidelity limit, measured rather than assumed: the replay reproduces the source's
-prompt sequence exactly but runs **0.4–1.0 s early throughout**, and the source's first
-prompt is skipped. Offsets normalize against the first *audio event*, which is logged
-when a segment is produced rather than when the prompt was set. Describe the arms as
-"matched in sequence and duration, with a known sub-hop lead", never as identical.
+Fidelity: the replay reproduces the source's prompt-decision timeline **exactly** —
+same prompts, same offsets, verified to 0.00 s across PILOT01's 492 changes.
+
+This was not true before 2026-08-16. Offsets normalised against the first *audio
+event* while prompts are decided at window boundaries, and those origins differ by
+however long the engine takes to produce its first segment — 7.06 s on PILOT01. Every
+replayed prompt landed that much early, and a first prompt superseded before the first
+segment was logged vanished entirely. Sessions recorded before the fix carry that bias
+in their logs; it cannot be recovered retrospectively, so do not use them as sources.
+
+The remaining caveat is resolution rather than offset: prompts replay on the source's
+hop grid, so a sham is never finer-grained in time than the analysis hop that produced
+it. At a 1 s hop that sits well inside a crossfade.
 
 ### What the participant does
 
