@@ -72,7 +72,7 @@ so treat it as a hypothesis still.
 If a build appears stuck on segment 1, it may genuinely be. It is resumable, so killing
 and rerunning costs nothing.
 
-Check everything checkable without hardware — 24 tests, no GPU, no headset:
+Check everything checkable without hardware — 26 tests, no GPU, no headset:
 
 ```bash
 python scripts/run_tests.py
@@ -106,11 +106,15 @@ python src/live_music.py --mock --headless --duration 1 --baseline-seconds 20
 | `scripts/power_analysis.py` | simulated sample size, using the measured autocorrelation |
 | `scripts/ladder_policy.py` | compares energy-ladder policies against real z |
 | `scripts/make_figures.py` | the paper figures, drawn from session data |
+| `scripts/verify_claims.py` | regenerates every number the preprint cites, and checks it |
 | `benchmarks/latency_probe.py` | the latency budget probe; run it on any new machine |
 | `notebooks/latency_probe_colab.ipynb` | the same probe on a Colab GPU |
 | `docs/results_latency.md` | every benchmark run, and what each one licenses |
 | `docs/results_pilot.md` | the first closed-loop session and the three defects it found |
 | `docs/figures/` | generated figures, regenerate with `make_figures.py` |
+| `docs/analysis_plan.md` | **frozen pre-registration** — do not edit; see below |
+| `docs/preprint_outline.md` | what the paper can claim, mapped to evidence |
+| `docs/runbook_session.md` | how to run one participant, start to finish |
 
 ## Pre-registration
 
