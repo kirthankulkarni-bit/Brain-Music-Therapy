@@ -4,7 +4,7 @@ Written before drafting, because the hardest editorial decision is which paper t
 and that decision is made badly once prose exists to defend.
 
 Every claim below is mapped to the artefact that supports it. Run
-`python scripts/verify_claims.py` to regenerate all 13 headline numbers from the data
+`python scripts/verify_claims.py` to regenerate all 14 headline numbers from the data
 on disk; all currently reproduce.
 
 ---
@@ -62,7 +62,7 @@ each is a trap the next group will hit:
 - event-locked measures are confounded by the trigger in any closed loop
 - dichotomised outcomes cost ~3× in detectable effect
 
-**C5. A validated, reproducible instrument.** Ground-truth-tested estimator, 24 automated
+**C5. A validated, reproducible instrument.** Ground-truth-tested estimator, 25 automated
 checks, every headline number regenerable by one command.
 
 ---
