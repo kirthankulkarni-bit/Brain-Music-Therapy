@@ -128,17 +128,91 @@ confound. They are not dependent variables and will not be tested for an effect.
 
 ## 4. Sample size and stopping
 
-n is set by `scripts/power_analysis.py` for 80% power at α = 0.05. For the crossover
-design chosen in §2, at a smallest effect of interest of **0.3 z**, that is **8
-participants** — each completing both arms, so 16 sessions.
+n is set by `scripts/power_analysis.py` for 80% power at α = 0.05, for the crossover
+design chosen in §2. The smallest effect of interest is justified below, and it is
+**0.15 z**, not the 0.3 z used as a working figure while the design was open.
 
-Recruit **10** rather than 8. The simulated figure is a floor (§2), and dropout plus the
-exclusion criteria in §5 will cost sessions. Two spare participants is cheaper than
-discovering the study is underpowered after collection.
+### Smallest effect of interest: 0.15 z, and what that costs
 
-`[DECIDE]` **Smallest effect of interest.** 0.3 z is used above as a working figure and
-is not yet justified clinically. Justify it or replace it before freezing — a sample
-size computed from an arbitrary effect is not a sample size.
+**One z unit is defined by the participant's own baseline.** On PILOT01 the baseline SD
+of log10(beta/alpha) was 0.1912, so:
+
+| effect | log10 units | change in beta/alpha |
+|---|---|---|
+| 0.15 z | 0.029 | 6.8% |
+| 0.30 z | 0.057 | 14.1% |
+| 1.00 z | 0.191 | 55.3% |
+
+For scale, the eyes-open to eyes-closed manipulation in `fig0` is **1.7 z** (+113% alpha).
+A therapeutic contrast should be expected far below a gross physiological one.
+
+**Literature anchors.** Two classes, and the distinction matters:
+
+| source | effect | in z here |
+|---|---|---|
+| Music vs *silence*: frontal beta −23% (monaural beats) | d = 1.0 | 0.59 |
+| Music vs *silence*: frontal beta −36% (pentatonic) | d = 1.56 | 1.01 |
+| Neurofeedback **neural modulation**, pooled | g = 0.34 (0.23–0.44) | — |
+| Same, pre- to post-training | g = 0.26 (0.03–0.50) | — |
+| Same, audio-only feedback subgroup | SMD = 0.28 (−3.19 to 3.75) | — |
+
+The music-vs-silence effects are **upper bounds, not estimates**. Both arms here hear
+music; the contrast isolates *contingency alone*, which must be smaller. The
+neurofeedback neural-modulation figures are the right comparison class, and they cluster
+at g ≈ 0.26–0.34.
+
+**The unit conversion that decides the number.** `z` is standardised by *within*-participant
+baseline SD; meta-analytic g is standardised by *between*-participant SD. They are not
+the same currency, and conflating them is the easy mistake here. At a between-participant
+SD of 0.5 z, a g of 0.3 corresponds to **0.15 z**, not 0.30 z.
+
+So **0.15 z** is the literature-matched target. The previous 0.3 z working figure was
+twice the effect the closest comparable literature reports.
+
+### What that costs, stated plainly
+
+| effect (z) | as d (bSD 0.5) | participants for 80% power |
+|---|---|---|
+| 0.59 (music vs silence — upper bound) | 1.18 | 4 |
+| 0.30 (the old working figure) | 0.60 | 8 |
+| 0.20 | 0.40 | 15 |
+| **0.15 (literature-matched)** | **0.30** | **30** |
+
+**At n = 10, power to detect 0.15 z is 38%.** A study with 38% power is more likely to
+miss a real effect than find it.
+
+Splitting the work differently does not rescue it. Effective sample size scales with time
+on task, so averaging K sessions per arm shrinks each participant's SE by √K — and the
+**total number of sessions stays near 60 regardless**:
+
+| design | participants | sessions each | total sessions |
+|---|---|---|---|
+| 1 × 20 min per arm | 30 | 2 | 60 |
+| 2 × 20 min per arm | 15 | 4 | 60 |
+| 3 × 20 min per arm | 10 | 6 | 60 |
+
+In a paired design the information is proportional to total time on task. Trading
+participants for sessions-per-participant changes recruitment difficulty, not power.
+
+### `[DECIDE]` The consequence, which is a scope decision rather than a statistical one
+
+Three honest options:
+
+1. **Power the study properly.** ~60 sessions, e.g. 15 participants × 2 sessions per arm.
+   At ~45 min per session including setup, roughly 45 hours of lab time.
+2. **Run it as an explicit feasibility study.** n = 10, powered only for effects ≥ 0.3 z.
+   Report the **confidence interval and an estimate of the between-participant SD**, and
+   state that it is not powered to test H1. This is legitimate and publishable — and the
+   between-participant SD it yields is exactly what a properly powered follow-up needs,
+   since that quantity is currently swept rather than known.
+3. **Reduce the noise.** n_eff is limited by the 9 s decorrelation time. A shorter
+   smoother or a longer session raises it, but re-validating the arousal index would be
+   required first.
+
+**Option 2 is the honest fit for the current scale**, and it changes what the paper claims
+rather than weakening it: a feasibility study reporting a CI is a contribution, whereas an
+underpowered study reporting p > 0.05 as evidence of no effect is not. Whichever is
+chosen, the choice and its power must be stated in the manuscript before collection.
 
 **No optional stopping.** The n is fixed in advance. Data will not be inspected for
 significance and then extended. If recruitment falls short, the shortfall is reported
@@ -233,7 +307,41 @@ sham exists to detect, and a publishable finding.
 
 ---
 
-## 8. Deviations
+## 8. Sources
+
+Literature anchors for the smallest effect of interest (§4). Accessed 2026-08-28.
+
+1. **Neurofeedback neural modulation, meta-analysis.** *Systematic review and meta-analysis
+   of the relationships between real-time neurofeedback training parameters and
+   acquisition of neural modulation.* Frontiers in Human Neuroscience (2025).
+   Pooled Hedges' g = 0.34 (95% CI 0.23–0.44) first-to-last session; g = 0.26 (0.03–0.50)
+   pre- to post-training. Feedback-modality subgroups: complex 0.50 (0.29–0.71), simple
+   audiovisual 0.59 (−0.01 to 1.19), simple visual 0.16 (0.07–0.25), simple audio 0.28
+   (−3.19 to 3.75). 55 groups from 39 studies, mean N = 16.2.
+   https://pmc.ncbi.nlm.nih.gov/articles/PMC12426165/
+
+   *This is the primary anchor* — it measures neural modulation, which is this study's
+   outcome class, rather than clinical symptom change. Note the audio-only subgroup's
+   confidence interval is uninformative; the pooled estimate carries the weight.
+
+2. **Relaxation audio, frontal beta reduction.** *Pentatonic sequences and monaural beats
+   to facilitate relaxation: an EEG study.* Frontiers in Psychology (2024), N = 31.
+   Frontal beta fell 0.13 → 0.10 µV²/Hz with monaural beats (d = 1.0, p = 0.04) and
+   0.11 → 0.07 with pentatonic sequences (d = 1.56, p = 0.02). Alpha showed no significant
+   change in either condition.
+   https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2024.1369485/full
+
+   *Upper bound only.* This is audio versus silence; both arms here hear music.
+
+3. **Relaxation training, clinical outcomes.** Ten-year systematic review with
+   meta-analysis: d = 0.57 within-group, 0.51 between-group for anxiety.
+   https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2427027/
+
+   Context only — these are symptom scales, not EEG, and are not commensurable with z.
+
+---
+
+## 9. Deviations
 
 Any departure from this plan after freezing is recorded here with its date, reason, and
 commit — including deviations that seem trivial. An unlogged deviation is
