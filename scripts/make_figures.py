@@ -5,6 +5,11 @@ Each figure exists to carry one claim that is hard to make in prose, and every o
 drawn from data on disk rather than illustrated. If a session is missing, the figure
 that depends on it is skipped rather than faked.
 
+  0. alpha validation     eyes-closed alpha increase. The sensing-path evidence: it
+                          shows the rig measures cortex rather than amplifier noise,
+                          and it is the first thing a reviewer looks for. Drawn from
+                          the alpha-test session rather than an intervention one.
+
   1. session trajectory   z over the intervention with the target band and the rung
                           changes marked. Shows the closed loop doing its job, and
                           shows visually how rarely the rung actually moves - which
@@ -65,7 +70,7 @@ ACCENT = "#c1440e"
 MUTED = "#8a8a8a"
 BAND = "#4a7fb5"
 plt.rcParams.update({
-    "figure.dpi": 150, "savefig.dpi": 200, "savefig.bbox": "tight",
+    "figure.dpi": 150, "savefig.dpi": 300, "savefig.bbox": "tight",
     "font.size": 9, "axes.labelsize": 9, "axes.titlesize": 10,
     "axes.spines.top": False, "axes.spines.right": False,
     "axes.edgecolor": INK, "text.color": INK, "axes.labelcolor": INK,
@@ -83,6 +88,65 @@ def intervention_z(session: dict) -> tuple[np.ndarray, np.ndarray]:
 
 
 # ------------------------------------------------------------------- figures
+
+
+def fig_alpha_validation(out: str) -> str:
+    """
+    The eyes-closed alpha increase, redrawn in the shared figure style.
+
+    alpha_test.py already saves a plot inside its session directory, but it predates
+    these figures and does not match them. A paper's figures should read as one set,
+    and this one carries the claim everything else depends on: that the frontal
+    channels are measuring cortex. Regenerated from the session log so it stays tied
+    to the data rather than to a PNG someone might not be able to reproduce.
+    """
+    from scipy import stats as sps
+
+    dirs = sorted(glob.glob(os.path.join(_ROOT, "sessions", "alphatest*")))
+    if not dirs:
+        return ""
+    session = load_session(dirs[-1])
+    rows = [w for w in session["windows"]
+            if w.get("phase") in ("eyes_open", "eyes_closed")
+            and isinstance(w.get("alpha"), (int, float)) and np.isfinite(w["alpha"])]
+    if len(rows) < 40:
+        return ""
+
+    t = np.asarray([w["elapsed_s"] for w in rows], dtype=float)
+    a = np.log10(np.asarray([w["alpha"] for w in rows], dtype=float))
+    closed = np.asarray([w["phase"] == "eyes_closed" for w in rows], dtype=bool)
+
+    ratio = float(10 ** (a[closed].mean() - a[~closed].mean()))
+    t_stat, p = sps.ttest_ind(a[closed], a[~closed], equal_var=False)
+    pooled = np.sqrt((a[closed].var(ddof=1) + a[~closed].var(ddof=1)) / 2)
+    d = float((a[closed].mean() - a[~closed].mean()) / pooled) if pooled > 0 else float("nan")
+
+    fig, ax = plt.subplots(figsize=(9, 3.2))
+    # Shade contiguous eyes-closed blocks rather than per-window, so the blocks read
+    # as blocks and a single rejected window does not punch a hole in the band.
+    start = None
+    for i, c in enumerate(closed):
+        if c and start is None:
+            start = t[i]
+        elif not c and start is not None:
+            ax.axvspan(start, t[i], color=BAND, alpha=0.15, lw=0)
+            start = None
+    if start is not None:
+        ax.axvspan(start, t[-1], color=BAND, alpha=0.15, lw=0)
+    ax.plot([], [], color=BAND, lw=6, alpha=0.35, label="eyes closed")
+    ax.plot(t, a, color=INK, lw=1.0, label="log10 alpha power")
+
+    ax.set_xlabel("time (seconds)")
+    ax.set_ylabel("log$_{10}$ alpha power\n(AF7/AF8 mean)")
+    ax.set_title(f"Sensing-path validation: alpha rises {ratio:.2f}x with eyes closed "
+                 f"(d = {d:.2f}, p = {p:.1e}, n = {closed.sum()}/{(~closed).sum()} windows)",
+                 fontsize=9)
+    ax.legend(frameon=False, fontsize=8, loc="upper left", ncol=2)
+    ax.margins(x=0.01)
+    path = os.path.join(out, "fig0_alpha_validation.png")
+    fig.savefig(path)
+    plt.close(fig)
+    return path
 
 
 def fig_trajectory(session: dict, out: str) -> str:
@@ -278,6 +342,7 @@ def main() -> int:
 
     made = []
     for name, fn in (
+        ("alpha validation", lambda: fig_alpha_validation(out)),
         ("session trajectory", lambda: fig_trajectory(session, out)),
         ("autocorrelation", lambda: fig_autocorrelation(session, out)),
         ("switch intervals", lambda: fig_chatter(session, out)),

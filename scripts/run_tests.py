@@ -356,6 +356,10 @@ def main() -> int:
 
     s.section("4. VALIDATORS - library coverage and the coupling estimator")
     run_validator(s, "library coverage and mixing", "verify_library.py", ["--synthetic"])
+    # Guards the manuscript against the code moving underneath it. A number copied
+    # into prose once and then diverging is how honest projects publish
+    # unreproducible papers.
+    run_validator(s, "preprint claims still reproduce", "verify_claims.py", [])
     if args.quick:
         s.skip("coupling ground truth", "--quick")
     else:

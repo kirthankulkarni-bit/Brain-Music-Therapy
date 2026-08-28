@@ -1,0 +1,262 @@
+"""
+verify_claims.py - regenerate every number the preprint cites, and check it.
+
+WHY
+
+A preprint's numbers get copied from a terminal into prose once, and then the code
+moves. Six weeks later the manuscript says 1.14x and the repository says 1.05x, and
+nobody knows which is right or when it changed. That is how honest projects end up
+with unreproducible papers.
+
+So every headline claim is recorded here with the value asserted in the manuscript and
+the computation that produces it, straight from the artefacts on disk. Running this
+before submission tells you whether the paper still describes the code.
+
+A failure here is not necessarily a bug. It means a number moved, and the manuscript
+has to move with it - or the claim was wrong. Either way it must be looked at rather
+than rounded away, so the tolerances are tight.
+
+Usage:
+    python scripts/verify_claims.py
+    python scripts/verify_claims.py --verbose
+"""
+
+from __future__ import annotations
+
+import argparse
+import collections
+import glob
+import json
+import os
+import sys
+
+import numpy as np
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(_ROOT, "src"))
+sys.path.insert(0, os.path.join(_ROOT, "scripts"))
+
+
+def _bench(pattern: str) -> list[dict]:
+    return [json.load(open(f, encoding="utf-8"))
+            for f in sorted(glob.glob(os.path.join(_ROOT, "benchmarks", pattern)))]
+
+
+def _median_gen(run: dict, precision: str, duration: float) -> float:
+    for row in run.get("musicgen") or []:
+        if row["precision"] == precision and row["duration_s"] == duration:
+            return float(row["median_generation_s"])
+    return float("nan")
+
+
+def _pilot() -> dict:
+    from session_logger import load_session
+    dirs = sorted(glob.glob(os.path.join(_ROOT, "sessions", "PILOT*")))
+    if not dirs:
+        raise FileNotFoundError("no PILOT session on disk")
+    return load_session(dirs[-1])
+
+
+def _pilot_z() -> np.ndarray:
+    z = np.asarray([w["z"] for w in _pilot()["windows"]
+                    if w.get("phase") == "intervention" and w.get("valid")
+                    and isinstance(w.get("z"), (int, float))], dtype=float)
+    return z[np.isfinite(z)]
+
+
+# ---------------------------------------------------------------- the claims
+
+
+def claim_t4_best_realtime() -> tuple[float, str]:
+    """Best realtime factor across all T4 runs and precisions."""
+    runs = _bench("latency_colab-tesla-t4-run*.json")
+    best = min(row["median_generation_s"] / row["duration_s"]
+               for r in runs for row in r["musicgen"])
+    return best, f"{len(runs)} T4 runs, all precisions"
+
+
+def claim_t4_precision_ordering() -> tuple[float, str]:
+    """Fraction of run x duration cells where fp32 < fp16-half < fp16."""
+    runs = _bench("latency_colab-tesla-t4-run*.json")
+    cells = ok = 0
+    for r in runs:
+        for d in (4.0, 8.0):
+            a, b, c = (_median_gen(r, "fp32", d), _median_gen(r, "fp16-half", d),
+                       _median_gen(r, "fp16", d))
+            if all(np.isfinite([a, b, c])):
+                cells += 1
+                ok += int(a < b < c)
+    return ok / max(1, cells), f"{ok} of {cells} cells"
+
+
+def claim_t4_fp16half_vs_fp32() -> tuple[float, str]:
+    """fp16-half speedup over fp32 at 8 s, median across runs."""
+    runs = _bench("latency_colab-tesla-t4-run*.json")
+    a = np.median([_median_gen(r, "fp32", 8.0) for r in runs])
+    b = np.median([_median_gen(r, "fp16-half", 8.0) for r in runs])
+    return a / b, "median of 3 T4 runs at 8 s"
+
+
+def claim_t4_between_run_variance() -> tuple[float, str]:
+    """Worst max/min across T4 runs for any configuration."""
+    runs = _bench("latency_colab-tesla-t4-run*.json")
+    worst = 0.0
+    for p in ("fp32", "fp16", "fp16-half"):
+        for d in (4.0, 8.0):
+            v = [_median_gen(r, p, d) for r in runs]
+            v = [x for x in v if np.isfinite(x)]
+            if len(v) > 1:
+                worst = max(worst, max(v) / min(v))
+    return worst, "worst config across 3 T4 runs"
+
+
+def claim_pilot_effective_n() -> tuple[float, str]:
+    z = _pilot_z()
+    rho = float(np.corrcoef(z[:-1], z[1:])[0, 1])
+    return z.size * (1 - rho) / (1 + rho), f"AR(1) from {z.size} windows"
+
+
+def claim_pilot_autocorrelation() -> tuple[float, str]:
+    z = _pilot_z()
+    return float(np.corrcoef(z[:-1], z[1:])[0, 1]), "lag-1 of PILOT01 intervention z"
+
+
+def claim_pilot_rejection() -> tuple[float, str]:
+    rows = [w for w in _pilot()["windows"] if w.get("phase") == "intervention"]
+    return sum(1 for w in rows if not w.get("valid")) / len(rows), f"{len(rows)} windows"
+
+
+def claim_chatter_before() -> tuple[float, str]:
+    """Prompt changes actually logged in PILOT01."""
+    audio = _pilot()["audio"]
+    return float(sum(1 for i in range(1, len(audio))
+                     if audio[i].get("prompt") != audio[i - 1].get("prompt"))), \
+        f"{len(audio)} audio events"
+
+
+def claim_chatter_after() -> tuple[float, str]:
+    """Prompt changes when the same z is replayed through the fixed controller."""
+    from music_engine import build_prompt
+    z = _pilot_z()
+    hist, prev, changes = collections.deque(maxlen=20), None, 0
+    for v in z:
+        hist.append(v)
+        tr = (float(np.polyfit(np.arange(len(hist), dtype=float), np.asarray(hist), 1)[0])
+              if len(hist) >= 20 else None)
+        p = build_prompt(float(v), -1.0, tr, previous_prompt=prev)
+        if prev is not None and p != prev:
+            changes += 1
+        prev = p
+    return float(changes), f"replay of {z.size} windows"
+
+
+def claim_library_clipping_bound() -> tuple[float, str]:
+    from library_engine import LibraryConfig
+    man = json.load(open(os.path.join(_ROOT, "library", "manifest.json"), encoding="utf-8"))
+    peaks = [s["peak"] for e in man["prompts"] for s in e["segments"]]
+    return max(peaks) * (2 ** 0.5) * LibraryConfig().output_gain, \
+        f"{len(peaks)} segments, gain {LibraryConfig().output_gain}"
+
+
+def claim_library_dominant_variants() -> tuple[float, str]:
+    """Renders available for the prompt that carries a relaxation session."""
+    from music_engine import _ENERGY_LADDER
+    man = json.load(open(os.path.join(_ROOT, "library", "manifest.json"), encoding="utf-8"))
+    for e in man["prompts"]:
+        if e["prompt"] == _ENERGY_LADDER[1]:
+            return float(len(e["segments"])), "rung 1 base, 96% of PILOT01"
+    return float("nan"), "not found"
+
+
+def claim_latency_budget() -> tuple[float, str]:
+    """End-to-end worst case with the library engine."""
+    from library_engine import LibraryConfig
+    runs = _bench("latency_colab-tesla-t4-run1.json")
+    analysis = runs[0]["analysis"][1]["total_analysis_latency_s"]
+    return analysis + LibraryConfig().crossfade_seconds, \
+        f"{analysis:g} s analysis + {LibraryConfig().crossfade_seconds:g} s crossfade"
+
+
+def claim_coupling_recovers_lag() -> tuple[float, str]:
+    """Ground-truth check: the estimator must return the lag it was given."""
+    from analyze_session import coupling_index
+    from validate_coupling import build_session
+    got = coupling_index(build_session(6.0, retrospective=False, seed=1),
+                         n_permutations=120).get("aci_peak_lag_s", float("nan"))
+    return float(got), "synthetic session, true lag +6.0 s"
+
+
+def claim_alpha_validation_ratio() -> tuple[float, str]:
+    """Eyes-closed alpha increase - the evidence the rig measures cortex."""
+    from session_logger import load_session
+    dirs = sorted(glob.glob(os.path.join(_ROOT, "sessions", "alphatest*")))
+    session = load_session(dirs[-1])
+    rows = [w for w in session["windows"]
+            if w.get("phase") in ("eyes_open", "eyes_closed")
+            and isinstance(w.get("alpha"), (int, float)) and np.isfinite(w["alpha"])]
+    a = np.log10(np.asarray([w["alpha"] for w in rows], dtype=float))
+    closed = np.asarray([w["phase"] == "eyes_closed" for w in rows], dtype=bool)
+    return float(10 ** (a[closed].mean() - a[~closed].mean())),         f"{closed.sum()} closed / {(~closed).sum()} open windows"
+
+
+# claim -> (function, value asserted in the manuscript, tolerance)
+CLAIMS = {
+    "T4 best realtime factor":            (claim_t4_best_realtime,        1.05,   0.01),
+    "T4 fp32<fp16-half<fp16 consistency": (claim_t4_precision_ordering,   1.00,   0.001),
+    "T4 fp16-half vs fp32 at 8 s":        (claim_t4_fp16half_vs_fp32,     0.952,  0.01),
+    "T4 between-run max/min":             (claim_t4_between_run_variance, 1.18,   0.02),
+    "PILOT01 lag-1 autocorrelation":      (claim_pilot_autocorrelation,   0.953,  0.005),
+    "PILOT01 effective sample size":      (claim_pilot_effective_n,       25.3,   0.5),
+    "PILOT01 intervention rejection":     (claim_pilot_rejection,         0.131,  0.005),
+    "prompt changes before the fix":      (claim_chatter_before,          491,    1),
+    "prompt changes after the fix":       (claim_chatter_after,           24,     2),
+    "library clipping bound":             (claim_library_clipping_bound,  0.980,  0.005),
+    "renders on the dominant prompt":     (claim_library_dominant_variants, 32,   0),
+    "end-to-end budget, library":         (claim_latency_budget,          6.5,    0.05),
+    "coupling recovers a +6 s lag":       (claim_coupling_recovers_lag,   6.0,    1.0),
+    "eyes-closed alpha ratio":            (claim_alpha_validation_ratio,  2.13,   0.02),
+}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Verify every number the preprint cites")
+    parser.add_argument("--verbose", action="store_true")
+    args = parser.parse_args()
+
+    print("=" * 78)
+    print("CLAIM VERIFICATION - every headline number, regenerated from artefacts")
+    print("=" * 78)
+    print(f"  {'claim':<36}{'asserted':>10}{'measured':>11}  status")
+    print("  " + "-" * 74)
+
+    failures = []
+    for name, (fn, asserted, tol) in CLAIMS.items():
+        try:
+            measured, source = fn()
+        except Exception as exc:  # noqa: BLE001
+            print(f"  {name:<36}{asserted:>10.3f}{'ERROR':>11}  {type(exc).__name__}")
+            failures.append(name)
+            continue
+        ok = np.isfinite(measured) and abs(measured - asserted) <= tol
+        print(f"  {name:<36}{asserted:>10.3f}{measured:>11.3f}  "
+              f"{'ok' if ok else 'MOVED'}")
+        if args.verbose:
+            print(f"  {'':<36}{'':<21}  source: {source}")
+        if not ok:
+            failures.append(name)
+
+    print()
+    print("=" * 78)
+    if failures:
+        print(f"  {len(failures)} CLAIM(S) MOVED - the manuscript no longer matches the code:")
+        for name in failures:
+            print(f"    {name}")
+        print("  Update the manuscript, or find out why the number changed. Do not round.")
+    else:
+        print(f"  All {len(CLAIMS)} claims reproduce. The manuscript matches the repository.")
+    print("=" * 78)
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
