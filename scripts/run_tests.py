@@ -280,6 +280,38 @@ def test_baseline_abort(s: Suite) -> None:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# Content hash of docs/analysis_plan.md at the freeze, tag preregistration-v1,
+# commit e45bd32. Line endings are normalised before hashing because git rewrites
+# them on checkout, so the raw hash of a fresh clone on Windows would differ from
+# the same file on Linux and the check would fail for the wrong reason.
+FROZEN_PLAN_SHA256 = "538328a2dac75fc9bab76fecb7f7cfa11ef88db9b08f6cf7e187bd1fe4fe4ce5"
+
+
+def test_preregistration_frozen(s: Suite) -> None:
+    """
+    The analysis plan must not change after the freeze.
+
+    A pre-registration's whole value is that it predates the data. "We did not edit it"
+    is an assertion; a hash checked on every test run is a fact. Without this, an
+    accidental edit - a typo fix, a reflow, a well-meant clarification - silently
+    destroys the guarantee and nothing anywhere would notice.
+
+    If this fails and the change was deliberate, the change does not belong in the file.
+    It belongs in section 9 as a dated deviation, and the freeze stands.
+    """
+    import hashlib
+
+    path = os.path.join(_ROOT, "docs", "analysis_plan.md")
+    if not os.path.exists(path):
+        s.skip("pre-registration frozen", "analysis_plan.md not found")
+        return
+    raw = open(path, "rb").read().replace(b"\r\n", b"\n")
+    digest = hashlib.sha256(raw).hexdigest()
+    s.check("pre-registration unchanged since the freeze",
+            digest == FROZEN_PLAN_SHA256,
+            f"{digest[:16]}... vs frozen {FROZEN_PLAN_SHA256[:16]}...")
+
+
 def test_analysis_runs(s: Suite) -> None:
     """analyze_session must complete on every session on disk."""
     from analyze_session import report
@@ -351,10 +383,13 @@ def main() -> int:
     test_session_failure_recording(s)
     test_baseline_abort(s)
 
-    s.section("3. ANALYSIS - the pipeline must complete on real sessions")
+    s.section("3. PRE-REGISTRATION - frozen before the data")
+    test_preregistration_frozen(s)
+
+    s.section("4. ANALYSIS - the pipeline must complete on real sessions")
     test_analysis_runs(s)
 
-    s.section("4. VALIDATORS - library coverage and the coupling estimator")
+    s.section("5. VALIDATORS - library coverage and the coupling estimator")
     run_validator(s, "library coverage and mixing", "verify_library.py", ["--synthetic"])
     # Guards the manuscript against the code moving underneath it. A number copied
     # into prose once and then diverging is how honest projects publish

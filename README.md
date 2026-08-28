@@ -112,6 +112,31 @@ python src/live_music.py --mock --headless --duration 1 --baseline-seconds 20
 | `docs/results_pilot.md` | the first closed-loop session and the three defects it found |
 | `docs/figures/` | generated figures, regenerate with `make_figures.py` |
 
+## Pre-registration
+
+The analysis plan was **frozen 2026-08-28, before any participant data existed**.
+
+| | |
+|---|---|
+| document | [docs/analysis_plan.md](docs/analysis_plan.md) |
+| git tag | `preregistration-v1` |
+| commit | `e45bd321dbaa048f946fc1d199cfc8a57a05d33e` |
+| sha256 (LF-normalised) | `538328a2dac75fc9bab76fecb7f7cfa11ef88db9b08f6cf7e187bd1fe4fe4ce5` |
+
+`scripts/run_tests.py` checks that hash on every run, so an edit after the freeze fails
+the suite rather than passing unnoticed. Retrieve the frozen text with:
+
+```bash
+git show preregistration-v1:docs/analysis_plan.md
+```
+
+Changes after the freeze — including any forced by ethics review — are logged as dated
+deviations in §9 of the plan, each with its own commit. The file itself does not move.
+
+**It is a feasibility study.** At n = 10, power to detect the literature-matched 0.15 z
+effect is 38%, so no efficacy test is run and no p-value is reported for the primary
+contrast. The outputs are an interval and two variance components. See §1 and §4.
+
 ## Three things to know before trusting a number here
 
 **Between-run variance dominates.** The same configuration on this laptop varied by

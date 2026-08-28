@@ -189,7 +189,7 @@ present in a different visual language from everything it supports.
 | ~~Decide independent vs crossover~~ | **DONE** — crossover, cross-yoked, n = 10 |
 | ~~Justify the smallest effect of interest~~ | **DONE** — 0.15 z, anchored to the neurofeedback meta-analytic g with the unit conversion made explicit |
 | ~~Decide scope given 38% power~~ | **DONE** — explicit feasibility study; estimation, not testing |
-| Freeze `analysis_plan.md` and record its commit hash | a pre-registration that can still be edited is not one |
+| ~~Freeze `analysis_plan.md` and record its commit hash~~ | **DONE** — tag `preregistration-v1`, commit `e45bd32`, hash checked by the test suite |
 | Choose a venue | arXiv `eess.AS` or `q-bio.NC`; a systems venue may want a demo |
 | Decide on releasing the library | 109 MB of audio; a Zenodo DOI is the usual route |
 
@@ -203,3 +203,8 @@ python scripts/make_figures.py     # regenerate from current data
 
 Record the commit hash in the manuscript. A preprint whose numbers cannot be traced to a
 specific commit is not reproducible, whatever the repository contains.
+
+Cite the pre-registration as tag **`preregistration-v1`** (commit `e45bd32`, frozen
+2026-08-28), and state in §9 that it predates all participant data. The content hash is
+in the README and enforced by the test suite, so the claim is checkable by a reader
+rather than taken on trust.
