@@ -123,12 +123,29 @@ C4 in full, with `fig2`. The strongest transferable content in the paper.
 
 ### §8 Limitations
 Frontal alpha only; single site, headset, operator; operator not blinded; **no efficacy
-data**; the ladder narrower than designed; the trend suffix inert.
+data and none planned at this scale**; the ladder narrower than designed; the trend
+suffix inert; the feasibility study underpowered for efficacy **by design and stated as
+such** rather than discovered afterwards.
 
-### §9 Planned study
-**Within-participant crossover, cross-yoked, n = 10** (recruiting above the simulated
-floor of 8), counterbalanced order, ≥48 h washout, period effect tested before pooling.
-Primary outcome mean z, paired t-test. Full specification in `docs/analysis_plan.md`.
+### §9 Planned study — a feasibility study, stated as one
+**Within-participant crossover, cross-yoked, n = 10**, counterbalanced, ≥48 h washout.
+**Explicitly a feasibility study**: at this n, power to detect the literature-matched
+0.15 z effect is 38%, so no efficacy test is run and **no p-value is reported for the
+primary contrast**. Full specification in `docs/analysis_plan.md`.
+
+The primary output is an interval (±0.20 z at n = 10 under modest heterogeneity) plus
+estimates of the **between-participant** and **participant × condition** SDs — the two
+quantities that currently force the power analysis to sweep a range instead of naming a
+number, and therefore the two that a properly powered trial needs most.
+
+Progression criteria are fixed in advance, including what result would *not* justify a
+larger trial.
+
+**Justifying 0.15 z is worth a paragraph**, because the unit conversion is where this
+kind of study usually goes wrong. `z` is standardised by *within*-participant baseline
+SD; meta-analytic Hedges' g by *between*-participant SD. At a between-participant SD of
+0.5 z, the pooled neurofeedback neural-modulation effect (g ≈ 0.26–0.34) maps to 0.15 z,
+not the 0.3 z that a naive reading of "both are about 0.3" would suggest.
 
 Two design details are worth a sentence each in the paper, because both are easy to get
 wrong and neither is obvious:
@@ -138,7 +155,7 @@ wrong and neither is obvious:
   only halfway. The bias runs toward the null.
 - **The simulated n is a floor.** The power simulation cancels participant offsets
   exactly; real crossover data carries a participant-by-condition interaction it does not
-  model.
+  model — which is precisely one of the quantities this study exists to estimate.
 
 Stating the design in advance, in a preprint that cannot report its outcome, is a
 credibility asset rather than an admission.
@@ -170,7 +187,9 @@ present in a different visual language from everything it supports.
 | task | why |
 |---|---|
 | ~~Decide independent vs crossover~~ | **DONE** — crossover, cross-yoked, n = 10 |
-| **Justify the 0.3 z smallest effect** | a sample size from an arbitrary effect is not a sample size; this is the last open item |
+| ~~Justify the smallest effect of interest~~ | **DONE** — 0.15 z, anchored to the neurofeedback meta-analytic g with the unit conversion made explicit |
+| ~~Decide scope given 38% power~~ | **DONE** — explicit feasibility study; estimation, not testing |
+| Freeze `analysis_plan.md` and record its commit hash | a pre-registration that can still be edited is not one |
 | Choose a venue | arXiv `eess.AS` or `q-bio.NC`; a systems venue may want a demo |
 | Decide on releasing the library | 109 MB of audio; a Zenodo DOI is the usual route |
 

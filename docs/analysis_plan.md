@@ -1,8 +1,7 @@
 # Analysis plan (pre-registration draft)
 
-**Status: DRAFT. Design is decided (§2). One decision remains, marked `[DECIDE]`.
-Settle it, then freeze this file and record its commit hash before the first
-participant.**
+**Status: DECIDED. This is a FEASIBILITY study, not a test of efficacy. Freeze this
+file and record its commit hash before the first participant.**
 
 The point of writing this before data exists is that every choice below becomes
 harder to make honestly afterwards. Which outcome is primary, what counts as an
@@ -14,23 +13,45 @@ named so a reviewer can check them.
 
 ---
 
-## 1. Hypotheses
+## 1. Objectives
 
-**H1 (primary).** Participants in the adaptive arm reach a lower mean arousal index
-than participants in the yoked-sham arm, where arousal is `z`, the frontal
-log(beta/alpha) ratio normalised against each participant's own resting baseline, and
-the target is z = −1.0.
+**This study is not powered to test whether the intervention works, and does not
+attempt to.** At the achievable sample size, power to detect the literature-matched
+effect is 38% (§4). A study that reports p > 0.05 at 38% power has learned nothing and
+implied something false. So the objectives are estimation and feasibility.
 
-**H2 (secondary, mechanistic).** Audio-neural coupling is stronger in the adaptive arm
-than in the yoked sham. Because the sham reproduces the same acoustic sequence with the
-brain-music contingency broken, a difference cannot be produced by regression to the
-mean, by the passage of time, or by the music alone.
+### Primary objective — estimation
 
-**Directional and one-sided in intent, tested two-sided.** The design predicts a sign;
-the tests do not assume it. A significant effect in the wrong direction is a result,
-not a null.
+Estimate the adaptive − sham difference in mean z **with a confidence interval**, and
+estimate the two variance components that a properly powered trial needs and that
+nothing currently pins down:
 
----
+- **between-participant SD** of session-mean z — currently swept across 0.3–0.7 in the
+  power analysis because one participant cannot estimate it
+- **participant × condition SD** — the heterogeneity of response that the paired
+  simulation assumes to be zero, which is why its sample sizes are a floor
+
+These two numbers are the study's main scientific output. They convert the next trial's
+sample size from a range into a number.
+
+### Secondary objective — feasibility
+
+| metric | recorded from |
+|---|---|
+| recruitment rate | enrolment log |
+| retention (both sessions completed) | session directories |
+| session exclusion rate | the criteria in §5 |
+| intervention rejection rate per arm | `analyze_session.py` |
+| protocol adherence (washout, order, cross-yoking) | allocation table |
+
+### What is explicitly NOT an objective
+
+No claim that the adaptive arm outperforms the sham. **No p-value is reported for the
+primary contrast.** The direction and interval are reported; the word "significant" does
+not appear in connection with H1.
+
+The mechanistic contrasts (ACI, event-locked response) are reported as intervals for the
+same reason, and remain interpretable only as adaptive − sham (§3).
 
 ## 2. Design
 
@@ -126,11 +147,12 @@ confound. They are not dependent variables and will not be tested for an effect.
 
 ---
 
-## 4. Sample size and stopping
+## 4. Sample size, and why this is a feasibility study
 
-n is set by `scripts/power_analysis.py` for 80% power at α = 0.05, for the crossover
-design chosen in §2. The smallest effect of interest is justified below, and it is
-**0.15 z**, not the 0.3 z used as a working figure while the design was open.
+**n = 10 participants**, each completing both arms — 20 sessions.
+
+That number is not derived from power, because at this scale power is not available. It
+is set by what the estimation objectives need and what the project can actually run.
 
 ### Smallest effect of interest: 0.15 z, and what that costs
 
@@ -194,35 +216,50 @@ on task, so averaging K sessions per arm shrinks each participant's SE by √K �
 In a paired design the information is proportional to total time on task. Trading
 participants for sessions-per-participant changes recruitment difficulty, not power.
 
-### `[DECIDE]` The consequence, which is a scope decision rather than a statistical one
+### The decision, and its consequence
 
-Three honest options:
+Of the three options considered, this study takes the second: **run at n = 10 as an
+explicit feasibility study.** Properly powering for 0.15 z needs roughly 60 sessions
+however they are distributed, which is out of scope here.
 
-1. **Power the study properly.** ~60 sessions, e.g. 15 participants × 2 sessions per arm.
-   At ~45 min per session including setup, roughly 45 hours of lab time.
-2. **Run it as an explicit feasibility study.** n = 10, powered only for effects ≥ 0.3 z.
-   Report the **confidence interval and an estimate of the between-participant SD**, and
-   state that it is not powered to test H1. This is legitimate and publishable — and the
-   between-participant SD it yields is exactly what a properly powered follow-up needs,
-   since that quantity is currently swept rather than known.
-3. **Reduce the noise.** n_eff is limited by the 9 s decorrelation time. A shorter
-   smoother or a longer session raises it, but re-validating the arousal index would be
-   required first.
+That choice changes what the paper claims rather than weakening it. A feasibility study
+reporting an interval and two variance components is a contribution. An underpowered
+study reporting p > 0.05 as evidence of no effect is not.
 
-**Option 2 is the honest fit for the current scale**, and it changes what the paper claims
-rather than weakening it: a feasibility study reporting a CI is a contribution, whereas an
-underpowered study reporting p > 0.05 as evidence of no effect is not. Whichever is
-chosen, the choice and its power must be stated in the manuscript before collection.
+### What n = 10 actually buys
 
-**No optional stopping.** The n is fixed in advance. Data will not be inspected for
-significance and then extended. If recruitment falls short, the shortfall is reported
-and the analysis runs on what was collected, reported as underpowered.
+95% CI half-width on the adaptive − sham difference, simulated with the pilot's measured
+autocorrelation:
 
-**Between-participant SD is unknown** and is swept in the power table rather than
-assumed. After the first three complete pairs, recompute the power table with the
-observed SD and record the update here — as a documented revision, not a silent one.
+| participant × condition SD | n = 10 | n = 12 | n = 15 |
+|---|---|---|---|
+| 0.00 (none — optimistic) | ±0.17 | ±0.16 | ±0.14 |
+| 0.15 (modest) | **±0.20** | ±0.18 | ±0.16 |
+| 0.30 (substantial) | ±0.27 | ±0.24 | ±0.21 |
 
----
+So a true effect of 0.15 z would be estimated at roughly **[−0.05, +0.35]**. That interval
+includes zero *and* includes the target, which is exactly the expected outcome and is why
+no test is being run. The interval's **width** is the result; its position is secondary.
+
+**No optional stopping.** n is fixed at 10 before enrolment. Data will not be inspected
+and the sample extended.
+
+### Progression criteria, fixed in advance
+
+What would justify a properly powered trial. Stated now so the answer is not constructed
+from whatever the data happens to show:
+
+| criterion | threshold |
+|---|---|
+| retention | ≥ 8 of 10 participants complete both sessions |
+| usable sessions | ≥ 80% pass the §5 exclusion criteria |
+| protocol adherence | no self-yoked sessions; washout met in every case |
+| estimated effect | point estimate in the predicted direction **and** CI compatible with ≥ 0.15 z |
+| variance components | between-participant and participant × condition SD both estimable |
+
+**Failing the effect criterion is a legitimate result and is reported as one.** A CI that
+excludes 0.15 z would indicate the contingency effect is smaller than the neurofeedback
+literature suggests — informative, and worth publishing.
 
 ## 5. Analysis
 
@@ -239,22 +276,38 @@ unavoidable, it comes from a permutation null that preserves the autocorrelation
 (circular shift for the ACI, shuffled onsets for the event-locked response), never from
 a parametric test.
 
-### Primary test
+### Primary estimate
 
-Paired t-test on per-participant adaptive−sham differences in mean z.
+Per-participant adaptive − sham difference in mean z, summarised as the **mean
+difference with a 95% confidence interval** (t-based, paired, n − 1 df).
 
-A period effect is tested first (adaptive-first vs sham-first participants). If
-significant, the crossover assumption has failed and the analysis uses first-period data
-only, as an independent-groups comparison — reported as underpowered rather than
-presented as the planned test.
+**No p-value is reported for this contrast.** At 38% power a p-value is not
+interpretable in either direction: a significant result would be badly inflated by the
+winner's curse, and a null one would be uninformative. Reporting the interval and
+withholding the test is the point of the design, not an omission from it.
 
-Effect size as Cohen's d with a 95% CI. **The CI is the result**, not the p-value.
+### Variance components — the primary scientific output
+
+Both estimated with 95% CIs, since these are what a properly powered trial needs:
+
+- **between-participant SD** of session-mean z, from the participant means
+- **participant × condition SD**, from the residual variance of the difference scores
+  after removing the mean difference
+
+Each is reported with its own interval. At n = 10 those intervals will be wide; that is
+expected and is itself informative about how much a follow-up must budget.
+
+### Period effect
+
+Tested (adaptive-first vs sham-first). This one **is** a test, because it is an
+assumption check rather than an efficacy claim. If a period effect appears, the
+crossover assumption has failed and the primary estimate is reported from first-period
+data only, with its wider interval.
 
 ### Multiplicity
 
-One primary outcome, one test. Secondary outcomes are reported with CIs and are
-explicitly **not** corrected, because they are not being used to claim an effect. No
-secondary outcome is promoted to primary after seeing the data.
+No correction, because nothing here is being used to claim an effect. Every quantity is
+reported as an interval. No outcome is promoted to primary after seeing the data.
 
 ### Exclusions, defined now
 
@@ -277,19 +330,22 @@ currently rules out every session recorded before 2026-08-16.
 
 ---
 
-## 6. What would falsify H1
+## 6. How the result will be read
 
-Stated in advance so a null is a result rather than a disappointment:
+A feasibility study cannot falsify an efficacy hypothesis, so the question is what each
+possible interval licenses. Fixed now, so the reading is not chosen after the fact:
 
-- No difference in mean z between arms, with a CI tight enough to exclude 0.3 z.
-- A difference in the wrong direction.
-- A difference that disappears once excluded sessions are handled as specified.
-- In crossover, a significant period effect, which would mean the arms are not
-  comparable and the design has failed regardless of the outcome.
+| interval on adaptive − sham | reading |
+|---|---|
+| includes 0 **and** ≥0.15 z | expected at this n. Uninformative about efficacy; the variance components still deliver the study's objective. |
+| excludes 0, direction predicted | encouraging, **not** evidence of efficacy. Winner's curse at 38% power means the point estimate is likely inflated. Report as motivating a powered trial. |
+| excludes 0.15 z, includes 0 | the most informative negative outcome: the contingency effect is smaller than the neurofeedback literature suggests. Publishable, and it changes what a follow-up should target. |
+| excludes 0, direction opposite | the sham outperformed the adaptive arm. Investigate before interpreting — check the allocation table for self-yokes and the exclusion log first. |
 
-**Both arms improving equally is the most likely null and the most informative one.** It
-would indicate the music helps and the contingency does not — which is what the yoked
-sham exists to detect, and a publishable finding.
+**Both arms improving equally remains the most likely outcome**, and it is the one the
+yoked sham exists to detect. It would indicate the music helps and the contingency does
+not. At this sample size that cannot be established, only estimated — which is why the
+interval, not the direction, is the reported result.
 
 ---
 
