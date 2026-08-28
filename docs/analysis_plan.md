@@ -1,7 +1,8 @@
 # Analysis plan (pre-registration draft)
 
-**Status: DRAFT. Two decisions are still open and are marked `[DECIDE]`. Finalise them,
-then freeze this file and record its commit hash before the first participant.**
+**Status: DRAFT. Design is decided (§2). One decision remains, marked `[DECIDE]`.
+Settle it, then freeze this file and record its commit hash before the first
+participant.**
 
 The point of writing this before data exists is that every choice below becomes
 harder to make honestly afterwards. Which outcome is primary, what counts as an
@@ -33,27 +34,47 @@ not a null.
 
 ## 2. Design
 
-`[DECIDE]` **Independent-groups or within-participant crossover.** This changes
-recruitment, consent language, and session count, so it must be settled before
-submission. The evidence:
+**DECIDED: within-participant crossover, cross-yoked.** Each participant completes both
+an adaptive and a sham session; their sham replays a *different* participant's adaptive
+schedule.
 
-| | independent | crossover |
+| | independent | **crossover (chosen)** |
 |---|---|---|
 | n per arm for a 0.3 z effect | ~60 | **8** |
 | sessions per participant | 1 | 2 |
 | between-participant variance | must be absorbed | cancels |
-| order and carryover effects | none | must be counterbalanced, needs washout |
+| order and carryover | none | counterbalanced, washout required |
 
 Source: `scripts/power_analysis.py`, simulated from the pilot's measured
-autocorrelation.
+autocorrelation. 60 participants per arm is not feasible at this project's scale; 8 is.
 
-The crossover is dramatically cheaper and is the only version feasible at this
-project's scale. Its costs are real: the paired sample sizes are a **floor**, because
-the simulation cancels participant offsets exactly while real crossover data carries a
-participant-by-condition interaction it does not model. Carryover is the specific
-threat — a relaxation session on day 1 plausibly shifts the day-2 resting baseline, and
-counterbalancing controls order without controlling carryover. If crossover is chosen,
-specify a washout of at least 48 hours and test for a period effect before pooling.
+**Cross-yoked, not self-yoked, and this matters.** The obvious shortcut is to yoke each
+participant's sham to their own earlier adaptive session. It is acoustically matched and
+the music no longer responds to them, so it looks valid. It is not: that schedule was
+generated *by their own brain dynamics*, and people are consistent enough between days
+that it may still partially track them. The contingency is then broken only partially,
+the arms differ by less than intended, and the bias runs toward the null — the direction
+that quietly wastes a study rather than producing a false positive.
+
+Cross-yoking keeps the crossover's whole statistical advantage, since participant offsets
+cancel in the paired difference regardless of whose schedule the sham replays.
+`live_music.py` warns loudly if a session is self-yoked.
+
+**Order and washout.**
+- Order counterbalanced: half adaptive-first, half sham-first, assigned before enrolment.
+- **Washout ≥ 48 hours** between a participant's two sessions.
+- A **period effect is tested before pooling**. If significant, the arms are not
+  comparable and the analysis falls back to first-period data only — which is an
+  independent-groups comparison at n = 8 per arm, and therefore underpowered. Report it
+  as such rather than pooling anyway.
+
+**Seeding.** A sham needs a prior adaptive session from someone else, so the first
+sham-first participant has no source. Seed from the operator's own post-fix pilot
+(PILOT02), or run the first participant adaptive-first. Record which was done.
+
+**The paired sample sizes are a floor.** The simulation cancels participant offsets
+exactly, while real crossover data carries a participant-by-condition interaction it does
+not model — some people respond and some do not. Treat 8 as a minimum, not a target.
 
 **Blinding.** Participants are not told which arm a session is. The operator cannot be
 blinded, because the sham requires passing `--yoke-from`. Record this as a limitation;
@@ -107,8 +128,13 @@ confound. They are not dependent variables and will not be tested for an effect.
 
 ## 4. Sample size and stopping
 
-n is set by `scripts/power_analysis.py` for 80% power at α = 0.05, given the design
-chosen in §2 and a smallest effect of interest of **0.3 z**.
+n is set by `scripts/power_analysis.py` for 80% power at α = 0.05. For the crossover
+design chosen in §2, at a smallest effect of interest of **0.3 z**, that is **8
+participants** — each completing both arms, so 16 sessions.
+
+Recruit **10** rather than 8. The simulated figure is a floor (§2), and dropout plus the
+exclusion criteria in §5 will cost sessions. Two spare participants is cheaper than
+discovering the study is underpowered after collection.
 
 `[DECIDE]` **Smallest effect of interest.** 0.3 z is used above as a working figure and
 is not yet justified clinically. Justify it or replace it before freezing — a sample
@@ -141,9 +167,12 @@ a parametric test.
 
 ### Primary test
 
-- Crossover: paired t-test on per-participant differences, with a period effect tested
-  first; if significant, first-period data only.
-- Independent: Welch's two-sample t-test.
+Paired t-test on per-participant adaptive−sham differences in mean z.
+
+A period effect is tested first (adaptive-first vs sham-first participants). If
+significant, the crossover assumption has failed and the analysis uses first-period data
+only, as an independent-groups comparison — reported as underpowered rather than
+presented as the planned test.
 
 Effect size as Cohen's d with a 95% CI. **The CI is the result**, not the p-value.
 
