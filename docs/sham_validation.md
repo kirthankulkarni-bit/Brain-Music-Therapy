@@ -99,3 +99,56 @@ positive control is what caught it, which is the reason to always have one.
   assertion that replayed segment onsets match the source session's timeline.
 - Only one session has usable z plus a schedule, so a real cross-yoked pair could not
   be tested. Run it on the first two real sessions.
+
+---
+
+# Replay fidelity
+
+**Added 2026-08-30.** `scripts/check_replay_fidelity.py`.
+
+Residual contingency asks whether the sham is decoupled from the *participant*. This
+asks the complementary question: whether it is faithfully coupled to its *source*. A
+yoked sham is acoustically matched to the adaptive arm only if it reproduces the
+source's prompt-decision timeline. Both must hold, and neither implies the other.
+
+## Why it is a standing check rather than a one-off
+
+The pre-fix loader anchored replay offsets on the source's first **audio** event while
+prompts are decided at **window** boundaries. On PILOT01 those origins are 7.06 s apart,
+so every replayed prompt landed most of a segment early on a loop with a 6.5 s latency
+budget — and a prompt superseded before the first segment was logged disappeared from
+the replay entirely.
+
+That was caught by hand and `_load_yoked_prompts` records it as "verified to 0.00 s
+against PILOT01's 492 changes" — a single manual check. A fidelity bug that returns
+silently is worth as much as one never fixed, so this makes the verification run on
+every sham session, with a non-zero exit code so it can gate an analysis.
+
+## Self-test
+
+The checker is validated against the bug it exists to catch:
+
+| input | result |
+|---|---|
+| correct schedule vs itself | **PASS** — origin +0.00 s, median +0.00 s, worst +0.00 s, 492 changes |
+| pre-fix audio-anchored schedule | **FAIL** — worst −7.06 s, median −7.04 s |
+
+The −7.06 s is recovered independently and matches the value in the fix commit.
+
+**Read the self-test carefully.** Both schedules there are normalised to their own first
+element, so the origin difference is zero by construction and the bug surfaces as DRIFT
+rather than ORIGIN. In a real sham a wrong anchor shifts deliveries bodily and ORIGIN is
+where it appears. Do not read "ORIGIN did not fire" as "the anchor was right".
+
+## Current status
+
+No sham sessions exist, so `--all` correctly reports nothing to verify. Both checks are
+in place before the first one is recorded, which is the point.
+
+## Incidental finding
+
+Running the check surfaced the chatter guard: PILOT01 has a median gap of 2.00 s between
+prompt changes across 492 changes, which flags it as a pre-fix chattering session and
+therefore **unusable as a yoke source**. The seeding plan in §2 of the analysis plan
+nominates the operator's post-fix pilot (PILOT02) for this, and that session does not
+exist yet. Recording it is a prerequisite for the first sham-first participant.
