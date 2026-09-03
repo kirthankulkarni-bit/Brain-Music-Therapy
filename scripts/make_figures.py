@@ -106,6 +106,11 @@ def fig_alpha_validation(out: str) -> str:
     if not dirs:
         return ""
     session = load_session(dirs[-1])
+    # Which channels this session actually used. It is NOT the pair the live system
+    # runs on: the alpha validation was recorded on TP9/TP10 while the arousal index
+    # uses AF7/AF8. Labelling the figure from the manifest rather than from memory is
+    # what caught that.
+    pair = session["manifest"].get("index_channels") or ["?", "?"]
     rows = [w for w in session["windows"]
             if w.get("phase") in ("eyes_open", "eyes_closed")
             and isinstance(w.get("alpha"), (int, float)) and np.isfinite(w["alpha"])]
@@ -137,10 +142,11 @@ def fig_alpha_validation(out: str) -> str:
     ax.plot(t, a, color=INK, lw=1.0, label="log10 alpha power")
 
     ax.set_xlabel("time (seconds)")
-    ax.set_ylabel("log$_{10}$ alpha power\n(AF7/AF8 mean)")
-    ax.set_title(f"Sensing-path validation: alpha rises {ratio:.2f}x with eyes closed "
-                 f"(d = {d:.2f}, p = {p:.1e}, n = {closed.sum()}/{(~closed).sum()} windows)",
-                 fontsize=9)
+    ax.set_ylabel("log$_{10}$ alpha power\n(" + "/".join(pair) + " mean)")
+    ax.set_title(f"Alpha rises {ratio:.2f}x with eyes closed on {'/'.join(pair)} "
+                 f"(d = {d:.2f}, p = {p:.1e}, n = {closed.sum()}/{(~closed).sum()})\n"
+                 f"NOTE: the live arousal index uses AF7/AF8, which this does NOT validate",
+                 fontsize=8.5)
     ax.legend(frameon=False, fontsize=8, loc="upper left", ncol=2)
     ax.margins(x=0.01)
     path = os.path.join(out, "fig0_alpha_validation.png")
