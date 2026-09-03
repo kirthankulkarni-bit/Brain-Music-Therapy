@@ -83,9 +83,16 @@ Shortening it pays twice. That connection is the finding.
 
 ## What this changes
 
-**For the system.** The conservative move is `--window 2 --hop 0.5 --tau 0.5`, which uses
-existing code paths and existing flags. End-to-end worst case would fall from 6.5 s to
-about **2.7 s** (1.68 s analysis + 1.0 s crossfade).
+**For the system.** The obvious move looked like `--window 2 --hop 0.5 --tau 0.5`, using
+existing flags, taking end-to-end worst case from 6.5 s to about 2.7 s.
+
+**That was tested and it does not work.** Replayed against PILOT01, those settings produce
+459 prompt changes with 168 arriving inside a crossfade, because `state_rung` has no
+hysteresis and a less-smoothed z crosses rung boundaries constantly. Recalibrating the
+trend thresholds changes nothing — it is the ladder, not the suffix. See
+[finding_ladder_hysteresis.md](finding_ladder_hysteresis.md).
+
+The finding below still stands; the cost of acting on it is higher than a flag change.
 
 **For the statistics.** More independent observations per minute directly attacks the
 power problem in `analysis_plan.md` §4, where achievable precision is limited by n_eff.

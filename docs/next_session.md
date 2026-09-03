@@ -13,7 +13,7 @@ fails, stop and fix rather than continuing, because everything after inherits th
 | finding | consequence |
 |---|---|
 | The alpha validation was recorded on **TP9/TP10**, the index runs on **AF7/AF8**, and the effect does not transfer (`finding_channel_validation.md`) | The sensing path is unvalidated on the channels the study uses. This gates participant data. |
-| The analysis latency is a **dominated configuration**, and retuning may cut required n from 25 to ~7 per arm (`finding_analysis_latency.md`) | The retuned settings are worth measuring now, because they may move the study from feasibility-only back to powered. |
+| The analysis latency is a **dominated configuration**, and retuning may cut required n from 25 to ~7 per arm (`finding_analysis_latency.md`) | Worth measuring on the right channels — but **not worth running a session at**, because the controller chatters under the retuned estimator (`finding_ladder_hysteresis.md`). |
 
 Both are answered by the same session if it is run in the right order.
 
@@ -89,38 +89,44 @@ The sweep has only ever run on TP9/TP10, because that was the only labelled reco
 Running it on AF7/AF8 answers whether the dominated-configuration result holds on the
 channels the study uses.
 
-Then derive the thresholds the retuned settings would need:
+Then record what the retuned settings would need, for later analysis rather than for use
+today:
 
 ```bash
 python scripts/calibrate_hysteresis.py --session sessions/<the alphatest> --window 2 --hop 0.5 --tau 0.5
 ```
 
-**Do not change `music_engine.py` during the session.** Record the numbers; decide later.
+**Do not change `music_engine.py` during the session, and do not run a session at the
+retuned settings.** Recalibrating the trend thresholds does not fix the chatter — it is
+the ladder, not the suffix. Record the numbers; the controller work comes later.
 
 ---
 
-## 4. PILOT02, at the retuned settings
+## 4. PILOT02, at the DEPLOYED settings
 
 ```bash
-python src/live_music.py --participant PILOT02 --condition pilot --duration 20 --window 2 --hop 0.5 --tau 0.5
+python src/live_music.py --participant PILOT02 --condition pilot --duration 20
 ```
 
-Two purposes, and the second is new:
+**Do not pass `--window 2 --hop 0.5 --tau 0.5`.** An earlier version of this document
+recommended it. That recommendation was tested against PILOT01's raw recording and is
+wrong: it produces 459 prompt changes with 168 arriving faster than a crossfade — worse
+than the defect that made PILOT01's audio unusable. See
+[finding_ladder_hysteresis.md](finding_ladder_hysteresis.md).
 
-1. **A clean yoke source.** Every session on disk is disqualified — pre-fix ones for
-   chatter, all of them for the 7 s replay-origin bias. Without one, the sham arm cannot
-   run at all.
-2. **Information rate on the real contrast.** The n = 7 projection assumes the
-   discriminability measured on an eyes-open/closed contrast carries to the subtler
-   adaptive-versus-sham one. This session measures it directly.
+The cause is not the estimator and not the trend thresholds. `state_rung` has **no
+hysteresis**, so the rung flips whenever z crosses a half-integer boundary; a less-smoothed
+z crosses them constantly. Fixing it needs controller work, not a flag.
 
-**If step 3 shows the retuned settings behave badly on AF7/AF8, run PILOT02 at the
-deployed settings instead** and record why. A clean yoke source at known settings is worth
-more than an unvalidated speed-up.
+So this session has one purpose:
 
-Watch for: rejection under ~20%, zero underruns, and **no chatter** — the hysteresis
-thresholds were calibrated for τ = 3, and at τ = 0.5 they may be wrong. If prompt changes
-come faster than a few seconds, stop and revert to the deployed settings.
+**A clean yoke source.** Every session on disk is disqualified — the pre-fix ones for
+chatter, all of them for the 7 s replay-origin bias. Without one, the sham arm cannot run
+at all, which blocks the study regardless of anything else.
+
+Watch for: rejection under ~20%, zero underruns, and no chatter. At the deployed settings
+PILOT01 replays to 36 prompt changes with a 3 s median gap and zero sub-crossfade
+switches, so anything much faster means something else has changed.
 
 ---
 
