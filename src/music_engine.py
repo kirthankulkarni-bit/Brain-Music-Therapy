@@ -140,13 +140,56 @@ _LADDER_CENTRE = 2  # rung corresponding to z = 0, the participant's own baselin
 _DEADBAND_Z = 0.35  # within this much of target, stop steering
 
 
-def state_rung(z: float) -> int:
-    """Where the participant currently sits on the energy ladder. 1 rung ~ 1 SD."""
-    return int(np.clip(round(_LADDER_CENTRE + z), 0, len(_ENERGY_LADDER) - 1))
+def _rung_of(prompt: Optional[str]) -> Optional[int]:
+    """The ladder rung a previous prompt was on, or None. Used for ladder hysteresis."""
+    if not prompt:
+        return None
+    for i, base in enumerate(_ENERGY_LADDER):
+        if prompt.startswith(base):
+            return i
+    return None
+
+
+def state_rung(z: float, previous_rung: Optional[int] = None, margin: float = 0.0) -> int:
+    """
+    Where the participant currently sits on the energy ladder. 1 rung ~ 1 SD.
+
+    LADDER HYSTERESIS, off by default. With margin = 0 this is round(2 + z) clipped, the
+    original behaviour, and every existing caller is unaffected.
+
+    With margin > 0 it becomes a Schmitt trigger: a rung is left only once z is `margin`
+    past the boundary. That matters because round() has no hysteresis at all, so the rung
+    flips every time z crosses a half-integer - 217 times in PILOT01 at the deployed
+    settings, and 1122 under a less-smoothed estimator.
+
+    The deployed configuration survives that only by accident: build_prompt maps several
+    `here` values onto the same output level, so most flips are absorbed before reaching
+    the audio. That absorption is a property of the mapping rather than a designed
+    guarantee, and reducing the smoothing spends it - see
+    docs/finding_ladder_hysteresis.md.
+
+    Measured on PILOT01 at the deployed settings, margin = 0.25 cuts prompt changes from
+    36 to 14 and raises the median gap from 3 s to 16 s, with no sub-crossfade switches
+    either way. It is off by default because it changes what a participant hears, which
+    is a therapeutic decision rather than an engineering one.
+    """
+    plain = int(np.clip(round(_LADDER_CENTRE + z), 0, len(_ENERGY_LADDER) - 1))
+    if margin <= 0.0 or previous_rung is None:
+        return plain
+
+    top = len(_ENERGY_LADDER) - 1
+    lower = previous_rung - _LADDER_CENTRE - 0.5 - margin
+    upper = previous_rung - _LADDER_CENTRE + 0.5 + margin
+    if z < lower:
+        return int(np.clip(previous_rung - 1, 0, top))
+    if z > upper:
+        return int(np.clip(previous_rung + 1, 0, top))
+    return int(np.clip(previous_rung, 0, top))
 
 
 def build_prompt(z: float, target_z: float = -1.0, trend: Optional[float] = None,
-                 previous_prompt: Optional[str] = None) -> str:
+                 previous_prompt: Optional[str] = None,
+                 ladder_margin: float = 0.0) -> str:
     """
     Map the normalized arousal index onto a graded musical prompt.
 
@@ -171,7 +214,7 @@ def build_prompt(z: float, target_z: float = -1.0, trend: Optional[float] = None
     if not math.isfinite(z):
         return _ENERGY_LADDER[_LADDER_CENTRE]
 
-    here = state_rung(z)
+    here = state_rung(z, previous_rung=_rung_of(previous_prompt), margin=ladder_margin)
     goal = state_rung(target_z)
     error = z - target_z
 

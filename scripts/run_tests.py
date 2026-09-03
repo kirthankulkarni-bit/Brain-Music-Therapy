@@ -172,6 +172,45 @@ def test_chatter_regression(s: Suite, session_z: np.ndarray) -> None:
             f"min gap {gaps.min():.0f} s, median gap {np.median(gaps):.0f} s")
 
 
+def test_ladder_hysteresis(s: Suite) -> None:
+    """
+    Opt-in ladder hysteresis: must be inert by default, effective when asked, and must
+    not stick.
+
+    The default matters most. This changes what a participant hears, so it is off unless
+    explicitly requested, and the check below is byte-identical output across the whole
+    z range rather than a spot check.
+    """
+    from music_engine import state_rung
+
+    identical = all(build_prompt(float(z), -1.0, None) ==
+                    build_prompt(float(z), -1.0, None, ladder_margin=0.0)
+                    for z in np.arange(-4, 4.01, 0.1))
+    s.check("ladder hysteresis is inert by default", identical,
+            "byte-identical across z in [-4, 4]")
+
+    # z dithering either side of the 2/3 boundary, which is where round() flips.
+    dither = [0.45, 0.55, 0.44, 0.58, 0.47, 0.53, 0.46]
+
+    def walk(margin):
+        prev, out = None, []
+        for z in dither:
+            prev = state_rung(z, previous_rung=prev, margin=margin)
+            out.append(prev)
+        return sum(1 for a, b in zip(out, out[1:]) if a != b)
+
+    s.check("without hysteresis the rung flips on noise", walk(0.0) >= 5,
+            f"{walk(0.0)} flips across a boundary")
+    s.check("with hysteresis it does not", walk(0.25) == 0, f"{walk(0.25)} flips")
+
+    # It must still follow a genuine excursion, or it would be a stuck controller.
+    prev = None
+    for z in np.arange(0.0, 3.01, 0.1):
+        prev = state_rung(float(z), previous_rung=prev, margin=0.25)
+    s.check("hysteresis still tracks a real move", prev == state_rung(3.0),
+            f"walked to rung {prev}, plain gives {state_rung(3.0)}")
+
+
 def test_ladder_reachability(s: Suite) -> None:
     """Rungs 0 and 4 are unreachable under both arms - documented, not accidental."""
     reached = set()
@@ -416,6 +455,7 @@ def main() -> int:
     test_hysteresis_thresholds(s)
     test_state_rung_monotonic(s)
     test_ladder_reachability(s)
+    test_ladder_hysteresis(s)
     test_chatter_regression(s, load_session_z())
     test_streaming_estimator(s)
 

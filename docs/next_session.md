@@ -143,8 +143,9 @@ Check, in order:
 - `session complete` present, not `session FAILED`
 - underruns 0, `missing_prompts` empty
 - rejection under ~40%
-- `audio_chattering` **false** — if true the session is disqualified as a yoke source and
-  the retuning is at fault
+- `audio_chattering` **false** — if true the session is disqualified as a yoke source.
+  At the deployed settings this should not happen; if it does, something has changed and
+  the session must be repeated before it can be used
 - the starred channels' verdicts
 
 `verify_claims` will now disagree with several stored numbers, because the alpha
@@ -157,8 +158,8 @@ loosening the tolerances.
 ## What this session cannot do
 
 It cannot produce efficacy data, and it is not a participant session. It answers whether
-the instrument measures what it claims on the channels it uses, and whether the
-retuning is safe. Both currently block the study, and neither needs ethics approval to
-answer.
+the instrument measures what it claims on the channels it uses, and produces the clean
+yoke source without which the sham arm cannot run. Both currently block the study, and
+neither needs ethics approval to answer.
 
 The SRC submission does not depend on this session and should be in flight already.
