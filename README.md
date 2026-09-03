@@ -128,7 +128,9 @@ python src/live_music.py --mock --headless --duration 1 --baseline-seconds 20
 | `docs/preprint_draft.md` | sections 1–8 |
 | `docs/preprint_outline.md` | what the paper can claim, mapped to evidence |
 | `docs/runbook_session.md` | how to run one participant, start to finish |
-| `docs/next_session.md` | **start here** — what the next hardware session must answer |
+| `docs/HANDOFF.md` | **read first in a new session** — state, numbers, and the traps |
+| `docs/next_session.md` | what the next hardware session must answer, step by step |
+| `docs/finding_ladder_hysteresis.md` | why the estimator retuning is not a flag change |
 
 ## Pre-registration
 
