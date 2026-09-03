@@ -17,11 +17,15 @@ at roughly 8× its fp32 throughput; giving this workload that made it *slower*, 
 was never arithmetic-bound. Batch-1 autoregressive decoding is bound by the sequential
 token loop, which no faster GPU and no numeric format addresses.
 
-So audio does not come from live generation. It comes from a **precomputed segment
-library**, and that turns out to be a complete solution rather than a compromise:
+Faster models exist — latent consistency models reach hundreds of times realtime — so
+slowness alone would be a weak reason to avoid generation. The durable reason is that
+generation is **unnecessary**: audio comes from a **precomputed segment library**, which
+is a complete solution rather than a compromise because
 `build_prompt()` is a pure function with a finite range — at most 5 energy rungs × 4
 trend variants = 20 strings, and it cannot emit anything else. A library covering
-those 20 covers the controller's entire output space exactly.
+those 20 covers the controller's entire output space exactly. Even given an infinitely
+fast generator, re-synthesising one of twenty prompts is strictly worse than selecting a
+pre-rendered variant. See [docs/related_work.md](docs/related_work.md).
 
 In practice the range is much smaller, and the measured numbers belong next to the
 design claim: only rungs 1–3 are reachable under the two therapeutic targets, and
@@ -72,7 +76,7 @@ so treat it as a hypothesis still.
 If a build appears stuck on segment 1, it may genuinely be. It is resumable, so killing
 and rerunning costs nothing.
 
-Check everything checkable without hardware — 26 tests, no GPU, no headset:
+Check everything checkable without hardware — 30 tests, no GPU, no headset:
 
 ```bash
 python scripts/run_tests.py
@@ -158,6 +162,12 @@ up to **1.96×** across runs, while within-run spread was 1.01–1.11. A single 
 **Never compare across backends.** audiocraft and transformers have different
 sampling loops and defaults, so their absolute numbers are not interchangeable.
 Every result JSON records `backend` for this reason.
+
+**The analysis path, not the GPU, is the bottleneck — and it is a configuration.**
+After the library fix, 85% of the 6.5 s budget is analysis. Measured against labelled
+ground truth, the deployed estimator takes 5.67 s to register a state change and yields
+1.2 independent observations per minute; **8 of 10 alternatives beat it on latency AND
+information rate simultaneously**. See [docs/finding_analysis_latency.md](docs/finding_analysis_latency.md).
 
 **Windows are not independent.** PILOT01's z has a lag-1 autocorrelation of 0.953 and
 a 9 s decorrelation time, so 1043 valid windows carry an effective sample size of
