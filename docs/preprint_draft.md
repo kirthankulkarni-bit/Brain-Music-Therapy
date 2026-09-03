@@ -1,4 +1,9 @@
-# Closed-loop EEG-driven music on consumer hardware: a latency characterisation and a precomputed-library architecture
+# Closed-loop EEG-driven music systems do not report their latency: a measurement, and what it costs
+
+*Working title. The earlier framing — "a latency characterisation and a precomputed-library
+architecture" — described the work but positioned it as a system paper, which the related
+work below rules out. The contribution is the measurement and the methodology, not the
+system.*
 
 **DRAFT — sections 1–8.** §9 (planned study) is specified in
 [analysis_plan.md](analysis_plan.md), frozen at tag `preregistration-v1`.
@@ -21,54 +26,89 @@ explicitly that no efficacy data are reported.)*
 
 ## 1. Introduction
 
-Closed-loop EEG neurofeedback pairs a continuously estimated neural state with a
-stimulus that responds to it. Generative audio models make an appealing feedback
-channel: instead of a bar or a tone, the participant hears music that changes with their
-own brain state, and the change can be graded rather than binary. Several groups have
-proposed such systems `[CITE: prior EEG-driven generative music systems]`.
+Closed-loop EEG-driven music systems are an established and active line of work. Systems
+have paired affect decoding with generative audio backbones (Zhang et al., 2026), built
+real-time emotional music generation from EEG (Ran et al., 2024), and used music as a
+feedback channel for emotion mediation in a BCI (Ehrlich et al., 2019); a 2023 review
+surveys the field (Dash & Agres, 2023) `[VERIFY author list]`. Building such a system is
+no longer novel, and this paper does not claim to.
 
-What is missing from those proposals is a latency budget. A closed-loop system is
-defined by the delay between a neural event and the stimulus that answers it, and that
-delay determines whether the loop is closed in any meaningful sense. The neurofeedback
-literature treats it as decisive: comparing 0 s, 1 s and 20 s feedback delays,
-real-time feedback improved performance where delayed feedback did not, and delays of
-about one second may already be sufficient to disturb the effect (Sato et al., 2022).
-The proposed mechanism — sense of agency, and the forward model relating intention to
-outcome — is not specific to operant protocols and would apply to any closed loop in
-which the participant is meant to perceive the contingency.
+**What these systems do not report is how long their loop takes to close.**
 
-Generative audio models sit awkwardly inside that constraint. They are autoregressive
-and produce audio a token at a time, so the delay is not an implementation detail to be
-optimised away but a property of the model class. Whether such a system can close a loop
-at all is an empirical question that, as far as we are aware, has not been reported
-`[CITE: confirm no prior latency characterisation exists]`.
+That omission is specific and checkable. MindMelody (Zhang et al., 2026) conditions
+MusicGen-medium on a continuously updated EEG-derived affect state and describes itself as
+"closed-loop real-time", while reporting no end-to-end latency, no per-generation
+inference time, and no hardware specification. It is not unusual in this respect: across
+the EEG-driven affective music literature, work is reported in terms of architecture,
+decoding accuracy, and audio-quality or subjective-alignment metrics rather than timing.
 
-This paper reports that measurement for MusicGen on two hardware tiers, gives the
-architecture we adopted once the measurement ruled out live generation, and documents
-four statistical properties of closed-loop EEG data that we found the hard way and that
-we expect to affect any study of this shape.
+The omission is not universal in real-time music research. Gesture2Music, a
+gesture-driven rather than EEG-driven system, reports 25–30 ms inference and 60–70 ms
+full-loop latency, explicitly against a 100 ms threshold for interactive use
+`[CITE: Gesture2Music, arXiv 2511.00793 — verify authors]`. The practice exists; it has
+not crossed into the EEG case.
 
-**We report no efficacy data.** The system has run one closed-loop session, on the
-author, unblinded. Every session-level number in §6 describes the behaviour of the
-instrument, not of an intervention. The planned feasibility study is pre-registered
-(§9) and has not been run.
+It matters more in the EEG case, not less, for two reasons.
+
+**The analysis path costs seconds before any model runs.** Estimating band power requires
+a window, and smoothing a noisy index requires a filter; both are delays, and neither is
+computation that a faster GPU addresses. A gesture system reads a sensor; an EEG system
+must integrate over time to get a usable estimate at all.
+
+**Generative audio models are autoregressive.** They emit audio a token at a time, so
+generation latency is a property of the model class rather than an implementation detail.
+
+And delay is not a cosmetic concern. In neurofeedback, comparing 0 s, 1 s and 20 s
+feedback delays, real-time feedback improved performance where delayed feedback did not,
+and delays of about one second may already suffice to disturb the effect (Sato et al.,
+2022) `[VERIFY author list]`. The mechanism offered — sense of agency, and the forward
+model linking intention to outcome — is not specific to operant protocols.
+
+So the question this paper asks is not whether such a system can be built. It is: **when
+one is measured rather than described, what is the number, and what follows from it?**
+
+We measure it for MusicGen across two GPU tiers, two backends, three precision modes and
+nine runs, and report an end-to-end worst case of **6.5 s** — roughly 65× the threshold
+Gesture2Music holds itself to, and several times the delay at which neurofeedback
+degrades. The dominant term is not the model. We then give the architecture this forces,
+and four statistical properties of closed-loop EEG data that we expect to affect any
+study of this shape.
+
+**We report no efficacy data.** The system has run one closed-loop session, on the author,
+unblinded. Every session-level number in §6 describes the instrument, not an intervention.
+The planned feasibility study is pre-registered (§9) and has not been run.
 
 ### Contributions
 
-1. A latency characterisation of MusicGen for closed-loop use across two GPU tiers,
-   two backends, three precision modes and nine runs. **Nothing reaches realtime**, and
-   the binding constraint is the sequential decode loop rather than arithmetic
-   throughput — established by giving the workload roughly 8× the arithmetic and
-   observing it get *slower*.
-2. An architecture that is complete rather than approximate: the controller's prompt
-   space is finite, so a precomputed library can cover it exactly.
-3. The observation that the audio-side bottleneck was **commitment**, not generation
-   time, and that removing it cuts worst-case response from 8.0 s to 1.0 s.
-4. Four statistical cautions, each with a worked example: window autocorrelation,
-   the structural failure of continuous coupling indices, the trigger confound in
-   event-locked measures, and the cost of dichotomised outcomes.
+1. **A latency budget for closed-loop EEG-driven generative audio**, which this
+   literature does not currently report. Measured across two GPU tiers, two backends,
+   three precision modes and nine runs. **Nothing reaches realtime**, and the binding
+   constraint is the sequential decode loop rather than arithmetic throughput —
+   established by giving the workload roughly 8× the arithmetic and observing it get
+   *slower*.
+2. **The decomposition**, which is the actionable part: after removing the audio-side
+   bottleneck, **85% of the remaining budget is the analysis path**. Work aimed at
+   faster generation is optimising the smaller term.
+3. **Four statistical cautions** for closed-loop EEG, each with a worked example:
+   window autocorrelation (effective n of 25 from 1043 windows), the structural failure
+   of continuous coupling indices, the trigger confound in event-locked measures, and
+   the cost of dichotomised outcomes. We have not found these addressed in this
+   literature, which reports subjective and audio-quality metrics rather than neural
+   time-series statistics.
+4. **An architecture that follows from the measurement** rather than preceding it: the
+   controller's prompt space is finite, so a precomputed library covers it exactly, and
+   removing playback *commitment* — not generation time — cuts worst-case response from
+   8.0 s to 1.0 s.
 
----
+### Relation to prior work
+
+We are not proposing a better EEG-to-music system, and make no comparison of audio
+quality or decoding accuracy against MindMelody, Mind to Music, or others. Those systems
+are the motivation: they are the reason a latency budget is worth having, and the reason
+its absence is worth pointing out. Our system is deliberately simpler than any of them —
+a two-channel frontal index and a five-rung prompt ladder — because a simple controller
+makes the latency terms separable and the prompt space finite. A more capable decoder
+would add latency to the analysis path, not remove it.
 
 ## 2. System
 
@@ -467,14 +507,53 @@ from mechanism rather than a measurement.
 
 ## References
 
-Sato, Y. et al. (2022). *Real-Time Detection and Feedback of Canonical Electroencephalogram
-Microstates: Validating a Neurofeedback System as a Function of Delay.* Frontiers in
-Systems Neuroscience. https://doi.org/10.3389/fnsys.2022.786200
-*(Verify author list and year before submission.)*
+**Author lists marked `[VERIFY]` were inferred from search metadata and must be checked
+against the papers before submission.** Every URL below was accessed 2026-08-28.
 
-`[CITE: prior EEG-driven generative music systems]`
-`[CITE: iso-principle in music therapy]`
-`[CITE: confirm no prior latency characterisation of generative audio for closed-loop use]`
+1. **MindMelody: A Closed-Loop EEG-Driven System for Personalized Music Intervention.**
+   Zhang, Sun & Gu `[VERIFY]`, arXiv:2605.01235 (May 2026).
+   https://arxiv.org/abs/2605.01235
+   MusicGen-medium backbone, Transformer-GNN affect encoder, RAG-LLM planner. Describes
+   itself as closed-loop real-time; reports no end-to-end latency, inference time, or
+   hardware. **The central example for §1.**
 
-Additional sources supporting the pre-registered effect size are listed in §8 of
+2. **Mind to Music: An EEG Signal-Driven Real-Time Emotional Music Generation System.**
+   Ran et al. `[VERIFY]`, International Journal of Intelligent Systems (2024).
+   https://onlinelibrary.wiley.com/doi/10.1155/int/9618884
+
+3. **A closed-loop, music-based brain-computer interface for emotion mediation.**
+   Ehrlich et al. `[VERIFY]`, PLOS ONE (2019). PMID 30883569.
+   https://pubmed.ncbi.nlm.nih.gov/30883569/
+
+4. **AI-Based Affective Music Generation Systems: A Review of Methods, and Challenges.**
+   Dash & Agres `[VERIFY]`, arXiv:2301.06890 (2023). https://arxiv.org/abs/2301.06890
+   Field review. **Check directly whether latency is discussed** — the PDF did not
+   extract cleanly, so the claim that the field does not report timing rests on the
+   individual papers and on search results, not yet on this review.
+
+5. **Gesture2Music: A Low-Latency Real-Time Framework for Continuous Gesture-Driven
+   Music Generation.** `[VERIFY authors]`, arXiv:2511.00793.
+   https://arxiv.org/abs/2511.00793
+   Reports ~25–30 ms inference, ~60–70 ms full-loop latency against a 100 ms interactive
+   threshold. **The contrast case**: the practice exists in adjacent real-time music
+   work.
+
+6. **Real-Time Detection and Feedback of Canonical Electroencephalogram Microstates:
+   Validating a Neurofeedback System as a Function of Delay.** Sato et al. `[VERIFY]`,
+   Frontiers in Systems Neuroscience (2022). https://doi.org/10.3389/fnsys.2022.786200
+   Tests 0 s / 1 s / 20 s feedback delay. Real-time improved performance where delayed
+   did not; cites prior work suggesting ~1 s may suffice to disturb the effect.
+
+`[CITE: iso-principle in music therapy]` — needed for §2.2 and §8.
+
+### Outstanding literature work
+
+The novelty claim in §1 is that this literature does not report latency budgets. It
+currently rests on: MindMelody read directly, a field-level search, and reference 5 as
+the contrast. **Before submission this must be strengthened** by checking timing
+reporting in references 2–4 individually, and by a targeted search for any closed-loop
+EEG-audio paper that does report an end-to-end figure. A single counterexample does not
+sink the paper, but it must be cited and engaged with rather than missed.
+
+Additional sources supporting the pre-registered effect size are in §8 of
 [analysis_plan.md](analysis_plan.md).
