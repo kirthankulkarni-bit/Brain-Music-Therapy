@@ -199,6 +199,68 @@ def claim_alpha_validation_ratio() -> tuple[float, str]:
     return float(10 ** (a[closed].mean() - a[~closed].mean())),         f"{closed.sum()} closed / {(~closed).sum()} open windows"
 
 
+def claim_channel_mismatch_af() -> tuple[float, str]:
+    """Eyes-closed alpha ratio on AF7/AF8 - the channels the study actually uses."""
+    from eeg_features import FeatureConfig, FeatureExtractor
+    from session_logger import load_raw, load_session
+
+    d = sorted(glob.glob(os.path.join(_ROOT, "sessions", "alphatest*")))[-1]
+    chans = load_raw(d)[:, 1:].T.astype(float)
+    session = load_session(d)
+    tl = [(float(w["elapsed_s"]), w["phase"]) for w in session["windows"]
+          if w.get("phase") in ("eyes_open", "eyes_closed")]
+
+    def phase_at(t):
+        prev = None
+        for tt, ph in tl:
+            if tt > t:
+                return prev
+            prev = ph
+        return prev
+
+    cfg = FeatureConfig(sampling_rate=256.0, frontal_channels=("AF7", "AF8"))
+    ex = FeatureExtractor(cfg)
+    nw, nh = cfg.window_samples, cfg.hop_samples
+    op, cl = [], []
+    for s0 in range(0, chans.shape[1] - nw + 1, nh):
+        f = ex.extract(chans[:, s0:s0 + nw])
+        if not (f.valid and np.isfinite(f.alpha) and f.alpha > 0):
+            continue
+        ph = phase_at((s0 + nw) / 256.0 + 6.25)
+        (op if ph == "eyes_open" else cl if ph == "eyes_closed" else []).append(f.alpha)
+    if len(op) < 10 or len(cl) < 10:
+        return float("nan"), "insufficient"
+    return float(10 ** (np.log10(cl).mean() - np.log10(op).mean())),         f"{len(op)} open / {len(cl)} closed windows"
+
+
+def claim_deap_arousal_rho() -> tuple[float, str]:
+    """Spearman rho between log(beta/alpha) and DEAP self-reported arousal, AF3/AF4."""
+    import pickle
+    from scipy import stats as spstats
+    from validate_index_deap import DEAP_CHANNELS, trial_index
+
+    path = os.path.join(_ROOT, "s01.dat")
+    if not os.path.exists(path):
+        return float("nan"), "s01.dat absent"
+    with open(path, "rb") as fh:
+        d = pickle.load(fh, encoding="latin1")
+    data = np.asarray(d["data"])[:, :32, :]
+    arousal = np.asarray(d["labels"])[:, 1]
+    picks = [DEAP_CHANNELS.index(c) for c in ("AF3", "AF4")]
+    idx = np.array([trial_index(data[t], picks) for t in range(data.shape[0])])
+    ok = np.isfinite(idx)
+    rho, _ = spstats.spearmanr(idx[ok], arousal[ok])
+    return float(rho), f"{ok.sum()} trials, AF3/AF4"
+
+
+def claim_streaming_latency_budget() -> tuple[float, str]:
+    """Total analysis latency of the low-latency estimator."""
+    from eeg_features import FeatureConfig, StreamingBandPower
+    est = StreamingBandPower(FeatureConfig(sampling_rate=256.0), tau_seconds=0.25, order=4)
+    b = est.latency_budget()
+    return float(b["total_analysis_latency_s"]), "order 4, tau 0.25"
+
+
 # claim -> (function, value asserted in the manuscript, tolerance)
 CLAIMS = {
     "T4 best realtime factor":            (claim_t4_best_realtime,        1.05,   0.01),
@@ -215,6 +277,9 @@ CLAIMS = {
     "end-to-end budget, library":         (claim_latency_budget,          6.5,    0.05),
     "coupling recovers a +6 s lag":       (claim_coupling_recovers_lag,   6.0,    1.0),
     "eyes-closed alpha ratio":            (claim_alpha_validation_ratio,  2.13,   0.02),
+    "same effect on AF7/AF8":             (claim_channel_mismatch_af,     0.91,   0.03),
+    "DEAP arousal rho (AF3/AF4)":         (claim_deap_arousal_rho,        0.303,  0.02),
+    "streaming estimator budget":         (claim_streaming_latency_budget, 0.413, 0.01),
 }
 
 
