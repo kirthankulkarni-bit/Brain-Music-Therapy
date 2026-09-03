@@ -78,6 +78,25 @@ TP9 and TP10 sit, so a contact check done bare-headed does not describe the
 configuration you will record in. Earbuds or speakers avoid the problem entirely and
 are preferred.
 
+### Second gate: is it measuring cortex?
+
+`contact_check.py` answers "is the electrode attached". That is necessary and not
+sufficient — an electrode can pass every amplitude check and still be dominated by ocular
+artefact, in which case the index steers on eye movement. Run:
+
+```bash
+python scripts/signal_quality.py --session sessions/<the session you just recorded>
+```
+
+after the session, and before trusting it. Read the verdict on the **starred** channels,
+which are the ones the index used. `consistent with eyes-open` is the expected result for
+a normal recording; `SUSPECT: no peak, low-band dominated` means the index may not have
+been measuring cortex at all.
+
+This gate exists because AF7 in the alpha-validation session passed enough windows to be
+analysed and showed a *significant reversal* of the eyes-closed effect (p = 0.009) — it
+was tracking blinks, and nothing in the pipeline noticed.
+
 If a channel will not exceed `FAIR`, you may proceed but must log it — expect a higher
 rejection rate, and note it as a per-session covariate.
 

@@ -107,12 +107,20 @@ python src/live_music.py --mock --headless --duration 1 --baseline-seconds 20
 | `scripts/ladder_policy.py` | compares energy-ladder policies against real z |
 | `scripts/make_figures.py` | the paper figures, drawn from session data |
 | `scripts/verify_claims.py` | regenerates every number the preprint cites, and checks it |
+| `scripts/signal_quality.py` | per-channel: is this electrode measuring cortex, or eyes? |
+| `scripts/estimator_sweep.py` | latency vs information rate for candidate estimators |
+| `scripts/calibrate_hysteresis.py` | derives trend thresholds for a given estimator |
+| `scripts/validate_index_deap.py` | tests log(beta/alpha) against DEAP arousal labels |
 | `benchmarks/latency_probe.py` | the latency budget probe; run it on any new machine |
 | `notebooks/latency_probe_colab.ipynb` | the same probe on a Colab GPU |
 | `docs/results_latency.md` | every benchmark run, and what each one licenses |
 | `docs/results_pilot.md` | the first closed-loop session and the three defects it found |
 | `docs/figures/` | generated figures, regenerate with `make_figures.py` |
 | `docs/analysis_plan.md` | **frozen pre-registration** — do not edit; see below |
+| `docs/related_work.md` | the arXiv sweep, and what survives it |
+| `docs/finding_channel_validation.md` | the validation/index channel mismatch |
+| `docs/finding_analysis_latency.md` | why 5.5 s is a dominated configuration |
+| `docs/preprint_draft.md` | sections 1–8 |
 | `docs/preprint_outline.md` | what the paper can claim, mapped to evidence |
 | `docs/runbook_session.md` | how to run one participant, start to finish |
 

@@ -371,6 +371,21 @@ frontal channels, which lack the occipital dominance of classic alpha demonstrat
 This is evidence the montage records cortical activity rather than amplifier noise
 (Figure 0).
 
+**Index construct validity.** Two separable claims underlie the measurement: that the
+electrodes record cortex, and that log(beta/alpha) measures *arousal*. The second was
+inherited from the literature and untested here, so we tested it on DEAP, which pairs
+32-channel EEG with self-reported arousal.
+
+Computed with the same `FeatureExtractor` the live system uses, the index correlates with
+reported arousal at rho = +0.303 (p = 0.058) on AF3/AF4, against rho = +0.082 (p = 0.615)
+for valence as a discriminant control. A single correlation at 40 trials is underpowered,
+but the direction across independent montages is not: **7 of 7 montages positive**
+(sign test p = 0.016, median rho = +0.162), strongest frontally and weaker posteriorly —
+the gradient the construct predicts.
+
+One participant, self-report, and a 32-channel cap rather than four dry sensors. This is
+a construct-validity check on public data that any reader can repeat, not a validation.
+
 **Coupling estimator.** The lagged audio-neural coupling index was tested on synthetic
 sessions with a lag imposed by construction. It recovered +6, +3, 0 and −3 s exactly
 (r ≈ 0.85, p < 0.001), placed positive and negative lags on opposite sides of zero, and
