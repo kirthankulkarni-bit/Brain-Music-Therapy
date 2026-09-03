@@ -231,6 +231,47 @@ made the laptop *slower* (12.80 s → 18.05 s at fp32 4 s), because on a thermal
 part the warm-up mostly adds heat — warm-up practice borrowed from server benchmarking
 is counterproductive there.
 
+### 3.4 The analysis path dominates, and it is a configuration rather than a floor
+
+With the audio-side bottleneck removed (§4), **85% of the end-to-end budget is the
+analysis path**. Work aimed at faster generation therefore optimises the smaller term.
+
+We measured whether that 5.5 s is reducible, using the alpha-validation session's five
+labelled eyes-open/closed transitions as ground truth for timing. Detection latency is
+the median time from a real state change until the estimator crosses the midpoint between
+block levels — end-to-end, and unlike group delay it includes window centroid and hop
+quantisation.
+
+**The budget is confirmed:** the deployed configuration measures **5.67 s** against a
+5.5 s theoretical prediction.
+
+| estimator | detect | d | rho | ind/min | info/min |
+|---|---|---|---|---|---|
+| **deployed: 4 s win, 1 s hop, tau=3.0** | **5.67 s** | 1.99 | 0.962 | 1.2 | 2.14 |
+| 2 s win, 0.5 s hop, tau=0.5 | 1.68 s | 1.14 | 0.629 | 13.6 | **4.20** |
+| streaming, order 4, tau=0.25 | **0.17 s** | 0.70 | 0.320 | 30.9 | 3.91 |
+
+Per-sample discriminability falls as latency falls, as expected. But `d` alone does not
+determine how well a session resolves a state difference — the number of *independent*
+observations matters equally, and heavy smoothing destroys independence. Scoring on
+`d × sqrt(ind/min)`, the t-statistic per root-minute, **the deployed configuration is
+dominated by 8 of 10 alternatives** (Figure 6). It is not on the efficient frontier.
+
+The mechanism connects this section to §7. At tau = 3 s consecutive outputs are nearly
+identical (rho = 0.962), yielding **1.2 independent observations per minute** — which is
+precisely the coefficient that produces an effective sample size of 25 from a 20-minute
+session (§7.1). **The smoother is simultaneously the largest latency term and the dominant
+cause of the autocorrelation that collapses statistical power.** Shortening it pays twice.
+
+A two-parameter change within the existing code path gives 3.4× faster response and 2.0×
+more information per minute, taking the end-to-end worst case from 6.5 s to about 2.7 s.
+
+Two caveats. The benchmark ran on TP9/TP10, the only channels with labelled ground truth
+(§8), and the controller's hysteresis thresholds were calibrated against the deployed
+estimator's noise — adopting a faster one requires re-deriving them (measured: ENTER would
+rise from 0.35 to 0.51) or the chatter of §6.3 returns with a different appearance and the
+same cause.
+
 ---
 
 ## 4. Architecture: a precomputed library that covers the controller exactly
@@ -286,7 +327,30 @@ from 0.482 to 0.990 and pushed the worst case to 1.120 at the then-current gain 
 while a 90 s verification render still peaked at 0.792 and clipped nothing. The render
 did not clip; it *could* have. The bound, not the observation, is what is now asserted.
 
-### 4.4 What the architecture gives up
+### 4.4 Why not simply use a faster generator?
+
+Non-autoregressive and consistency-model approaches reach faster-than-realtime audio
+generation today — AudioLCM reports 333× realtime on a single consumer GPU `[CITE:
+AudioLCM, arXiv 2406.00356]`, alongside Music Consistency Models `[CITE: arXiv
+2404.13358]`, Musika `[CITE: arXiv 2208.08706]` and Music2Latent `[CITE: arXiv
+2408.06500]`. The decode-loop bound established in §3.2 is a property of MusicGen's model
+class, not of generative audio in general.
+
+So the obvious objection is that this architecture solves a solved problem. Two answers,
+and only the second is durable.
+
+**It would not help much.** After the audio fix, generation sits inside a 1.0 s crossfade
+within a 6.5 s budget of which 85% is analysis (§3.4). Instant generation removes at most
+1.0 s.
+
+**Generation is unnecessary, not merely slow.** `build_prompt` is a pure function with a
+finite range. Given even an infinitely fast generator, re-synthesising one of twenty
+possible prompts on demand is strictly worse than selecting a pre-rendered variant: the
+same audio, no compute, and no variance in response time. **The finite prompt space, not
+the latency, is what justifies the library**, and that argument is unaffected by how fast
+generators become.
+
+### 4.5 What the architecture gives up
 
 Streaming conditioned each segment on the tail of the previous one, so the music
 developed as a single piece. Library playback blends between independent renders:
@@ -488,9 +552,23 @@ experimentally.
 accounted for 96% of the pilot, and the trend suffix cannot fire after calibration. The
 system is a three-level ladder behaving as a two-level one.
 
+**The sensing path has not been validated on the channels the system uses.** This is the
+most serious limitation here. Figure 0 — the eyes-closed alpha increase — was recorded
+with `frontal_channels = TP9/TP10`, while the live index uses AF7/AF8. Recomputed from the
+same raw recording, the effect does not transfer: 1.85× (d = 1.23, p = 1.8 × 10⁻²⁵) on
+TP9/TP10 against 0.91× (d = −0.17, p = 0.26) on AF7/AF8, with **48% of frontal windows
+rejected as artefact** against 3%.
+
+The rejection rate is the necessary context and stops this being "frontal channels fail":
+PILOT01 ran on AF7/AF8 and rejected only 13.1%, so frontal contact can be good — it was
+not good during the alpha test. The honest statement is narrower and worse: *the sensing
+path has never been validated on the channels the study uses, and the one session capable
+of testing it had frontal contact too poor to answer.* Repeating the validation on AF7/AF8
+gates participant data.
+
 **Frontal channels only.** The Muse 2 has no occipital electrodes, and frontal alpha is
 weaker and more contaminated by ocular and muscle artefact than occipital alpha. The
-index inherits that.
+index inherits that, and the 48% figure above is a concrete instance.
 
 **Single site, single headset, single operator.** The operator cannot be blinded, since
 running the sham arm requires supplying the yoked source explicitly.

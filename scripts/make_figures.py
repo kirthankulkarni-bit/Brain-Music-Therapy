@@ -290,6 +290,66 @@ def fig_event_locked(session: dict, out: str) -> str:
     return path
 
 
+def fig_estimator(out: str) -> str:
+    """
+    Latency against information rate. The deployed setting is not on the frontier.
+
+    Two axes because either alone misleads: latency alone would favour a wire, and
+    per-sample discriminability alone favours smoothing everything to a constant. The
+    y-axis is d x sqrt(independent observations per minute) - the t-statistic per
+    root-minute - which is what determines how well a fixed-duration session resolves a
+    state difference.
+    """
+    import subprocess
+    import re
+
+    proc = subprocess.run([sys.executable, os.path.join(_ROOT, "scripts", "estimator_sweep.py")],
+                          capture_output=True, text=True, cwd=_ROOT)
+    rows = []
+    for line in proc.stdout.splitlines():
+        m = re.match(r"\s{2}(\S.*?)\s{2,}([\d.]+)s\s+([\d.-]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)", line)
+        if m:
+            rows.append((m.group(1).strip(), float(m.group(2)), float(m.group(3)),
+                         float(m.group(5)), float(m.group(6))))
+    if len(rows) < 4:
+        return ""
+
+    fig, ax = plt.subplots(figsize=(7.0, 4.2))
+    base = rows[0]
+    for name, lat, d, indmin, info in rows:
+        deployed = name.startswith("PIPELINE")
+        streaming = name.startswith("streaming")
+        ax.scatter(lat, info, s=110 if deployed else 55,
+                   marker="s" if deployed else ("^" if streaming else "o"),
+                   color=ACCENT if deployed else (INK if streaming else BAND),
+                   zorder=3, edgecolor="white", linewidth=0.8)
+
+    ax.axhline(base[4], color=ACCENT, lw=0.9, ls=":", zorder=1)
+    ax.axvline(base[1], color=ACCENT, lw=0.9, ls=":", zorder=1)
+    ax.axhspan(base[4], ax.get_ylim()[1], xmin=0, xmax=(base[1] - ax.get_xlim()[0]) /
+               (ax.get_xlim()[1] - ax.get_xlim()[0]), color=BAND, alpha=0.08, zorder=0)
+    ax.annotate("faster AND more informative\nthan the deployed setting",
+                xy=(0.3, base[4] * 1.55), fontsize=8, color=MUTED)
+    ax.annotate("deployed", xy=(base[1], base[4]), xytext=(base[1] * 0.42, base[4] * 0.80),
+                fontsize=8.5, color=ACCENT,
+                arrowprops=dict(arrowstyle="->", color=ACCENT, lw=0.9))
+
+    ax.plot([], [], "s", color=ACCENT, label="deployed")
+    ax.plot([], [], "o", color=BAND, label="windowed, retuned")
+    ax.plot([], [], "^", color=INK, label="streaming (causal, per-sample)")
+    ax.set_xscale("log")
+    ax.set_xlabel("detection latency (s, log scale) - lower is better")
+    ax.set_ylabel("information per minute\n"
+                  r"$d \times \sqrt{ind/min}$" + " - higher is better")
+    ax.set_title("The analysis latency is a dominated configuration, not a floor\n"
+                 "8 of 10 alternatives beat the deployed setting on BOTH axes", fontsize=9)
+    ax.legend(frameon=False, fontsize=8, loc="lower left")
+    path = os.path.join(out, "fig6_estimator_tradeoff.png")
+    fig.savefig(path)
+    plt.close(fig)
+    return path
+
+
 def fig_power(session_dir: str, out: str, sims: int) -> str:
     from power_analysis import required_n, session_stats
 
@@ -353,6 +413,7 @@ def main() -> int:
         ("autocorrelation", lambda: fig_autocorrelation(session, out)),
         ("switch intervals", lambda: fig_chatter(session, out)),
         ("event-locked response", lambda: fig_event_locked(session, out)),
+        ("estimator trade-off", lambda: fig_estimator(out)),
         ("power curves", lambda: fig_power(session_dir, out, args.sims)),
     ):
         try:
