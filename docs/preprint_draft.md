@@ -383,6 +383,20 @@ but the direction across independent montages is not: **7 of 7 montages positive
 (sign test p = 0.016, median rho = +0.162), strongest frontally and weaker posteriorly —
 the gradient the construct predicts.
 
+We also asked whether log(beta/alpha) is the *right* index or merely the inherited one,
+by comparing seven candidate band ratios on the same data. The deployed index ranks third
+of seven by median rho (+0.209 against a best of +0.230), but that gap is far inside the
+standard error of a single rho at n = 40 (about 0.16), so the top candidates are
+indistinguishable. What the comparison does establish is that the inherited choice sits
+in the top group rather than being arbitrary, and that the simpler alternatives are
+worse: raw log(beta) achieves only 6/7 positive montages and correlates more strongly
+with valence (+0.214) than with arousal, which is the wrong discriminant profile for a
+measure named for arousal.
+
+All seven candidates are reported in the repository rather than only the winner, because
+selecting among seven on 40 trials is how a spurious result is manufactured. Nothing here
+licenses changing the deployed index, which is fixed by the pre-registration.
+
 One participant, self-report, and a 32-channel cap rather than four dry sensors. This is
 a construct-validity check on public data that any reader can repeat, not a validation.
 

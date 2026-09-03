@@ -115,6 +115,7 @@ python src/live_music.py --mock --headless --duration 1 --baseline-seconds 20
 | `scripts/estimator_sweep.py` | latency vs information rate for candidate estimators |
 | `scripts/calibrate_hysteresis.py` | derives trend thresholds for a given estimator |
 | `scripts/validate_index_deap.py` | tests log(beta/alpha) against DEAP arousal labels |
+| `scripts/compare_indices_deap.py` | seven candidate arousal indices, all reported |
 | `benchmarks/latency_probe.py` | the latency budget probe; run it on any new machine |
 | `notebooks/latency_probe_colab.ipynb` | the same probe on a Colab GPU |
 | `docs/results_latency.md` | every benchmark run, and what each one licenses |
