@@ -45,6 +45,41 @@ So the honest statement is narrower and worse than "frontal channels fail":
 That is a gap, not a refutation. But it is a gap directly under the study's main
 measurement.
 
+## Follow-up: it is contamination, not merely noise, and PILOT01 looks better
+
+Per-channel analysis (`scripts/signal_quality.py`) sharpened the picture in two ways.
+
+**AF7 was not just noisy — it was systematically wrong.** Analysed alone rather than
+averaged, AF7 rejects 21% of windows and shows a **significant reversal** of the
+eyes-closed effect: 0.83x, d = -0.32, p = 0.009. A pure noise channel gives d near zero.
+A significant reversal means the channel tracked something anti-correlated with alpha,
+which is the signature of ocular contamination: eyes open means more blinking, and blink
+energy leaks into the analysis band. AF8 alone rejected 97% and is simply dead.
+
+So per-channel quality gating would not rescue that session. There was no good frontal
+channel to fall back to.
+
+**PILOT01's frontal contact was much better.** Amplitude beyond 100 uV, by session:
+
+| channel | alphatest | PILOT01 |
+|---|---|---|
+| AF7 | 17.8% | **7.1%** |
+| AF8 | **49.0%** | **3.3%** |
+| TP9 | 1.8% | 2.2% |
+| TP10 | 1.3% | 2.8% |
+
+AF8 went from unusable to acceptable. AF7 remains the noisiest channel (sd 101 uV against
+34 for TP9), which is consistent with residual ocular contamination but is not disqualifying.
+
+**Alpha peak prominence in PILOT01 is consistent with a normal eyes-open recording**, not
+with contamination: 1.04-1.09 across all four channels, against an eyes-open reference of
+1.10 measured on TP9 in the alpha-validation session (which rises to 2.08 eyes-closed).
+
+That is reassuring but **not** a validation. Prominence cannot separate "eyes-open cortex"
+from "no cortex" without an eye-closure manipulation, which is exactly the missing
+experiment. It does mean there is no positive evidence of contamination in PILOT01, and
+that a repeat on AF7/AF8 has a reasonable chance of succeeding.
+
 ## Why it was not caught earlier
 
 The alpha test was run first, as a rig check, before the channel decision was settled.
