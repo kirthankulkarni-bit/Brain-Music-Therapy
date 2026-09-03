@@ -97,6 +97,42 @@ is stronger: *we measured the budget, found the dominant term, showed it is a
 configuration rather than a floor, and quantified a setting that improves latency and
 statistical efficiency simultaneously.*
 
+## The consequence for sample size, which is the reason this matters most
+
+`analysis_plan.md` §4 concluded that detecting the literature-matched 0.15 z effect needs
+about 60 sessions however distributed, and that the project can afford roughly 20. That is
+why it became a feasibility study.
+
+That conclusion was reached with the deployed estimator's information rate. Recomputing
+with the measured rates — and accounting for BOTH the independence gained and the
+per-sample discriminability lost, since a faster estimator trades one for the other:
+
+> required n scales as 1 / (d × sqrt(ind/min))²
+
+| configuration | d | ind/min | info | gain | n per arm |
+|---|---|---|---|---|---|
+| deployed | 1.99 | 1.2 | 2.18 | 1.00× | **25** |
+| 2 s win, 0.5 s hop, tau=0.5 | 1.14 | 13.6 | 4.20 | 1.93× | **7** |
+| streaming o4, tau=0.25 | 0.70 | 30.9 | 3.89 | 1.78× | 8 |
+
+The discriminability loss offsets part of the independence gain but does not cancel it. A
+simulation adjusting only the autocorrelation gives 6 for the retuned configuration; this
+fuller calculation gives 7, so the conclusion does not depend on which is used.
+
+**If this holds, a properly powered study moves from infeasible to feasible** — roughly
+7 participants per arm rather than 25, which is 14 sessions rather than 50. That would
+change the study from a feasibility exercise back into a test of H1.
+
+**It is a projection, not a result, and rests on one assumption that has not been
+measured.** `d` was measured on an eyes-open/closed contrast, which is gross compared to
+adaptive-versus-sham. If the subtler contrast degrades faster under a noisier estimator,
+the gain shrinks — possibly a lot. Nothing here establishes that it does not.
+
+That assumption is directly measurable, and measuring it is the strongest argument for
+running PILOT02 at the retuned settings: it would yield the information rate for the real
+contrast rather than for a proxy, and either confirm the projection or kill it before the
+protocol is committed.
+
 ## What this does not establish
 
 - **Measured on one session, on TP9/TP10.** That is the only session with labelled ground
