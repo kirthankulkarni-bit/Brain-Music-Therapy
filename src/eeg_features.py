@@ -382,6 +382,148 @@ class BaselineNormalizer:
         }
 
 
+class StreamingBandPower:
+    """
+    Causal per-sample band-power estimator, as an alternative to the windowed path.
+
+    WHY THIS EXISTS
+
+    The windowed pipeline (FeatureExtractor + ExponentialSmoother) has three delay terms:
+    half the window, half the hop, and the smoother time constant. At the deployed
+    settings that is 5.5 s, which measured 5.67 s against labelled ground truth and is an
+    order of magnitude outside the 300-1000 ms range reported for neurofeedback systems.
+
+    This estimator removes two of the three terms structurally. There is no window, so no
+    centroid delay; there is no hop, so no quantisation. Only filter group delay and the
+    smoother remain.
+
+    Measured on the alpha-validation session (scripts/estimator_sweep.py), order 4 with
+    tau = 0.25 s detects a real eyes-open/closed transition in 0.17 s against the windowed
+    path's 5.67 s - 33x faster - while yielding 30.9 independent observations per minute
+    against 1.2, because the heavy smoother is also what destroys independence.
+
+    THE TRADE, STATED HONESTLY. Per-sample discriminability falls: d 1.99 -> 0.70 on that
+    contrast. But d alone does not determine how well a session resolves a state
+    difference; d x sqrt(independent observations) does, and by that measure this
+    estimator extracts MORE information per minute than the deployed configuration. See
+    docs/finding_analysis_latency.md.
+
+    NOT A DROP-IN REPLACEMENT. The controller's hysteresis thresholds in music_engine.py
+    were calibrated against the noise of the windowed estimator. This one has different
+    noise, so those thresholds must be re-derived before it drives a session, or the
+    prompt chatter that PILOT01 exposed will return in a different form. Use
+    scripts/calibrate_hysteresis.py.
+
+    Everything is forward-only. filtfilt would be zero-phase and cannot run in realtime.
+    """
+
+    def __init__(self, config: FeatureConfig, band: str = "alpha",
+                 tau_seconds: float = 0.25, order: int = 4):
+        from scipy.signal import butter, iirnotch, sosfilt_zi, lfilter_zi
+
+        if band not in config.bands:
+            raise ValueError(f"unknown band {band!r}; have {sorted(config.bands)}")
+        lo, hi = config.bands[band]
+        fs = config.sampling_rate
+        if tau_seconds <= 0:
+            raise ValueError("tau_seconds must be positive")
+
+        self.cfg = config
+        self.band = band
+        self.tau_seconds = tau_seconds
+        self.order = order
+
+        # DC block, mains notch, then the band. Mirrors the windowed path's intent with
+        # causal equivalents, so a comparison between them is of architecture rather than
+        # of one being handed cleaner input.
+        self._hp = butter(2, 1.0, btype="highpass", fs=fs, output="sos")
+        self._hp_zi = sosfilt_zi(self._hp)
+        self._notch = None
+        if config.notch_hz and config.notch_hz < fs * 0.475:
+            b, a = iirnotch(config.notch_hz, config.notch_q, fs=fs)
+            self._notch = (b, a)
+            self._notch_zi = lfilter_zi(b, a)
+        self._bp = butter(order, (lo, hi), btype="bandpass", fs=fs, output="sos")
+        self._bp_zi = sosfilt_zi(self._bp)
+
+        self._alpha = 1.0 - math.exp(-1.0 / (tau_seconds * fs))
+        self._acc: Optional[float] = None
+        self._primed = False
+
+    def reset(self) -> None:
+        """Clear filter state. Call between phases so a baseline cannot leak forward."""
+        from scipy.signal import sosfilt_zi, lfilter_zi
+        self._hp_zi = sosfilt_zi(self._hp)
+        self._bp_zi = sosfilt_zi(self._bp)
+        if self._notch is not None:
+            self._notch_zi = lfilter_zi(*self._notch)
+        self._acc = None
+        self._primed = False
+
+    def push(self, samples: np.ndarray) -> float:
+        """
+        Feed a chunk of the frontal-mean signal in microvolts; get current band power.
+
+        Filter state persists across calls, so chunk size does not affect the output -
+        which is what makes it safe to drive from an LSL pull of arbitrary length.
+        """
+        from scipy.signal import lfilter, sosfilt
+
+        x = np.asarray(samples, dtype=np.float64).ravel()
+        if x.size == 0:
+            return float(self._acc) if self._acc is not None else float("nan")
+        if not np.all(np.isfinite(x)):
+            # Match the windowed path: refuse rather than propagate. The caller logs a
+            # rejection; state is left untouched so the next good chunk continues cleanly.
+            return float("nan")
+
+        if not self._primed:
+            # Seed filter states from the first sample so the response does not begin
+            # with a long transient that would look like a state change.
+            self._hp_zi = self._hp_zi * x[0]
+            self._bp_zi = self._bp_zi * 0.0
+            if self._notch is not None:
+                self._notch_zi = self._notch_zi * x[0]
+            self._primed = True
+
+        y, self._hp_zi = sosfilt(self._hp, x, zi=self._hp_zi)
+        if self._notch is not None:
+            b, a = self._notch
+            y, self._notch_zi = lfilter(b, a, y, zi=self._notch_zi)
+        y, self._bp_zi = sosfilt(self._bp, y, zi=self._bp_zi)
+
+        power = y ** 2
+        acc = self._acc if self._acc is not None else float(power[0])
+        a = self._alpha
+        for v in power:
+            acc += a * (v - acc)
+        self._acc = float(acc)
+        return self._acc
+
+    def latency_budget(self) -> Dict[str, float]:
+        """
+        Delay terms, for comparison against latency_budget() on the windowed path.
+
+        Group delay is evaluated at the band centre, where the signal is, rather than
+        averaged across the passband where the edges would dominate.
+        """
+        from scipy.signal import group_delay, sos2tf
+
+        lo, hi = self.cfg.bands[self.band]
+        centre = (lo + hi) / 2.0
+        b, a = sos2tf(self._bp)
+        w = np.array([2 * np.pi * centre / self.cfg.sampling_rate])
+        _, gd = group_delay((b, a), w=w)
+        filt = float(gd[0]) / self.cfg.sampling_rate
+        return {
+            "window_centroid_delay_s": 0.0,
+            "hop_quantization_s": 0.0,
+            "filter_group_delay_s": filt,
+            "smoother_group_delay_s": self.tau_seconds,
+            "total_analysis_latency_s": filt + self.tau_seconds,
+        }
+
+
 def latency_budget(config: FeatureConfig, smoother_tau: float) -> Dict[str, float]:
     """
     The irreducible analysis-path latency, in seconds, for the paper's budget table.

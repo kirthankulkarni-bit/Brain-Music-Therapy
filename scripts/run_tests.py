@@ -195,6 +195,45 @@ def test_state_rung_monotonic(s: Suite) -> None:
             f"{min(rungs)}..{max(rungs)}")
 
 
+def test_streaming_estimator(s: Suite) -> None:
+    """
+    The low-latency alternative must be chunk-size independent and genuinely faster.
+
+    Chunk independence is the property that makes it safe to drive from an LSL pull of
+    arbitrary length: filter state persists across calls, so the output cannot depend on
+    how the samples happened to arrive. Without it the estimate would vary with network
+    timing, which is the kind of fault that only appears under load.
+    """
+    from eeg_features import FeatureConfig, StreamingBandPower, latency_budget
+
+    cfg = FeatureConfig(sampling_rate=256.0)
+    rng = np.random.default_rng(0)
+    t = np.arange(2560) / 256.0
+    sig = 20 * np.sin(2 * np.pi * 10 * t) + rng.normal(0, 5, t.size)
+
+    a = StreamingBandPower(cfg, tau_seconds=0.25)
+    for i in range(0, sig.size, 37):          # ragged chunks, as LSL delivers
+        a.push(sig[i:i + 37])
+    b = StreamingBandPower(cfg, tau_seconds=0.25)
+    b.push(sig)                                # one shot
+    rel = abs(a._acc - b._acc) / max(abs(b._acc), 1e-12)
+    s.check("streaming estimator is chunk-size independent", rel < 1e-9,
+            f"relative difference {rel:.2e}")
+
+    stream = StreamingBandPower(cfg, tau_seconds=0.25).latency_budget()
+    windowed = latency_budget(cfg, smoother_tau=3.0)
+    s.check("streaming budget beats the windowed path",
+            stream["total_analysis_latency_s"] < windowed["total_analysis_latency_s"] / 5,
+            f"{stream['total_analysis_latency_s']:.2f}s vs "
+            f"{windowed['total_analysis_latency_s']:.2f}s")
+
+    s.check("streaming has no window or hop delay",
+            stream["window_centroid_delay_s"] == 0 and stream["hop_quantization_s"] == 0)
+
+    nan_out = StreamingBandPower(cfg).push(np.array([1.0, np.nan, 3.0]))
+    s.check("non-finite input is refused, not propagated", not np.isfinite(nan_out))
+
+
 def test_session_failure_recording(s: Suite) -> None:
     """A crashed worker must record FAILED and must not record complete."""
     import argparse as ap
@@ -378,6 +417,7 @@ def main() -> int:
     test_state_rung_monotonic(s)
     test_ladder_reachability(s)
     test_chatter_regression(s, load_session_z())
+    test_streaming_estimator(s)
 
     s.section("2. SESSION - a crash must never look like a success")
     test_session_failure_recording(s)
