@@ -194,7 +194,9 @@ def main() -> int:
     extractor = FeatureExtractor(cfg)
     buffers = [collections.deque(maxlen=cfg.window_samples) for _ in range(len(cfg.channels))]
 
-    logger = SessionLogger(participant_id=args.participant, condition="alpha_validation")
+    logger = SessionLogger(participant_id=args.participant,
+                           condition="alpha_validation",
+                           synthetic=args.demo)
     logger.write_manifest(
         sampling_rate=sampling_rate,
         sampling_rate_source="demo" if args.demo else "lsl_nominal_srate",

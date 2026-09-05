@@ -9,3 +9,10 @@ s01.dat
 # Session output: keep the event logs and metrics (small, and they are the data),
 # ignore the raw recordings (binary, ~18 MB per hour at 256 Hz x 4 ch + timestamp).
 sessions/*/raw_eeg.f32
+
+# Synthetic sessions from --demo / --mock runs. They are written to sessions/ like any
+# other run and would otherwise be picked up by `git add -A` and committed alongside real
+# recordings. On 9/5 a thirty-second alpha_test --demo silently recomputed six manuscript
+# claims by sorting after the real one; session_logger.real_sessions() filters them out of
+# analysis, and this keeps them out of the repository as well.
+sessions/DEMO_*

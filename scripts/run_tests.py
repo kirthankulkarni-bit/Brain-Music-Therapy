@@ -523,6 +523,36 @@ def test_synthetic_sessions_are_excluded(s: Suite) -> None:
     s.check("no synthetic session is in the live manuscript set",
             not any(is_synthetic(d) for d in live), f"{len(live)} real sessions")
 
+    # DEFENCE IN DEPTH. The manifest marker existed and nothing read it, so the marker
+    # alone is not a design anyone should trust twice. A synthetic run is now also NAMED
+    # so the mistake is visible in `ls`, and .gitignore excludes the pattern so it cannot
+    # reach the repository through a `git add -A`.
+    from session_logger import SessionLogger
+
+    root = _tf.mkdtemp(prefix="naming_")
+    try:
+        with SessionLogger("alphatest", "alpha_validation", root=root,
+                           synthetic=True) as lg:
+            demo_dir = lg.dir
+        with SessionLogger("PILOT99", "pilot", root=root) as lg:
+            real_dir = lg.dir
+        s.check("a synthetic session is named so it cannot be mistaken for data",
+                os.path.basename(demo_dir).startswith("DEMO_"),
+                os.path.basename(demo_dir))
+        s.check("a real session is not renamed",
+                not os.path.basename(real_dir).startswith("DEMO_"),
+                os.path.basename(real_dir))
+        # Name alone must be sufficient: a demo interrupted before its manifest was
+        # flushed would otherwise read as real, which is the wrong way round to fail.
+        os.remove(os.path.join(demo_dir, "events.jsonl"))
+        s.check("naming alone marks it synthetic, without a readable manifest",
+                is_synthetic(demo_dir))
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+    ignored = open(os.path.join(_ROOT, ".gitignore"), encoding="utf-8").read()
+    s.check("synthetic sessions are gitignored", "sessions/DEMO_*" in ignored)
+
 
 def test_contact_gate(s: Suite) -> None:
     """

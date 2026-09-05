@@ -862,7 +862,9 @@ def main() -> int:
         return 2
 
     state = SessionState(target_z=args.target)
-    logger = SessionLogger(participant_id=args.participant, condition=args.condition)
+    logger = SessionLogger(participant_id=args.participant,
+                           condition=args.condition,
+                           synthetic=bool(args.mock))
     print(f"[session] logging to {logger.dir}")
 
     worker = threading.Thread(target=eeg_worker, args=(args, state, logger), name="eeg", daemon=True)

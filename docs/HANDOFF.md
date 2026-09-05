@@ -11,7 +11,7 @@ Verify the state is still current before trusting anything below:
 python scripts/run_tests.py && python scripts/verify_claims.py
 ```
 
-Expected: **70 passed, 0 failed** and **33 claims reproduce**. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
+Expected: **74 passed, 0 failed** and **33 claims reproduce**. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
 something changed after this was written and the numbers here are stale.
 
 ---
@@ -224,7 +224,16 @@ The marker always existed — `alpha_test` writes `sampling_rate_source: "demo"`
 now, and every selector feeding the manuscript goes through it. Use it rather than
 `glob` for anything that reaches a number.
 
-Demo sessions are still written to `sessions/`. That is fine now, but delete them anyway.
+Since `sessions/` **is committed** (only `raw_eeg.f32` is ignored), a demo run followed
+by `git add -A` would have put synthetic data in the study's dataset. Two further
+defences, because a marker nothing reads is not a design to trust twice:
+
+- a synthetic run is now **named** `DEMO_<participant>_<ts>`, so the mistake is visible
+  in `ls` rather than only in a manifest field
+- `.gitignore` excludes `sessions/DEMO_*`, so it cannot be committed
+
+`is_synthetic()` checks the name first, so a demo interrupted before its manifest flushed
+still reads as synthetic — the wrong way round to fail would be reading as real.
 
 ---
 
@@ -337,7 +346,7 @@ settings**.
 | `src/music_engine.py` | `build_prompt` — the controller |
 | `src/library_engine.py` | the default audio path |
 | `src/analyze_session.py` | outcomes, coupling, event-locked |
-| `scripts/run_tests.py` | 70 checks, one command |
+| `scripts/run_tests.py` | 74 checks, one command |
 | `scripts/verify_claims.py` | regenerates all 17 manuscript numbers |
 | `scripts/estimator_sweep.py` | latency vs information rate, needs a labelled session |
 | `scripts/controller_replay.py` | replays a recording through the real controller; chatter counts |

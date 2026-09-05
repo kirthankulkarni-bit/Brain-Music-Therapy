@@ -46,12 +46,24 @@ class SessionLogger:
         root: str = SESSIONS_ROOT,
         n_channels: int = 4,
         session_id: Optional[str] = None,
+        synthetic: bool = False,
     ):
         self.session_id = session_id or datetime.now().strftime("%Y%m%d_%H%M%S")
         self.participant_id = participant_id
         self.condition = condition
         self.n_channels = n_channels
-        self.dir = os.path.join(root, f"{participant_id}_{self.session_id}")
+        self.synthetic = synthetic
+
+        # A synthetic run is named so it CANNOT be mistaken for data, and .gitignore
+        # excludes the pattern so it cannot be committed by a `git add -A`.
+        #
+        # Defence in depth, because the manifest marker alone was not enough. It already
+        # existed and nothing read it, and on 9/5 a thirty-second alpha_test --demo
+        # recomputed six manuscript claims from a signal generator purely by sorting
+        # after the real recording. real_sessions() reads the marker now; this makes the
+        # mistake visible in `ls` and unpushable as well.
+        prefix = "DEMO_" if synthetic else ""
+        self.dir = os.path.join(root, f"{prefix}{participant_id}_{self.session_id}")
         os.makedirs(self.dir, exist_ok=True)
 
         self.events_path = os.path.join(self.dir, "events.jsonl")
@@ -241,7 +253,15 @@ _SYNTHETIC_SOURCES = frozenset({"demo", "mock"})
 
 
 def is_synthetic(session_dir: str) -> bool:
-    """True if this session was generated rather than recorded from a headset."""
+    """
+    True if this session was generated rather than recorded from a headset.
+
+    Checks the directory name first. A session whose manifest is truncated - a demo
+    interrupted with Ctrl+C before the manifest was flushed - would otherwise read as
+    real, which is the wrong way round to fail.
+    """
+    if os.path.basename(session_dir.rstrip("/\\")).startswith("DEMO_"):
+        return True
     try:
         with open(os.path.join(session_dir, "events.jsonl"), encoding="utf-8") as fh:
             for line in fh:
