@@ -21,11 +21,17 @@ Faster models exist — latent consistency models reach hundreds of times realti
 slowness alone would be a weak reason to avoid generation. The durable reason is that
 generation is **unnecessary**: audio comes from a **precomputed segment library**, which
 is a complete solution rather than a compromise because
-`build_prompt()` is a pure function with a finite range — at most 5 energy rungs × 4
-trend variants = 20 strings, and it cannot emit anything else. A library covering
-those 20 covers the controller's entire output space exactly. Even given an infinitely
-fast generator, re-synthesising one of twenty prompts is strictly worse than selecting a
-pre-rendered variant. See [docs/related_work.md](docs/related_work.md).
+`build_prompt()` is a pure function with a finite range — **5 energy rungs, and it cannot
+emit anything else.** A library covering those 5 covers the controller's entire output
+space exactly. Even given an infinitely fast generator, re-synthesising one of five
+prompts is strictly worse than selecting a pre-rendered variant. See
+[docs/related_work.md](docs/related_work.md).
+
+The range was 20 until 2026-09-05: each rung could carry one of four trend suffixes. The
+suffix was removed because the slope it gated on is smaller than the noise of the
+estimator measuring it, so no threshold could work — see
+[docs/deviations.md](docs/deviations.md). That quartered the prompt space and made this
+argument four times stronger.
 
 In practice the range is much smaller, and the measured numbers belong next to the
 design claim: only rungs 1–3 are reachable under the two therapeutic targets, and
@@ -53,10 +59,12 @@ continues where it stopped:
 python scripts/build_library.py
 ```
 
-Renders are allocated by how much a prompt actually plays: 32 for each of the five
-suffix-free base prompts, which carry essentially the whole session, and 4 for the
-suffixed ones as insurance. A uniform 32 across all 20 would cost three hours of GPU
-to produce audio the controller cannot select.
+Renders are allocated by how much a prompt actually plays: 32 for each of the five base
+prompts, which are now the entire prompt space.
+
+Libraries built before 9/5 also hold 4 renders for each of 15 suffixed prompts — 60 of
+220 segments, 8.0 of 29.3 minutes. They still load; those segments are simply never
+requested. Rebuild to reclaim the space.
 
 Budget roughly **16 s per segment** on a GTX 1650 Ti. Two builds measured:
 
@@ -109,11 +117,12 @@ python src/live_music.py --mock --headless --duration 1 --baseline-seconds 20
 | `scripts/validate_coupling.py` | ground-truth validation of the coupling estimator |
 | `scripts/power_analysis.py` | simulated sample size, using the measured autocorrelation |
 | `scripts/ladder_policy.py` | compares energy-ladder policies against real z |
+| `scripts/controller_replay.py` | replays a recording through the real controller; chatter counts |
 | `scripts/make_figures.py` | the paper figures, drawn from session data |
 | `scripts/verify_claims.py` | regenerates every number the preprint cites, and checks it |
 | `scripts/signal_quality.py` | per-channel: is this electrode measuring cortex, or eyes? |
 | `scripts/estimator_sweep.py` | latency vs information rate for candidate estimators |
-| `scripts/calibrate_hysteresis.py` | derives trend thresholds for a given estimator |
+| `scripts/calibrate_hysteresis.py` | is the trend measurable under a given estimator? (so far, never) |
 | `scripts/validate_index_deap.py` | tests log(beta/alpha) against DEAP arousal labels |
 | `scripts/compare_indices_deap.py` | seven candidate arousal indices, all reported |
 | `benchmarks/latency_probe.py` | the latency budget probe; run it on any new machine |
@@ -122,6 +131,7 @@ python src/live_music.py --mock --headless --duration 1 --baseline-seconds 20
 | `docs/results_pilot.md` | the first closed-loop session and the three defects it found |
 | `docs/figures/` | generated figures, regenerate with `make_figures.py` |
 | `docs/analysis_plan.md` | **frozen pre-registration** — do not edit; see below |
+| `docs/deviations.md` | the deviation log — kept outside the frozen file, and why |
 | `docs/related_work.md` | the arXiv sweep, and what survives it |
 | `docs/finding_channel_validation.md` | the validation/index channel mismatch |
 | `docs/finding_analysis_latency.md` | why 5.5 s is a dominated configuration |
@@ -186,11 +196,19 @@ size or a permutation null that preserves the autocorrelation.
   sparsest drone never plays, not even to a participant sitting at that arousal
   level. Whether that is intended is a therapeutic call, so the code is unchanged and
   the library renders them as insurance.
-- Should the trend suffix be removed? After the hysteresis fix it is calibrated above
-  the measured noise ceiling and therefore **cannot fire in a normal session**. A
-  branch that cannot fire is arguably dead code, but deleting it is a design decision.
-- Independent or crossover design? Detecting a 0.3 z effect needs ~60 participants per
-  arm independently, or **8** paired. `scripts/power_analysis.py` has the full table.
+- ~~Should the trend suffix be removed?~~ **Removed 2026-09-05.** Not for being unable to
+  fire, which would have argued for keeping it as harmless, but because the quantity it
+  thresholded is **not measurable**: the largest genuine 60 s drift is 0.0385 z/hop
+  against slope-estimator noise of 0.0681. A threshold above the noise can only be
+  crossed by noise; one low enough to catch real drift fires constantly. Verified a
+  no-op across all 1212 logged windows. See [docs/deviations.md](docs/deviations.md).
+- ~~Independent or crossover design?~~ **Settled: crossover, cross-yoked**
+  (`analysis_plan.md` §2, frozen). This entry quoted 0.3 z, which was superseded — the
+  registered smallest effect of interest is **0.15 z**, matched to a neurofeedback
+  meta-analytic g ≈ 0.3 against a between-participant SD of 0.5 z. At that effect it is
+  **25 participants per arm** paired, against 61 independent, which is why the study runs
+  at n = 10 as an explicit feasibility study with **38% power**. Both numbers are
+  asserted by `verify_claims.py`; `scripts/power_analysis.py` has the full table.
 - Does the crossfade sound acceptable? `python src/library_engine.py --wav demo.wav`
   renders a scripted arousal trajectory to listen to. This is the one cost of the 8×
   that no metric captures, and PILOT01's audio was chattering, so it has never been
