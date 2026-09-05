@@ -296,7 +296,8 @@ def main() -> int:
 
     d = args.session
     if d is None:
-        cands = sorted(glob.glob(os.path.join(_ROOT, "sessions", "alphatest*")))
+        from session_logger import real_sessions
+        cands = real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))
         if not cands:
             print("No alphatest session found; pass --session.")
             return 1

@@ -50,10 +50,12 @@ def _median_gen(run: dict, precision: str, duration: float) -> float:
 
 
 def _pilot() -> dict:
-    from session_logger import load_session
-    dirs = sorted(glob.glob(os.path.join(_ROOT, "sessions", "PILOT*")))
+    # real_sessions, not glob: a --demo or --mock run must not be able to move a
+    # manuscript number by existing. See session_logger._SYNTHETIC_SOURCES.
+    from session_logger import load_session, real_sessions
+    dirs = real_sessions(os.path.join(_ROOT, "sessions", "PILOT*"))
     if not dirs:
-        raise FileNotFoundError("no PILOT session on disk")
+        raise FileNotFoundError("no real PILOT session on disk")
     return load_session(dirs[-1])
 
 
@@ -186,7 +188,8 @@ def claim_coupling_recovers_lag() -> tuple[float, str]:
 def claim_alpha_validation_ratio() -> tuple[float, str]:
     """Eyes-closed alpha increase - the evidence the rig measures cortex."""
     from session_logger import load_session
-    dirs = sorted(glob.glob(os.path.join(_ROOT, "sessions", "alphatest*")))
+    from session_logger import real_sessions
+    dirs = real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))
     session = load_session(dirs[-1])
     rows = [w for w in session["windows"]
             if w.get("phase") in ("eyes_open", "eyes_closed")
@@ -201,7 +204,8 @@ def claim_channel_mismatch_af() -> tuple[float, str]:
     from eeg_features import FeatureConfig, FeatureExtractor
     from session_logger import load_raw, load_session
 
-    d = sorted(glob.glob(os.path.join(_ROOT, "sessions", "alphatest*")))[-1]
+    from session_logger import real_sessions
+    d = real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))[-1]
     chans = load_raw(d)[:, 1:].T.astype(float)
     session = load_session(d)
     tl = [(float(w["elapsed_s"]), w["phase"]) for w in session["windows"]
@@ -366,7 +370,8 @@ def _sweep():
     """
     if not _SWEEP_CACHE:
         import estimator_sweep as es
-        d = sorted(glob.glob(os.path.join(_ROOT, "sessions", "alphatest*")))[-1]
+        from session_logger import real_sessions
+        d = real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))[-1]
         session, chans, pair, timeline = es.load(d)
         offset, r = es.find_offset(chans, pair, session, timeline)
         if not np.isfinite(r) or r < 0.9:
@@ -428,7 +433,8 @@ _POWER_SIMS = 2000
 
 def _power_ctx():
     from power_analysis import session_stats
-    return session_stats(sorted(glob.glob(os.path.join(_ROOT, "sessions", "PILOT*")))[-1])
+    from session_logger import real_sessions
+    return session_stats(real_sessions(os.path.join(_ROOT, "sessions", "PILOT*"))[-1])
 
 
 def claim_power_at_registered_n() -> tuple[float, str]:
@@ -510,7 +516,8 @@ def _replay_ctx():
     """
     if not _REPLAY_CACHE:
         import controller_replay as cr
-        d = sorted(glob.glob(os.path.join(_ROOT, "sessions", "PILOT*")))[-1]
+        from session_logger import real_sessions
+        d = real_sessions(os.path.join(_ROOT, "sessions", "PILOT*"))[-1]
         session, chans, ts, pair, base = cr.load(d)
         t0, v0 = cr.reconstruct(chans, ts, pair, cr.DEPLOYED[0], cr.DEPLOYED[1], 0.001)
         offset, r = cr.align(t0, v0, session)

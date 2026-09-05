@@ -84,7 +84,7 @@ so treat it as a hypothesis still.
 If a build appears stuck on segment 1, it may genuinely be. It is resumable, so killing
 and rerunning costs nothing.
 
-Check everything checkable without hardware — 60 tests, no GPU, no headset:
+Check everything checkable without hardware — 70 tests, no GPU, no headset:
 
 ```bash
 python scripts/run_tests.py

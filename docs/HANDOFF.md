@@ -11,7 +11,7 @@ Verify the state is still current before trusting anything below:
 python scripts/run_tests.py && python scripts/verify_claims.py
 ```
 
-Expected: **60 passed, 0 failed** and **33 claims reproduce**. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
+Expected: **70 passed, 0 failed** and **33 claims reproduce**. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
 something changed after this was written and the numbers here are stale.
 
 ---
@@ -207,6 +207,27 @@ Computing spectral prominence over a whole recording averages the peak away. Com
 ~10 s segment and take the **median**. A whole-session Welch scores a validated channel
 as having no alpha peak.
 
+### Trap 8: a `--demo` or `--mock` run lands in `sessions/` and outranks the real one
+
+Every selector took `sorted(glob(...))[-1]`, so the NEWEST match wins. Running
+`alpha_test.py --demo` for thirty seconds to smoke-test the hardware gate wrote
+`sessions/alphatest_<today>`, which sorts after the August recording — and **six
+manuscript claims silently recomputed against a signal generator**: the eyes-closed
+alpha ratio, the AF7/AF8 mismatch, and the entire estimator sweep.
+
+`verify_claims` caught it, but only because those numbers had been locked hours earlier.
+Before that, running the demo would have rewritten the alpha validation and Figure 6
+from synthetic data with nothing to notice.
+
+The marker always existed — `alpha_test` writes `sampling_rate_source: "demo"`,
+`live_music` writes `"mock"`. **Nothing read it.** `session_logger.real_sessions()` does
+now, and every selector feeding the manuscript goes through it. Use it rather than
+`glob` for anything that reaches a number.
+
+Demo sessions are still written to `sessions/`. That is fine now, but delete them anyway.
+
+---
+
 ### Trap 7: every session on disk is disqualified as a yoke source
 
 Pre-fix ones for chatter; **all** of them for a 7.06 s replay-origin bias (fixed 8/28, but
@@ -316,7 +337,7 @@ settings**.
 | `src/music_engine.py` | `build_prompt` — the controller |
 | `src/library_engine.py` | the default audio path |
 | `src/analyze_session.py` | outcomes, coupling, event-locked |
-| `scripts/run_tests.py` | 60 checks, one command |
+| `scripts/run_tests.py` | 70 checks, one command |
 | `scripts/verify_claims.py` | regenerates all 17 manuscript numbers |
 | `scripts/estimator_sweep.py` | latency vs information rate, needs a labelled session |
 | `scripts/controller_replay.py` | replays a recording through the real controller; chatter counts |

@@ -23,6 +23,7 @@ sampling-rate defect, being able to reprocess is not optional.
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 import time
@@ -224,6 +225,50 @@ def load_raw(session_dir: str, n_channels: int = 4) -> np.ndarray:
     width = 1 + n_channels
     usable = (flat.size // width) * width
     return flat[:usable].reshape(-1, width)
+
+
+# Manifest values of sampling_rate_source that mean the recording is SYNTHETIC. The
+# marker already existed - alpha_test writes "demo" and live_music writes "mock" - but
+# nothing read it, and every selector below took the newest matching directory.
+#
+# That is a real failure mode and it fired on 2026-09-05: running alpha_test --demo to
+# smoke-test the hardware gate wrote sessions/alphatest_<today>, which sorted after the
+# real recording, and six manuscript claims silently recomputed against synthetic data.
+# verify_claims caught it - the numbers moved - but only because the numbers were locked
+# a few hours earlier. Before that it would have rewritten the alpha validation, the
+# channel-mismatch figure and the whole estimator sweep from a signal generator.
+_SYNTHETIC_SOURCES = frozenset({"demo", "mock"})
+
+
+def is_synthetic(session_dir: str) -> bool:
+    """True if this session was generated rather than recorded from a headset."""
+    try:
+        with open(os.path.join(session_dir, "events.jsonl"), encoding="utf-8") as fh:
+            for line in fh:
+                event = json.loads(line)
+                if event.get("type") == "manifest":
+                    return event.get("sampling_rate_source") in _SYNTHETIC_SOURCES
+                break
+    except (OSError, ValueError):
+        return False
+    return False
+
+
+def real_sessions(pattern: str) -> List[str]:
+    """
+    Session directories matching a glob, synthetic ones removed, oldest first.
+
+    Use this instead of sorted(glob(...)) anywhere a number that reaches the manuscript
+    is derived. A demo run must not be able to change a published figure by existing.
+    """
+    return [d for d in sorted(glob.glob(pattern))
+            if os.path.isdir(d) and not is_synthetic(d)]
+
+
+def newest_real_session(pattern: str) -> Optional[str]:
+    """The most recent non-synthetic session matching a glob, or None."""
+    found = real_sessions(pattern)
+    return found[-1] if found else None
 
 
 def latest_session(root: str = SESSIONS_ROOT) -> Optional[str]:

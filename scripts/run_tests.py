@@ -469,6 +469,122 @@ def _session_args(tmp: str, **overrides):
     return args
 
 
+def test_synthetic_sessions_are_excluded(s: Suite) -> None:
+    """
+    A demo or mock run must not be able to move a manuscript number by existing.
+
+    This fired for real on 9/5. Running alpha_test.py --demo to smoke-test the hardware
+    gate wrote sessions/alphatest_<today>, which sorts after the genuine recording, and
+    every selector took the newest match. Six claims silently recomputed against a signal
+    generator: the eyes-closed alpha ratio, the AF7/AF8 channel mismatch, and the whole
+    estimator sweep including the detection latency and both information rates.
+
+    verify_claims caught it only because those numbers had been locked hours earlier.
+    Before that, running the demo would have rewritten the alpha validation and Figure 6
+    from synthetic data with nothing to notice.
+
+    The marker already existed - alpha_test writes sampling_rate_source "demo", live_music
+    writes "mock". Nothing read it. session_logger.real_sessions does now, and every
+    selector that feeds the manuscript goes through it.
+    """
+    import shutil
+    import tempfile as _tf
+
+    from session_logger import is_synthetic, real_sessions
+
+    root = _tf.mkdtemp(prefix="synthsess_")
+    try:
+        def write(name, source):
+            d = os.path.join(root, name)
+            os.makedirs(d)
+            with open(os.path.join(d, "events.jsonl"), "w", encoding="utf-8") as fh:
+                fh.write(json.dumps({"type": "manifest", "participant_id": name,
+                                     "sampling_rate_source": source}) + chr(10))
+            return d
+
+        real = write("alphatest_20260101_000000", "lsl_nominal_srate")
+        demo = write("alphatest_20260905_999999", "demo")
+        mock = write("alphatest_20260905_999998", "mock")
+
+        s.check("a demo session is recognised as synthetic", is_synthetic(demo))
+        s.check("a mock session is recognised as synthetic", is_synthetic(mock))
+        s.check("a real session is not", not is_synthetic(real))
+
+        # The ordering is the whole point: both synthetic dirs sort AFTER the real one,
+        # so a selector taking [-1] would pick one of them.
+        found = real_sessions(os.path.join(root, "alphatest*"))
+        s.check("synthetic sessions are excluded even when they sort last",
+                found == [real], f"selected {[os.path.basename(d) for d in found]}")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+    # And nothing synthetic is currently sitting in the set the manuscript is built from.
+    live = real_sessions(os.path.join(_ROOT, "sessions", "*"))
+    s.check("no synthetic session is in the live manuscript set",
+            not any(is_synthetic(d) for d in live), f"{len(live)} real sessions")
+
+
+def test_contact_gate(s: Suite) -> None:
+    """
+    The contact classifier, against channels whose quality is known by construction.
+
+    This is the gate the whole next hardware session hangs on: next_session.md step 1
+    refuses to proceed unless AF7 and AF8 both read GOOD, because the alpha validation
+    already failed once on frontal channels where AF8 exceeded 100 uV on 49% of samples.
+    Nothing tested the classifier itself, so a regression in it would be discovered with
+    the headset on and a two-hour slot booked.
+
+    contact_check's own demo mode declares the answer - "TP9 clean, AF7 clean, AF8 poor,
+    TP10 dead" - which makes it usable as ground truth rather than only as a smoke test.
+    The synthetic channels are rebuilt here rather than driven through DemoInlet, which
+    generates in real time and would put seconds into the suite for no extra coverage.
+
+    Note what this does and does not establish. contact_check answers "is the electrode
+    attached"; it does NOT answer "is this cortex" - AF7 passed this check while tracking
+    blinks (trap 2). signal_quality.py is the second gate and a different question.
+    """
+    import contact_check as cc
+    from eeg_features import FeatureConfig, FeatureExtractor
+
+    fs, n = 256.0, 1024
+    t = np.arange(n) / fs
+    rng = np.random.default_rng(11)
+    eeg = 12 * np.sin(2 * np.pi * 10 * t) + 4 * np.sin(2 * np.pi * 20 * t)
+    mains = np.sin(2 * np.pi * 60 * t)
+
+    channels = {
+        "TP9": eeg + 3 * mains + rng.normal(0, 5, n),      # clean
+        "AF7": eeg + 2 * mains + rng.normal(0, 5, n),      # clean
+        "AF8": eeg + 40 * mains + rng.normal(0, 5, n),     # heavy mains pickup
+        "TP10": np.zeros(n),                                # flatline
+    }
+    # The extractor must be the CONTACT one, not the pipeline's. Contact quality is
+    # measured from mains pickup, so the 60 Hz notch has to be off and the band wide
+    # enough to pass it - contact_check.main builds it exactly this way and says why.
+    # Using the default FeatureConfig here scored the 40x-mains channel as GOOD, because
+    # the notch removed the evidence. That is worth stating: this test was written wrong
+    # first, and the wrong version passed three of its five checks.
+    ex = FeatureExtractor(FeatureConfig(sampling_rate=fs, window_seconds=n / fs,
+                                        bandpass=(1.0, min(80.0, fs / 2 * 0.9)),
+                                        notch_hz=None))
+    q = {name: cc.assess(sig, fs, 60.0, name, ex) for name, sig in channels.items()}
+
+    s.check("a clean channel passes", q["TP9"].is_usable,
+            f"TP9 -> {q['TP9'].verdict} ({q['TP9'].reason})")
+    s.check("a second clean channel passes", q["AF7"].is_usable,
+            f"AF7 -> {q['AF7'].verdict} ({q['AF7'].reason})")
+    s.check("heavy mains pickup does not pass", not q["AF8"].is_usable,
+            f"AF8 -> {q['AF8'].verdict} ({q['AF8'].reason})")
+    s.check("a flatline is called dead", q["TP10"].verdict == "DEAD",
+            f"TP10 -> {q['TP10'].verdict} ({q['TP10'].reason})")
+
+    # The gate must also SEPARATE: if every channel scored the same, the verdicts above
+    # could all pass while carrying no information.
+    s.check("the classifier separates good from bad",
+            q["AF7"].verdict != q["AF8"].verdict,
+            f"AF7 {q['AF7'].verdict} vs AF8 {q['AF8'].verdict}")
+
+
 def test_primary_outcome_ground_truth(s: Suite) -> None:
     """
     The registered PRIMARY OUTCOME, tested against a session whose answers are known.
@@ -844,6 +960,8 @@ def main() -> int:
     test_streaming_estimator(s)
 
     s.section("2. SESSION - a crash must never look like a success")
+    test_synthetic_sessions_are_excluded(s)
+    test_contact_gate(s)
     test_primary_outcome_ground_truth(s)
     test_sham_path(s)
     test_session_failure_recording(s)

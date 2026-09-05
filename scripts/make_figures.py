@@ -102,7 +102,8 @@ def fig_alpha_validation(out: str) -> str:
     """
     from scipy import stats as sps
 
-    dirs = sorted(glob.glob(os.path.join(_ROOT, "sessions", "alphatest*")))
+    from session_logger import real_sessions
+    dirs = real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))
     if not dirs:
         return ""
     session = load_session(dirs[-1])
@@ -393,7 +394,8 @@ def main() -> int:
 
     session_dir = args.session
     if session_dir is None:
-        candidates = sorted(glob.glob(os.path.join(_ROOT, "sessions", "PILOT*")))
+        from session_logger import real_sessions
+        candidates = real_sessions(os.path.join(_ROOT, "sessions", "PILOT*"))
         if not candidates:
             print("No PILOT session found. Pass --session explicitly.")
             return 1

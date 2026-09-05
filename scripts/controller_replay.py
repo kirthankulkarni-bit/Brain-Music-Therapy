@@ -264,7 +264,8 @@ def main() -> int:
 
     d = args.session
     if d is None:
-        cands = sorted(glob.glob(os.path.join(_ROOT, "sessions", "PILOT*")))
+        from session_logger import real_sessions
+        cands = real_sessions(os.path.join(_ROOT, "sessions", "PILOT*"))
         d = cands[-1] if cands else None
     if d is None:
         print("No session found; pass --session.")
