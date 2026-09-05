@@ -1,7 +1,25 @@
 """
-calibrate_hysteresis.py - derive the trend thresholds for a given estimator, from data.
+calibrate_hysteresis.py - is the trend measurable under a given estimator? (Usually not.)
 
-WHY THIS IS NEEDED BEFORE CHANGING THE ESTIMATOR
+WHAT THIS IS NOW FOR
+
+This script used to derive _TREND_ENTER / _TREND_EXIT for a proposed estimator. Those
+constants no longer exist: the trend suffix was removed on 2026-09-05 because the
+quantity it thresholded is not measurable under any configuration tested, so no threshold
+could make it work. See docs/deviations.md.
+
+What survives is the measurement, which is the evidence for that decision and the test
+that would reopen it. The script reports the trend estimator's own noise against the
+largest genuine drift in the recording. While the ratio exceeds 1.0 the trend is not
+measurable and no trend-gated control can be honest. If a future estimator drives it
+below 1.0, the suffix becomes worth reconsidering - and verify_claims.py asserts the
+ratio, so a change would be noticed rather than discovered.
+
+The threshold arithmetic below is retained and still printed, because a threshold is the
+clearest way to show the problem: ENTER at 5x the noise sits ~9x above the largest real
+drift, which is what "cannot fire except on noise" means numerically.
+
+THE ORIGINAL RATIONALE, KEPT BECAUSE IT IS STILL THE REASON THE MEASUREMENT MATTERS
 
 The trend suffix in build_prompt is gated by two thresholds. They are not arbitrary: they
 were derived from the measured noise of the DEPLOYED estimator, after PILOT01 showed that
@@ -202,12 +220,27 @@ def main() -> int:
         print("  That is the intended outcome when the trend is unmeasurable at this SNR -")
         print("  it fires only for excursions genuinely outside anything observed.")
     print()
-    from music_engine import _TREND_ENTER, _TREND_EXIT
-    print(f"  currently in music_engine.py: ENTER {_TREND_ENTER:g}, EXIT {_TREND_EXIT:g}")
+    # The verdict, which is the point of the script now that there is no threshold to set.
+    win = max(2, int(60.0 / hop))
+    real = max(abs(float(np.polyfit(np.arange(win, dtype=float), z[i:i + win], 1)[0]))
+               for i in range(0, z.size - win, max(1, win // 4)))
+    ratio = r["trend_sd"] / real if real > 0 else float("inf")
+    print(f"  largest genuine 60 s drift : {real:.4f}")
+    print(f"  noise / genuine drift      : {ratio:.2f}x")
     print()
-    print("  Put these in music_engine.py as _TREND_ENTER / _TREND_EXIT if adopting this")
-    print("  estimator, and rerun scripts/run_tests.py - the chatter regression test will")
-    print("  tell you whether the controller still behaves.")
+    if ratio > 1.0:
+        print("  THE TREND IS NOT MEASURABLE under this estimator. The noise of the slope")
+        print("  estimate is larger than the largest real drift in the recording, so a")
+        print("  threshold above the noise can only be crossed by noise, and one low enough")
+        print("  to catch real drift fires constantly. There is no setting in between.")
+        print()
+        print("  This is why the trend suffix was removed (docs/deviations.md). Nothing")
+        print("  here should be wired back into the controller.")
+    else:
+        print("  THE TREND IS MEASURABLE under this estimator - the first configuration for")
+        print("  which that is true. The suffix removal was justified by the opposite")
+        print("  result, so this is worth revisiting deliberately: re-read")
+        print("  docs/deviations.md, and note that verify_claims.py asserts the old ratio.")
     return 0
 
 

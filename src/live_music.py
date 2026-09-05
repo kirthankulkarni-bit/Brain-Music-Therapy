@@ -18,24 +18,27 @@ are deliberate and worth stating plainly:
    session on purpose - it means bad electrode contact, and catching that before
    the intervention is the whole point.
 
-2. HYSTERESIS IS BACK, ON THE TREND SUFFIX ONLY. This entry used to read
-   "hysteresis is gone", on the reasoning that the old 0.35/0.55 thresholds existed
-   to debounce a BINARY ambient/focus switch, and that graded prompts need no
-   debouncing because a small change in z produces a small change in the prompt.
+2. THE TREND SUFFIX IS GONE, AND THE HISTORY IS WORTH KEEPING. This entry has now
+   said three different things, which is itself the finding.
 
-   That reasoning was right about the ladder and wrong about the suffix, and
-   PILOT01 showed the difference. The rung was stable - one rung for 95.9% of a
-   20-minute session, exactly as the graded design predicts. But the trend suffix
-   bolted on top of it is a hard threshold plus a sign test, and it flipped on 24%
-   of hops, driving 491 prompt changes and putting the audio in near-continuous
-   crossfade.
+   It first said "hysteresis is gone", reasoning that the old 0.35/0.55 thresholds
+   debounced a BINARY ambient/focus switch and that graded prompts need no
+   debouncing. That was right about the ladder and wrong about the suffix: the rung
+   was stable for 95.9% of PILOT01, but the suffix bolted on top was a hard
+   threshold plus a sign test, and it flipped on 24% of hops, driving 491 prompt
+   changes and putting the audio in near-continuous crossfade. The cause was a
+   one-hop difference whose sd (0.275) was five times its own threshold (0.05).
 
-   The cause was that trend was z minus previous_z, a one-hop difference whose sd
-   (0.275) was five times its own decision threshold (0.05). It was thresholding
-   noise. Trend is now a least-squares slope over _TREND_WINDOW_HOPS, and
-   build_prompt applies a dual-threshold hysteresis band on top of that. Replayed
-   against the pilot's own z, prompt changes drop from 477 to 24, all of them
-   genuine rung changes.
+   It then said hysteresis was back, on the suffix only, with trend as a
+   least-squares slope over _TREND_WINDOW_HOPS and a dual-threshold band on top.
+   Replayed against the pilot that gave 24 changes instead of 477.
+
+   It now says the suffix is removed, because the second fix treated a measurement
+   problem as a calibration problem. The largest genuine 60 s drift in PILOT01 is
+   0.0385 z per hop against slope-estimator noise of 0.0681 - the noise is 1.8x the
+   signal, and 3.9x under the retuned estimator. No threshold works: above the noise
+   only noise can cross it, below the noise it fires constantly. The trend is still
+   computed and logged here as a diagnostic, and nothing reads it.
 
    Any deadband is still defined in z units, so it transfers across participants.
 
@@ -296,7 +299,7 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
         if yoked_prompts:
             print(f"[eeg] SHAM (yoked): replaying {len(yoked_prompts)} prompts from {args.yoke_from}")
 
-        initial_prompt = build_prompt(0.0, args.target, None)
+        initial_prompt = build_prompt(0.0, args.target)
 
         # THE GUARD THAT ENCODES finding_ladder_hysteresis.md. A retuned estimator is
         # less smoothed, so z crosses rung boundaries constantly and the prompt chatters:
@@ -418,7 +421,7 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
                 # The governor owns the ladder state estimate and the dwell clock;
                 # build_prompt stays pure underneath it. At margin 0 and dwell 0 this
                 # is exactly the previous behaviour.
-                prompt = governor.update(z, trend=trend, now=now)
+                prompt = governor.update(z, now=now)
 
             changed = engine.set_target_prompt(prompt)
 

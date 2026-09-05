@@ -113,9 +113,13 @@ import numpy as np
 # This comment used to claim that graded levels need no hysteresis, because a small
 # change in z produces a small change in the prompt rather than a hard flip. The
 # claim holds for the LADDER and PILOT01 confirmed it - the rung was stable for
-# 95.9% of a 20-minute session. It did NOT hold for the trend suffix appended in
-# build_prompt, which is a hard threshold plus a sign test and chattered on 24% of
-# hops. Hysteresis lives there now; see _trend_suffix.
+# 95.9% of a 20-minute session. It did NOT hold for the trend suffix that used to be
+# appended in build_prompt, which was a hard threshold plus a sign test and chattered
+# on 24% of hops. That suffix was removed on 9/5; see the note below the ladder.
+#
+# The rung itself has no hysteresis either unless ladder_margin is set - which is a
+# separate matter, and one that latched the controller when it was first wired up.
+# See build_prompt's note on previous_rung.
 #
 # ONLY RUNGS 1-3 ARE REACHABLE. level is either goal or here +/- 1, and goal is
 # state_rung(target_z), which is rung 1 for the relaxation arm and rung 3 for the
@@ -195,7 +199,7 @@ def state_rung(z: float, previous_rung: Optional[int] = None, margin: float = 0.
     return int(np.clip(previous_rung, 0, top))
 
 
-def build_prompt(z: float, target_z: float = -1.0, trend: Optional[float] = None,
+def build_prompt(z: float, target_z: float = -1.0, *,
                  previous_prompt: Optional[str] = None,
                  ladder_margin: float = 0.0,
                  previous_rung: Optional[int] = None) -> str:
@@ -204,7 +208,6 @@ def build_prompt(z: float, target_z: float = -1.0, trend: Optional[float] = None
 
     z             : current log(beta/alpha), z-scored against the participant's baseline
     target_z      : desired z (-1.0 = one SD below their resting baseline, relaxation)
-    trend         : least-squares slope of z, used to decide whether to hold or push
     previous_rung : the last estimate of the participant's OWN rung. Only read when
                     ladder_margin > 0, and it must come from a caller that tracks the
                     state estimate - PromptGovernor does. It is NOT recoverable from
@@ -247,101 +250,38 @@ def build_prompt(z: float, target_z: float = -1.0, trend: Optional[float] = None
 
     here = state_rung(z, previous_rung=previous_rung, margin=ladder_margin)
     goal = state_rung(target_z)
-    error = z - target_z
 
-    if abs(error) <= _DEADBAND_Z or here == goal:
+    if abs(z - target_z) <= _DEADBAND_Z or here == goal:
         level = goal
     else:
         level = here + (1 if goal > here else -1)  # lead by exactly one rung
     level = int(np.clip(level, 0, len(_ENERGY_LADDER) - 1))
 
-    base = _ENERGY_LADDER[level]
-
-    return base + _trend_suffix(trend, error, previous_prompt)
+    return _ENERGY_LADDER[level]
 
 
-# Suffix strings, named so the hysteresis can recover its own previous state from a
-# prompt string rather than needing a stateful object. build_prompt stays pure: same
-# inputs give the same output, which is what lets build_library enumerate its range
-# by sweeping it.
-_SUFFIX_NONE = ""
-_SUFFIX_HOLDING = ", holding steady, minimal variation"
-_SUFFIX_RECEDING = ", softer and slower, receding"
-_SUFFIX_EMERGING = ", gradually more present"
-_ALL_SUFFIXES = (_SUFFIX_HOLDING, _SUFFIX_RECEDING, _SUFFIX_EMERGING)
-
-# Hysteresis band, in z units per hop, calibrated against MEASURED noise rather than
-# guessed. On PILOT01 the trend estimator's own sd was 0.275 at one hop and 0.068
-# over a 20-hop regression window, while the genuine drift being described was
-# 0.00088 per hop - a signal-to-noise ratio of 0.013. The old single threshold of
-# 0.05 sat five times BELOW the one-hop noise, so it was thresholding noise and the
-# suffix flipped on 24% of hops.
+# THE TREND SUFFIX WAS REMOVED 2026-09-05. It appended ", holding steady", ", softer
+# and slower, receding" or ", gradually more present" to the base prompt, gated by a
+# dual-threshold band on the least-squares slope of z.
 #
-# ENTER is ~5 sd of the 20-hop estimator, EXIT ~2.5 sd. The gap between them is the
-# hysteresis: once a trend is asserted it persists until the estimate falls well
-# back, so an estimate hovering near a single threshold cannot flap across it.
+# It was not removed for being inert. It was removed because the quantity it thresholded
+# is not measurable, so no threshold can make it work. Measured on PILOT01 in z units, on
+# the same 20-hop slope the controller used: the largest genuine 60 s drift is 0.0385
+# while the slope estimator's own noise is 0.0681 - the noise is 1.8x the signal, and
+# under the retuned estimator it is 3.9x. A threshold above the noise floor can only be
+# crossed by noise; one low enough to catch real drift fires constantly, which is exactly
+# the 8/16 defect (threshold 0.05 against one-hop noise of 0.275, 491 prompt changes in
+# twenty minutes). There is no setting in between.
 #
-# ENTER was first set to 0.20, at 3 sd. That turned out to sit exactly on the
-# largest slope PILOT01 ever produced - 0.1998 against a 0.2000 threshold. It fired
-# zero times out of 1023 windows, but by a margin of 0.0002, which is an accident
-# rather than a decision: another session would cross it arbitrarily. 0.35 sits
-# clearly above the observed ceiling, so "never fires" is a property of the
-# calibration instead of a coincidence.
+# It was also a latent hazard rather than dead weight. ENTER = 0.35 was calibrated
+# against the deployed estimator; under the retuned one the largest observed slope rises
+# to 0.3023, a margin of 1.16x. This project has already shipped a threshold that missed
+# firing by 0.0002 and recorded it as an accident rather than a decision.
 #
-# THE CONSEQUENCE IS THAT THE SUFFIX IS NOW INERT IN A NORMAL SESSION, and that is
-# a finding rather than a workaround. No plausible physiological excursion produces
-# a 20-hop slope this large: PILOT01's full z range was 4.8 units over 20 minutes,
-# and even a 3-unit move compressed into 20 s only reaches 0.15. Large enough
-# artifacts are rejected upstream before they ever reach here. Whether a branch
-# that cannot fire should remain in the code is a design call - see the note in
-# docs/results_latency.md - but it is at least now honestly calibrated rather than
-# firing on noise, which is what the pilot recorded it doing.
-_TREND_ENTER = 0.35
-_TREND_EXIT = 0.175
-
-
-def _previous_suffix(previous_prompt: Optional[str]) -> str:
-    """Recover the last suffix decision from the last prompt string."""
-    if not previous_prompt:
-        return _SUFFIX_NONE
-    for suffix in _ALL_SUFFIXES:
-        if previous_prompt.endswith(suffix):
-            return suffix
-    return _SUFFIX_NONE
-
-
-def _trend_suffix(trend: Optional[float], error: float,
-                  previous_prompt: Optional[str]) -> str:
-    """
-    Which trend suffix to append, with hysteresis against the previous decision.
-
-    Three states - none, moving toward the target, moving away from it - and a
-    transition needs |trend| >= _TREND_ENTER. Staying in a state only needs
-    |trend| > _TREND_EXIT. With no previous prompt there is no state to hold, so the
-    stricter ENTER threshold applies, which keeps the reachable prompt set unchanged
-    and therefore keeps the library's coverage guarantee intact.
-    """
-    if trend is None or not math.isfinite(trend):
-        return _SUFFIX_NONE
-
-    previous = _previous_suffix(previous_prompt)
-    magnitude = abs(trend)
-
-    # Below the exit threshold nothing is assertable, whatever was asserted before.
-    if magnitude < _TREND_EXIT:
-        return _SUFFIX_NONE
-
-    # Between EXIT and ENTER, hold whatever was already asserted but never start
-    # something new. This band is the hysteresis.
-    moving_toward_target = (trend < 0) if error > 0 else (trend > 0)
-    desired = _SUFFIX_HOLDING if moving_toward_target else (
-        _SUFFIX_RECEDING if error > 0 else _SUFFIX_EMERGING
-    )
-
-    if magnitude < _TREND_ENTER:
-        return previous
-
-    return desired
+# Removal is a no-op for participants: 0 suffixed prompts across all 1212 logged windows
+# on disk. It freed 15 of 20 distinct library prompts and 60 of 220 segments - 8.0 of
+# 29.3 minutes of rendered audio, maintained for prompts the controller could not
+# request. See docs/deviations.md for the full record.
 
 
 # ------------------------------------------------------------------- governor
@@ -401,10 +341,17 @@ class PromptGovernor:
         # rung toward the target. See build_prompt's note on previous_rung.
         self._state_rung: Optional[int] = None
 
-    def update(self, z: float, trend: Optional[float] = None,
-               now: Optional[float] = None) -> str:
-        """The prompt that should be sounding. `now` is seconds on any monotonic clock."""
-        wanted = build_prompt(z, target_z=self.target_z, trend=trend,
+    def update(self, z: float, now: Optional[float] = None) -> str:
+        """
+        The prompt that should be sounding. `now` is seconds on any monotonic clock.
+
+        There is deliberately no `trend` argument. The controller consumed one until
+        9/5, to gate a suffix on the slope of z; that slope is not measurable at this
+        SNR and the suffix was removed. The slope is still computed and logged by
+        live_music as a diagnostic - it is the evidence for the removal - but nothing
+        downstream of the log reads it. See docs/deviations.md.
+        """
+        wanted = build_prompt(z, target_z=self.target_z,
                               previous_prompt=self.prompt,
                               ladder_margin=self.ladder_margin,
                               previous_rung=self._state_rung)

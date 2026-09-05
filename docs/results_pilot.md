@@ -83,6 +83,17 @@ own z:
 | before | 477 | 24 | 453 | 2.2 s | 1.4 s | **30%** |
 | after | **24** | 24 | **0** | 43.5 s | 4.0 s | **0%** |
 
+**The suffix was removed entirely on 2026-09-05, and this table is why the second fix
+was not the end of it.** Look at the `suffix-only` column: the fix took it from 453 to 0.
+A control contributing nothing to 24 remaining changes is either perfectly calibrated or
+inoperative, and this table cannot tell the two apart. It turned out to be the second —
+the slope the suffix gated on is smaller than the noise of the estimator measuring it
+(1.8x on this session), so no threshold could ever have worked. Calibrating it above the
+noise did not make it correct, it made it silent. See [deviations.md](deviations.md).
+
+The numbers below stand as the record of what the calibration achieved; the control they
+describe no longer exists.
+
 Read the two dwell columns together. Mean dwell rises to 43.5 s, but the remaining
 rung changes **cluster** — the median gap between consecutive changes is 4.0 s, and 13
 of 23 gaps still fall inside a single 8 s segment. What the fix guarantees is the

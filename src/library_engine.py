@@ -563,7 +563,7 @@ if __name__ == "__main__":
     # music_engine smoke test uses, so the two engines can be compared by ear.
     def control(t: float) -> Optional[str]:
         z = 2.0 - 0.05 * t
-        return build_prompt(z, target_z=-1.0, trend=-0.05)
+        return build_prompt(z, target_z=-1.0)
 
     if args.wav:
         import soundfile as sf

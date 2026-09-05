@@ -229,7 +229,7 @@ def fig_chatter(session: dict, out: str) -> str:
         trend = (float(np.polyfit(np.arange(len(hist), dtype=float), np.asarray(hist), 1)[0])
                  if len(hist) >= window else None)
         p = build_prompt(float(v), session["manifest"].get("target_z", -1.0),
-                         trend, previous_prompt=prev)
+                         previous_prompt=prev)
         if prev is not None and p != prev:
             change_times.append(i)
         prompts.append(p)

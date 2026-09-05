@@ -161,9 +161,6 @@ def replay(z, t, target_z, margin, dwell, crossfade_s):
     """
     Drive the real controller with a z series and record what would have been heard.
 
-    Trend is the least-squares slope over the same 20-hop window the live loop uses, so
-    the suffix logic sees what it would see live.
-
     `t` is real elapsed seconds, so a dropout shows up as one long gap rather than as
     silently compressed time - which matters, because the whole measurement is a rate.
     """
@@ -173,11 +170,7 @@ def replay(z, t, target_z, margin, dwell, crossfade_s):
     prev = None
     for i, value in enumerate(z):
         now = float(t[i])
-        trend = None
-        if i + 1 >= _TREND_WINDOW_HOPS:
-            seg = z[i + 1 - _TREND_WINDOW_HOPS:i + 1]
-            trend = float(np.polyfit(np.arange(seg.size, dtype=float), seg, 1)[0])
-        p = gov.update(float(value), trend=trend, now=now)
+        p = gov.update(float(value), now=now)
         if prev is not None and p != prev:
             change_times.append(now)
             prompts.append(p)

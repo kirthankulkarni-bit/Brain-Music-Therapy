@@ -11,7 +11,7 @@ Verify the state is still current before trusting anything below:
 python scripts/run_tests.py && python scripts/verify_claims.py
 ```
 
-Expected: **45 passed, 0 failed** and **21 claims reproduce**. If either disagrees,
+Expected: **44 passed, 0 failed** and **23 claims reproduce**. If either disagrees,
 something changed after this was written and the numbers here are stale.
 
 ---
@@ -250,7 +250,15 @@ settings**.
 ## 7. Open questions
 
 1. **Does the eyes-closed effect hold on AF7/AF8 with good contact?** Gates everything.
-2. **Should the inert trend suffix be deleted?** It cannot fire after calibration.
+2. ~~**Should the inert trend suffix be deleted?**~~ **DONE 9/5 — deleted.** Not for being
+   inert, but because the quantity it thresholded is **not measurable**: the largest
+   genuine 60 s drift in PILOT01 is 0.0385 z/hop against slope-estimator noise of 0.0681
+   (1.8x, and 3.9x under the retuned estimator). A threshold above the noise can only be
+   crossed by noise; one low enough to catch real drift fires constantly, which is the
+   8/16 defect. It was also a hazard rather than dead weight — ENTER 0.35 sat only 1.16x
+   above the retuned estimator's largest slope. Verified a no-op: **0 suffixed prompts
+   across all 1212 logged windows**. Freed 15 of 20 library prompts and 60 of 220 segments
+   (8.0 of 29.3 min). Logged in [deviations.md](deviations.md).
 3. **Should `ladder_margin` be turned on?** It *works* now — as of 8/28 it did not, and
    enabling it would have frozen the controller (trap 1). At deployed settings it gives
    28 → 8 changes with a 21 s median gap. Still off by default, still a therapeutic call.
@@ -282,6 +290,7 @@ settings**.
 | `docs/HANDOFF.md` | this file |
 | `docs/next_session.md` | **the next hardware session, step by step** |
 | `docs/analysis_plan.md` | **frozen pre-registration — do not edit** |
+| `docs/deviations.md` | the deviation log. Deliberately OUTSIDE the hash — §9 of the plan says to log deviations in the plan, which would break the freeze |
 | `docs/preprint_draft.md` | §1–§8 |
 | `docs/related_work.md` | the arXiv sweep and what survives it |
 | `docs/finding_channel_validation.md` | trap 2 in full |
@@ -292,7 +301,7 @@ settings**.
 | `src/music_engine.py` | `build_prompt` — the controller |
 | `src/library_engine.py` | the default audio path |
 | `src/analyze_session.py` | outcomes, coupling, event-locked |
-| `scripts/run_tests.py` | 45 checks, one command |
+| `scripts/run_tests.py` | 44 checks, one command |
 | `scripts/verify_claims.py` | regenerates all 17 manuscript numbers |
 | `scripts/estimator_sweep.py` | latency vs information rate, needs a labelled session |
 | `scripts/controller_replay.py` | replays a recording through the real controller; chatter counts |

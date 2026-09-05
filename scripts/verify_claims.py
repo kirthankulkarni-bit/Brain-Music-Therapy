@@ -138,12 +138,9 @@ def claim_chatter_after() -> tuple[float, str]:
     """Prompt changes when the same z is replayed through the fixed controller."""
     from music_engine import build_prompt
     z = _pilot_z()
-    hist, prev, changes = collections.deque(maxlen=20), None, 0
+    prev, changes = None, 0
     for v in z:
-        hist.append(v)
-        tr = (float(np.polyfit(np.arange(len(hist), dtype=float), np.asarray(hist), 1)[0])
-              if len(hist) >= 20 else None)
-        p = build_prompt(float(v), -1.0, tr, previous_prompt=prev)
+        p = build_prompt(float(v), -1.0, previous_prompt=prev)
         if prev is not None and p != prev:
             changes += 1
         prev = p
@@ -262,6 +259,42 @@ def claim_streaming_latency_budget() -> tuple[float, str]:
 
 
 # claim -> (function, value asserted in the manuscript, tolerance)
+def claim_trend_noise_to_signal() -> tuple[float, str]:
+    """
+    How many times larger the trend estimator's noise is than the drift it describes.
+
+    This is the number that removed the trend suffix on 9/5, so it is regenerated rather
+    than remembered. Above 1.0 means no threshold can work: placed above the noise it can
+    only be crossed by noise, placed low enough to catch real drift it fires constantly.
+
+    If a future estimator ever drives this below 1.0, the trend becomes measurable and
+    the suffix is worth reconsidering. See docs/deviations.md.
+    """
+    z = _pilot_z()
+    W = 20
+    idx = np.arange(W, dtype=float)
+    noise = float(np.array([np.polyfit(idx, z[i - W:i], 1)[0]
+                            for i in range(W, z.size)]).std(ddof=1))
+    win = 60
+    real = max(abs(float(np.polyfit(np.arange(win, dtype=float), z[i:i + win], 1)[0]))
+               for i in range(0, z.size - win, win // 4))
+    return noise / real, f"noise {noise:.4f} vs largest 60 s drift {real:.4f}"
+
+
+def claim_reachable_prompt_space() -> tuple[float, str]:
+    """
+    Distinct prompts build_prompt can emit. Was 20 with the trend suffix, now 5.
+
+    Asserted because build_library derives the render list from this sweep, so a silent
+    growth here means the library stops covering the controller - the exact failure
+    verify_library exists to catch, one step earlier.
+    """
+    from build_library import enumerate_prompts
+    ps = enumerate_prompts()
+    n_reach = sum(1 for p in ps if p["reachable_default_targets"])
+    return float(len(ps)), f"{n_reach} reachable under the two default targets"
+
+
 _REPLAY_CACHE: dict = {}
 
 
@@ -366,6 +399,8 @@ CLAIMS = {
     "retuned, no dwell: inside a xfade":  (claim_retuned_chatter_no_dwell, 136,   4),
     "retuned, 1 s dwell: inside a xfade": (claim_retuned_chatter_with_dwell, 0,   0),
     "ladder margin 0.25 still responds":  (claim_ladder_margin_responds,  8,      2),
+    "trend noise / genuine drift":        (claim_trend_noise_to_signal,   1.77,   0.05),
+    "distinct prompts build_prompt emits":(claim_reachable_prompt_space,  5,      0),
 }
 
 

@@ -138,7 +138,7 @@ def main() -> int:
     # The independent check: sweep the real controller, not the enumeration, so a
     # divergence between the two is caught rather than cancelling out.
     emitted = {
-        build_prompt(float(z), target_z=tz, trend=tr)
+        build_prompt(float(z), target_z=tz)
         for tz in (-1.0, 1.0)
         for z in np.arange(-4.0, 4.05, 0.25)
         for tr in (None, -0.3, 0.0, 0.3)
@@ -164,7 +164,7 @@ def main() -> int:
 
     # A trajectory that forces many prompt changes, so seams are exercised hard.
     def control(t: float) -> str:
-        return build_prompt(2.0 - 0.15 * t, target_z=-1.0, trend=-0.15)
+        return build_prompt(2.0 - 0.15 * t, target_z=-1.0)
 
     audio = engine.render_offline(90.0, control=control)
     sr = engine.sample_rate

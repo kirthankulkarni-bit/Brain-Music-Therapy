@@ -67,13 +67,17 @@ from music_engine import _ENERGY_LADDER, build_prompt  # noqa: E402
 
 MUSICGEN_TOKENS_PER_SECOND = 50
 
-# Trend suffixes build_prompt can append. Kept here only to label segments; the
-# prompt set itself is discovered by sweeping, never by combining these.
+# build_prompt returns a bare ladder rung and nothing else. The trend suffix that used
+# to be appended was removed on 9/5 - it gated on a slope whose noise is 1.8x the
+# largest genuine drift, so no threshold could make it work (docs/deviations.md).
+#
+# This map is kept, with one entry, because the manifest schema carries a `variant`
+# field and existing libraries on disk have segments labelled with the old values. A
+# library built before the removal still loads; its suffixed segments simply stop being
+# requested. Rebuild to reclaim the space - they were 60 of 220 segments, 8.0 of 29.3
+# minutes, for prompts the controller could no longer produce.
 _VARIANT_LABELS = {
     "": "base",
-    ", holding steady, minimal variation": "holding",
-    ", softer and slower, receding": "receding",
-    ", gradually more present": "emerging",
 }
 
 # -20 dBFS RMS. Loud enough to sit well above the noise floor of any playback path,
@@ -94,8 +98,10 @@ def enumerate_prompts() -> list[dict]:
     Derived rather than constructed: if the ladder gains a rung or the deadband
     changes, this picks it up automatically.
 
-    A FINDING THIS SWEEP PRODUCED. Under the two default targets, only 12 of the 20
-    ladder-times-variant combinations are reachable - rungs 0 and 4 are dead code.
+    A FINDING THIS SWEEP PRODUCED. Under the two default targets, only 3 of the 5
+    ladder rungs are reachable - rungs 0 and 4 are dead code. (Before the trend suffix
+    was removed this read 12 of 20 combinations; the suffix multiplied every rung by
+    four variants, and 15 of those 20 prompts could not be requested at all.)
     build_prompt always leads by exactly one rung toward `goal`, and `goal` is
     state_rung(target_z), which is rung 1 for target -1.0 and rung 3 for target +1.0.
     Reaching rung 0 requires goal == 0, i.e. a target near -2 SD, which neither arm
@@ -108,28 +114,26 @@ def enumerate_prompts() -> list[dict]:
     is explicit rather than accidental.
     """
     seen: dict[str, dict] = {}
-    trends = [None] + [round(t, 2) for t in np.arange(-0.5, 0.55, 0.05)]
     wide_targets = [round(t, 1) for t in np.arange(-3.0, 3.05, 0.5)]
 
     for target_z in wide_targets:
         for z in np.arange(-4.0, 4.05, 0.1):
-            for trend in trends:
-                text = build_prompt(float(z), target_z=float(target_z), trend=trend)
-                default_arm = target_z in _DEFAULT_TARGETS
+            text = build_prompt(float(z), target_z=float(target_z))
+            default_arm = target_z in _DEFAULT_TARGETS
 
-                if text in seen:
-                    seen[text]["reachable_default_targets"] |= default_arm
-                    continue
+            if text in seen:
+                seen[text]["reachable_default_targets"] |= default_arm
+                continue
 
-                rung = next((i for i, base in enumerate(_ENERGY_LADDER)
-                             if text.startswith(base)), -1)
-                suffix = text[len(_ENERGY_LADDER[rung]):] if rung >= 0 else ""
-                seen[text] = {
-                    "prompt": text,
-                    "rung": rung,
-                    "variant": _VARIANT_LABELS.get(suffix, "unknown"),
-                    "reachable_default_targets": default_arm,
-                }
+            rung = next((i for i, base in enumerate(_ENERGY_LADDER)
+                         if text.startswith(base)), -1)
+            suffix = text[len(_ENERGY_LADDER[rung]):] if rung >= 0 else ""
+            seen[text] = {
+                "prompt": text,
+                "rung": rung,
+                "variant": _VARIANT_LABELS.get(suffix, "unknown"),
+                "reachable_default_targets": default_arm,
+            }
 
     return sorted(seen.values(), key=lambda p: (p["rung"], p["variant"]))
 

@@ -59,8 +59,6 @@ sys.path.insert(0, os.path.join(_ROOT, "src"))
 sys.path.insert(0, os.path.join(_ROOT, "scripts"))
 
 from music_engine import (  # noqa: E402
-    _TREND_ENTER,
-    _TREND_EXIT,
     build_prompt,
     state_rung,
 )
@@ -94,40 +92,88 @@ class Suite:
 
 def test_build_prompt_purity(s: Suite) -> None:
     """Same inputs must give the same output - build_library depends on it."""
-    cases = [(0.5, -1.0, None, None), (2.0, -1.0, 0.4, None),
-             (-2.0, 1.0, -0.4, "flowing melodic electronica, steady gentle rhythm, 85 bpm")]
-    stable = all(build_prompt(*c) == build_prompt(*c) == build_prompt(*c) for c in cases)
+    cases = [(0.5, -1.0, None), (2.0, -1.0, None),
+             (-2.0, 1.0, "flowing melodic electronica, steady gentle rhythm, 85 bpm")]
+    stable = all(build_prompt(z, t, previous_prompt=pp) ==
+                 build_prompt(z, t, previous_prompt=pp) ==
+                 build_prompt(z, t, previous_prompt=pp) for z, t, pp in cases)
     s.check("build_prompt is pure", stable, f"{len(cases)} input combinations, 3 calls each")
 
     # No hidden module state: interleaving different inputs must not change results.
-    a1 = build_prompt(2.0, -1.0, 0.4)
-    _ = [build_prompt(x, -1.0, 0.4) for x in (-3.0, 0.0, 3.0)]
-    s.check("no hidden state between calls", build_prompt(2.0, -1.0, 0.4) == a1)
+    a1 = build_prompt(2.0, -1.0)
+    _ = [build_prompt(x, -1.0) for x in (-3.0, 0.0, 3.0)]
+    s.check("no hidden state between calls", build_prompt(2.0, -1.0) == a1)
+
+    # Everything past target_z is keyword-only, so a call written against the old
+    # signature raises instead of silently reinterpreting its third argument. When the
+    # trend parameter was removed, build_prompt(z, target, trend) would otherwise have
+    # passed the trend as previous_prompt and kept running.
+    try:
+        build_prompt(1.0, -1.0, 0.4)          # type: ignore[misc]
+        rejected = False
+    except TypeError:
+        rejected = True
+    s.check("stale positional call is rejected, not reinterpreted", rejected)
 
 
-def test_hysteresis_thresholds(s: Suite) -> None:
-    """The band must be a band, and calibrated above the measured noise ceiling."""
-    s.check("ENTER above EXIT (a band, not one threshold)", _TREND_ENTER > _TREND_EXIT,
-            f"enter {_TREND_ENTER}, exit {_TREND_EXIT}")
+def test_trend_is_not_measurable(s: Suite, session_z: np.ndarray) -> None:
+    """
+    The evidence for removing the trend suffix, asserted rather than remembered.
 
-    # PILOT01's largest observed 20-hop slope. ENTER sat exactly on it at 0.20,
-    # firing zero times by a margin of 0.0002 - luck rather than calibration.
-    observed_ceiling = 0.1998
-    s.check("ENTER clear of the measured noise ceiling",
-            _TREND_ENTER > observed_ceiling * 1.25,
-            f"enter {_TREND_ENTER} vs observed max slope {observed_ceiling}")
+    This test replaces test_hysteresis_thresholds, which checked that ENTER sat above
+    EXIT and above the measured noise ceiling. Those checks passed for two weeks while
+    describing a control that could not work: they verified the threshold was placed
+    consistently, never that the quantity underneath it was measurable.
 
-    base = build_prompt(1.0, -1.0, 0.0)
-    s.check("below EXIT asserts nothing", build_prompt(1.0, -1.0, _TREND_EXIT * 0.5) == base)
-    s.check("above ENTER asserts a suffix", build_prompt(1.0, -1.0, _TREND_ENTER * 1.5) != base)
+    It is not. The slope the suffix gated on is smaller than the noise of the estimator
+    measuring it, so a threshold above the noise can only be crossed by noise, and one
+    low enough to catch real drift fires constantly - which is the 8/16 defect, 491
+    prompt changes in twenty minutes from a 0.05 threshold against 0.275 of noise.
 
-    # The band itself: between EXIT and ENTER, hold whatever was already asserted.
-    asserted = build_prompt(1.0, -1.0, _TREND_ENTER * 1.5)
-    mid = (_TREND_ENTER + _TREND_EXIT) / 2
-    s.check("inside the band, a prior assertion is held",
-            build_prompt(1.0, -1.0, mid, previous_prompt=asserted) == asserted)
-    s.check("inside the band, nothing new is started",
-            build_prompt(1.0, -1.0, mid, previous_prompt=None) == base)
+    If a future estimator ever makes the trend measurable, this test fails and the
+    suffix becomes worth reconsidering. That is the intended way to reopen the question.
+    """
+    if session_z.size < 200:
+        s.skip("trend is not measurable", "no session with enough windows")
+        return
+
+    W = 20
+    idx = np.arange(W, dtype=float)
+    slopes = np.array([np.polyfit(idx, session_z[i - W:i], 1)[0]
+                       for i in range(W, session_z.size)])
+    noise = float(slopes.std(ddof=1))
+
+    # The genuine drift, measured over 60 s stretches rather than the whole session,
+    # so a real excursion is not averaged away by a flat session.
+    win = 60
+    real = max(abs(float(np.polyfit(np.arange(win, dtype=float),
+                                    session_z[i:i + win], 1)[0]))
+               for i in range(0, session_z.size - win, win // 4))
+
+    s.check("trend noise exceeds the largest genuine drift", noise > real,
+            f"noise {noise:.4f} vs largest 60 s drift {real:.4f} "
+            f"({noise / real:.1f}x)")
+
+    # Every emitted prompt must be EXACTLY a ladder rung - not "starts with" one, which
+    # a suffix would still satisfy. Swept over both arms and a previous_prompt, since the
+    # suffix used to be reachable only when one was threaded through.
+    import music_engine
+    rungs = set(music_engine._ENERGY_LADDER)
+    emitted = set()
+    for target in (-1.0, 1.0):
+        prev = None
+        for v in np.arange(-4, 4.01, 0.05):
+            prev = build_prompt(float(v), target, previous_prompt=prev)
+            emitted.add(prev)
+    s.check("every prompt is exactly a ladder rung", emitted <= rungs,
+            f"{len(emitted)} distinct prompts, all in the {len(rungs)}-rung ladder"
+            if emitted <= rungs else f"outside the ladder: {sorted(emitted - rungs)}")
+
+    gone = [n for n in ("_trend_suffix", "_previous_suffix", "_TREND_ENTER",
+                        "_TREND_EXIT", "_ALL_SUFFIXES", "_SUFFIX_HOLDING")
+            if hasattr(music_engine, n)]
+    s.check("the suffix machinery is gone, not just unused", not gone,
+            f"still present: {gone}" if gone else "6 names removed")
 
 
 def test_chatter_regression(s: Suite, session_z: np.ndarray) -> None:
@@ -143,18 +189,16 @@ def test_chatter_regression(s: Suite, session_z: np.ndarray) -> None:
         s.skip("chatter regression", "no session with enough intervention windows")
         return
 
-    window = 20
-    prompts, prev, hist = [], None, collections.deque(maxlen=window)
+    prompts, prev = [], None
     for v in session_z:
-        hist.append(v)
-        trend = (float(np.polyfit(np.arange(len(hist), dtype=float), np.asarray(hist), 1)[0])
-                 if len(hist) >= window else None)
-        p = build_prompt(float(v), -1.0, trend, previous_prompt=prev)
+        p = build_prompt(float(v), -1.0, previous_prompt=prev)
         prompts.append(p)
         prev = p
 
     change_idx = [i for i in range(1, len(prompts)) if prompts[i] != prompts[i - 1]]
     changes = len(change_idx)
+    # Every change is now a rung change by construction - there is no suffix left that
+    # could change without one. Kept as a check that that stays true.
     suffix_only = sum(1 for i in change_idx
                       if prompts[i].split(",")[0] == prompts[i - 1].split(",")[0])
     gaps = np.diff(np.asarray(change_idx, dtype=float)) if changes > 1 else np.array([np.inf])
@@ -183,8 +227,8 @@ def test_ladder_hysteresis(s: Suite) -> None:
     """
     from music_engine import state_rung
 
-    identical = all(build_prompt(float(z), -1.0, None) ==
-                    build_prompt(float(z), -1.0, None, ladder_margin=0.0)
+    identical = all(build_prompt(float(z), -1.0) ==
+                    build_prompt(float(z), -1.0, ladder_margin=0.0)
                     for z in np.arange(-4, 4.01, 0.1))
     s.check("ladder hysteresis is inert by default", identical,
             "byte-identical across z in [-4, 4]")
@@ -266,7 +310,7 @@ def test_min_dwell(s: Suite) -> None:
     # Default off: identical to calling build_prompt directly, across the z range.
     gov = PromptGovernor(target_z=-1.0)
     same = all(gov.update(float(z), now=float(i)) ==
-               bp(float(z), -1.0, None, previous_prompt=(gov.prompt if i else None))
+               bp(float(z), -1.0, previous_prompt=(gov.prompt if i else None))
                for i, z in enumerate(np.arange(-3, 3.01, 0.25)))
     s.check("governor with no margin and no dwell matches build_prompt", same)
 
@@ -297,7 +341,7 @@ def test_min_dwell(s: Suite) -> None:
     gov.update(-3.0, now=1.5)                   # superseded while still blocked
     after = gov.update(-3.0, now=20.0)          # dwell expired
     s.check("dwell adopts the current request, not the stale one",
-            after == bp(-3.0, -1.0, None, previous_prompt=gov.prompt),
+            after == bp(-3.0, -1.0, previous_prompt=gov.prompt),
             "no queued backlog of superseded prompts")
 
 
@@ -349,9 +393,7 @@ def test_ladder_reachability(s: Suite) -> None:
     reached = set()
     for target in (-1.0, 1.0):
         for z in np.arange(-4.0, 4.05, 0.1):
-            for trend in (None, -0.5, 0.0, 0.5):
-                p = build_prompt(float(z), target, trend)
-                reached.add(p.split(",")[0])
+            reached.add(build_prompt(float(z), target).split(",")[0])
     from music_engine import _ENERGY_LADDER
     idx = {base.split(",")[0]: i for i, base in enumerate(_ENERGY_LADDER)}
     rungs = sorted(idx[r] for r in reached if r in idx)
@@ -540,6 +582,18 @@ def test_preregistration_frozen(s: Suite) -> None:
             digest == FROZEN_PLAN_SHA256,
             f"{digest[:16]}... vs frozen {FROZEN_PLAN_SHA256[:16]}...")
 
+    # The deviation log must exist and must live OUTSIDE the hash. Section 9 of the plan
+    # says deviations are recorded "here", but "here" is inside the hashed file, so
+    # appending a row fails the check above. The first person to log a deviation would
+    # find a failing test whose only cause was the log entry, and the obvious fix -
+    # updating FROZEN_PLAN_SHA256 - destroys the freeze permanently. A guard that makes
+    # disabling itself the reasonable next step is worse than no guard, so the log lives
+    # in its own file and this asserts it has not been quietly dropped.
+    dev = os.path.join(_ROOT, "docs", "deviations.md")
+    s.check("deviation log exists outside the frozen file",
+            os.path.exists(dev) and os.path.getsize(dev) > 0,
+            "docs/deviations.md")
+
 
 def test_analysis_runs(s: Suite) -> None:
     """analyze_session must complete on every session on disk."""
@@ -603,7 +657,7 @@ def main() -> int:
 
     s.section("1. CONTROLLER - purity, hysteresis, and the chatter regression")
     test_build_prompt_purity(s)
-    test_hysteresis_thresholds(s)
+    test_trend_is_not_measurable(s, load_session_z())
     test_state_rung_monotonic(s)
     test_ladder_reachability(s)
     test_ladder_hysteresis(s)
