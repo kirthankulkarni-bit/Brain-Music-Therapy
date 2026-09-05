@@ -259,6 +259,49 @@ def claim_streaming_latency_budget() -> tuple[float, str]:
 
 
 # claim -> (function, value asserted in the manuscript, tolerance)
+# Simulations per power cell. 1000 leaves required_n straddling a grid step (25 or 30
+# depending on seed); 2000 pins it at 25 with the power estimate varying by 0.010 across
+# seeds. The tolerances on the two power claims below are that measured spread, not a
+# guess - a stochastic quantity asserted to more precision than its own noise is a test
+# that fails for the wrong reason.
+_POWER_SIMS = 2000
+
+
+def _power_ctx():
+    from power_analysis import session_stats
+    return session_stats(sorted(glob.glob(os.path.join(_ROOT, "sessions", "PILOT*")))[-1])
+
+
+def claim_power_at_registered_n() -> tuple[float, str]:
+    """
+    Power to detect the smallest effect of interest at the registered n.
+
+    analysis_plan.md section 4 states 38%, and that number is the reason this is a
+    feasibility study rather than a test of H1. It is frozen, so it cannot move - but it
+    can stop being reproducible, which is worse, because the registered design would then
+    rest on a computation nobody can rerun. Nothing checked it until 9/5.
+    """
+    from power_analysis import power_for
+    st = _power_ctx()
+    got = power_for(np.random.default_rng(0), 10, 0.15, 0.5, st, True, "z_mean",
+                    _POWER_SIMS)
+    return float(got), f"paired, n=10 per arm, 0.15 z, {_POWER_SIMS} sims"
+
+
+def claim_required_n_for_target_effect() -> tuple[float, str]:
+    """
+    Participants per arm for 80% power at 0.15 z, paired.
+
+    This is the 25 that finding_analysis_latency.md compares its retuned projection of 7
+    against, so the whole "infeasible to feasible" argument is anchored on it.
+    """
+    from power_analysis import required_n
+    st = _power_ctx()
+    got = required_n(np.random.default_rng(0), 0.15, 0.5, st, True, "z_mean",
+                     _POWER_SIMS)
+    return float(got), f"paired, 80% power, {_POWER_SIMS} sims"
+
+
 def claim_trend_noise_to_signal() -> tuple[float, str]:
     """
     How many times larger the trend estimator's noise is than the drift it describes.
@@ -401,6 +444,8 @@ CLAIMS = {
     "ladder margin 0.25 still responds":  (claim_ladder_margin_responds,  8,      2),
     "trend noise / genuine drift":        (claim_trend_noise_to_signal,   1.77,   0.05),
     "distinct prompts build_prompt emits":(claim_reachable_prompt_space,  5,      0),
+    "power at the registered n = 10":     (claim_power_at_registered_n,   0.389,  0.02),
+    "participants per arm for 0.15 z":    (claim_required_n_for_target_effect, 25, 5),
 }
 
 
