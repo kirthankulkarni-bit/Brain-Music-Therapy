@@ -230,24 +230,68 @@ def claim_channel_mismatch_af() -> tuple[float, str]:
     return float(10 ** (np.log10(cl).mean() - np.log10(op).mean())),         f"{len(op)} open / {len(cl)} closed windows"
 
 
+_DEAP_CACHE: dict = {}
+
+
+def _deap():
+    """DEAP participant 1, loaded once. The file is 103 MB and two claims read it."""
+    if not _DEAP_CACHE:
+        import pickle
+        path = os.path.join(_ROOT, "s01.dat")
+        if not os.path.exists(path):
+            _DEAP_CACHE["missing"] = True
+            return _DEAP_CACHE
+        with open(path, "rb") as fh:
+            d = pickle.load(fh, encoding="latin1")
+        _DEAP_CACHE.update(data=np.asarray(d["data"])[:, :32, :],
+                           arousal=np.asarray(d["labels"])[:, 1])
+    return _DEAP_CACHE
+
+
 def claim_deap_arousal_rho() -> tuple[float, str]:
     """Spearman rho between log(beta/alpha) and DEAP self-reported arousal, AF3/AF4."""
-    import pickle
     from scipy import stats as spstats
     from validate_index_deap import DEAP_CHANNELS, trial_index
 
-    path = os.path.join(_ROOT, "s01.dat")
-    if not os.path.exists(path):
+    c = _deap()
+    if c.get("missing"):
         return float("nan"), "s01.dat absent"
-    with open(path, "rb") as fh:
-        d = pickle.load(fh, encoding="latin1")
-    data = np.asarray(d["data"])[:, :32, :]
-    arousal = np.asarray(d["labels"])[:, 1]
-    picks = [DEAP_CHANNELS.index(c) for c in ("AF3", "AF4")]
-    idx = np.array([trial_index(data[t], picks) for t in range(data.shape[0])])
+    picks = [DEAP_CHANNELS.index(ch) for ch in ("AF3", "AF4")]
+    idx = np.array([trial_index(c["data"][t], picks) for t in range(c["data"].shape[0])])
     ok = np.isfinite(idx)
-    rho, _ = spstats.spearmanr(idx[ok], arousal[ok])
+    rho, _ = spstats.spearmanr(idx[ok], c["arousal"][ok])
     return float(rho), f"{ok.sum()} trials, AF3/AF4"
+
+
+def claim_deap_montages_positive() -> tuple[float, str]:
+    """
+    Montages where the index correlates POSITIVELY with arousal, of seven.
+
+    The construct-validity result does not rest on any single correlation - at n = 40
+    none of them individually reaches 0.05. It rests on the direction being consistent
+    across independent channel pairs, which under no association is a coin flip each.
+    Seven of seven is what makes the sign test significant, and it was asserted nowhere.
+    """
+    from scipy import stats as spstats
+    from validate_index_deap import DEAP_CHANNELS, trial_index
+
+    c = _deap()
+    if c.get("missing"):
+        return float("nan"), "s01.dat absent"
+    rhos = []
+    for pair in (("AF3", "AF4"), ("Fp1", "Fp2"), ("F7", "F8"), ("F3", "F4"),
+                 ("T7", "T8"), ("P3", "P4"), ("O1", "O2")):
+        picks = [DEAP_CHANNELS.index(ch) for ch in pair]
+        v = np.array([trial_index(c["data"][t], picks)
+                      for t in range(c["data"].shape[0])])
+        m = np.isfinite(v)
+        if m.sum() < 12:
+            continue
+        rho, _ = spstats.spearmanr(v[m], c["arousal"][m])
+        rhos.append(rho)
+    pos = sum(r > 0 for r in rhos)
+    sign_p = spstats.binomtest(pos, len(rhos), 0.5).pvalue
+    return float(pos), f"of {len(rhos)} montages, sign test p = {sign_p:.3f}"
 
 
 def claim_streaming_latency_budget() -> tuple[float, str]:
@@ -259,6 +303,52 @@ def claim_streaming_latency_budget() -> tuple[float, str]:
 
 
 # claim -> (function, value asserted in the manuscript, tolerance)
+def claim_analysis_share_of_budget() -> tuple[float, str]:
+    """
+    Fraction of the end-to-end budget spent in the analysis path, not in audio.
+
+    This is what makes the latency decomposition useful rather than merely present: work
+    aimed at faster GENERATION optimises the smaller term. The preprint states 85% twice
+    and nothing regenerated it until 9/5.
+    """
+    from library_engine import LibraryConfig
+    analysis = _bench("latency_colab-tesla-t4-run1.json")[0]["analysis"][1][
+        "total_analysis_latency_s"]
+    crossfade = LibraryConfig().crossfade_seconds
+    return analysis / (analysis + crossfade),         f"{analysis:g} s analysis of {analysis + crossfade:g} s total"
+
+
+def claim_laptop_between_run_variance() -> tuple[float, str]:
+    """
+    Worst max/min across the three laptop runs of the same configuration.
+
+    The T4 equivalent (1.18) was already asserted; this one was not, and it is the more
+    striking of the pair - a single run of the probe is not a measurement on a thermally
+    limited part, which is why the paper reports a range rather than a point estimate.
+    """
+    runs = _bench("latency_nitro5-1650ti_run*.json")
+    worst = 0.0
+    for p in ("fp32", "fp16", "fp16-half"):
+        for d in (4.0, 8.0):
+            v = [x for x in (_median_gen(r, p, d) for r in runs) if np.isfinite(x)]
+            if len(v) > 1:
+                worst = max(worst, max(v) / min(v))
+    return worst, f"worst config across {len(runs)} laptop runs"
+
+
+def claim_autocorrelation_overstatement() -> tuple[float, str]:
+    """
+    How much treating windows as independent overstates the evidence: sqrt(n / n_eff).
+
+    The factor between p = 0.05 and p = 0.4. Both inputs were asserted separately; the
+    ratio the paper actually quotes was not.
+    """
+    z = _pilot_z()
+    rho = float(np.corrcoef(z[:-1], z[1:])[0, 1])
+    n_eff = z.size * (1 - rho) / (1 + rho)
+    return float((z.size / n_eff) ** 0.5), f"{z.size} windows, n_eff {n_eff:.1f}"
+
+
 _SWEEP_CACHE: dict = {}
 
 
@@ -519,22 +609,59 @@ CLAIMS = {
     "deployed info per minute":           (claim_deployed_info_per_min,      2.14,  0.03),
     "retuned info per minute":            (claim_retuned_info_per_min,       4.20,  0.03),
     "alternatives dominating deployed":   (claim_alternatives_dominating_deployed, 8, 0),
+    "analysis share of the budget":       (claim_analysis_share_of_budget,   0.846, 0.005),
+    "laptop between-run max/min":         (claim_laptop_between_run_variance, 1.96, 0.02),
+    "autocorrelation overstatement":      (claim_autocorrelation_overstatement, 6.4, 0.05),
+    "DEAP montages positive (of 7)":      (claim_deap_montages_positive,     7,     0),
 }
+
+
+# Claims that dominate the runtime, and what they cost. --quick skips exactly these.
+#
+# They are the ones that recompute something large rather than read a stored artefact:
+# the power claims run Monte Carlo studies, the DEAP claims Welch a 103 MB recording
+# across 40 trials, and the replay claims run the feature extractor over 20 minutes of
+# 256 Hz data twice. Everything else is arithmetic on JSON and takes milliseconds.
+#
+# Named individually rather than flagged by a duration threshold, so adding a slow claim
+# does not silently join the skip list.
+_SLOW = frozenset({
+    "power at the registered n = 10",
+    "participants per arm for 0.15 z",
+    "DEAP arousal rho (AF3/AF4)",
+    "DEAP montages positive (of 7)",
+    "replay fidelity vs the log",
+    "retuned, no dwell: inside a xfade",
+    "retuned, 1 s dwell: inside a xfade",
+    "ladder margin 0.25 still responds",
+    "coupling recovers a +6 s lag",
+})
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify every number the preprint cites")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--quick", action="store_true",
+                        help="skip the claims that recompute from raw data. NOT a "
+                             "substitute for a full run before committing or submitting.")
     args = parser.parse_args()
 
     print("=" * 78)
     print("CLAIM VERIFICATION - every headline number, regenerated from artefacts")
     print("=" * 78)
+    if args.quick:
+        print(f"  --quick: {len(_SLOW)} of {len(CLAIMS)} claims SKIPPED, not verified.")
+        print("  Run without --quick before committing or submitting.")
+        print()
     print(f"  {'claim':<36}{'asserted':>10}{'measured':>11}  status")
     print("  " + "-" * 74)
 
     failures = []
+    skipped = 0
     for name, (fn, asserted, tol) in CLAIMS.items():
+        if args.quick and name in _SLOW:
+            skipped += 1
+            continue
         try:
             measured, source = fn()
         except Exception as exc:  # noqa: BLE001
@@ -557,7 +684,12 @@ def main() -> int:
             print(f"    {name}")
         print("  Update the manuscript, or find out why the number changed. Do not round.")
     else:
-        print(f"  All {len(CLAIMS)} claims reproduce. The manuscript matches the repository.")
+        n = len(CLAIMS) - skipped
+        if skipped:
+            print(f"  All {n} claims run reproduce, {skipped} SKIPPED by --quick.")
+            print("  This is not a clean bill of health - rerun in full.")
+        else:
+            print(f"  All {n} claims reproduce. The manuscript matches the repository.")
     print("=" * 78)
     return 1 if failures else 0
 

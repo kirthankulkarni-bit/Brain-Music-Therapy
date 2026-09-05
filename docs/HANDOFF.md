@@ -11,7 +11,7 @@ Verify the state is still current before trusting anything below:
 python scripts/run_tests.py && python scripts/verify_claims.py
 ```
 
-Expected: **44 passed, 0 failed** and **29 claims reproduce**. If either disagrees,
+Expected: **44 passed, 0 failed** and **33 claims reproduce**. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
 something changed after this was written and the numbers here are stale.
 
 ---

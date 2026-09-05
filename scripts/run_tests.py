@@ -38,7 +38,7 @@ prudent. In order of the damage the bug would have done:
 
 Usage:
     python scripts/run_tests.py           # everything, no GPU, no headset
-    python scripts/run_tests.py --quick   # skip the slow permutation tests
+    python scripts/run_tests.py --quick   # skip everything that recomputes from raw data
 """
 
 from __future__ import annotations
@@ -650,7 +650,10 @@ def load_session_z() -> np.ndarray:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run every hardware-free check")
     parser.add_argument("--quick", action="store_true",
-                        help="skip the slow permutation-based coupling validation")
+                        help="skip the checks that recompute from raw data: the "
+                             "permutation coupling validation and the claims that "
+                             "rerun power simulations, DEAP, and the session replay. "
+                             "NOT sufficient before a commit.")
     args = parser.parse_args()
 
     s = Suite()
@@ -682,7 +685,8 @@ def main() -> int:
     # Guards the manuscript against the code moving underneath it. A number copied
     # into prose once and then diverging is how honest projects publish
     # unreproducible papers.
-    run_validator(s, "preprint claims still reproduce", "verify_claims.py", [])
+    run_validator(s, "preprint claims still reproduce", "verify_claims.py",
+                  ["--quick"] if args.quick else [])
     if args.quick:
         s.skip("coupling ground truth", "--quick")
     else:
