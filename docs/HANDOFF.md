@@ -261,9 +261,17 @@ settings**.
 4. **Does the information-rate gain survive the real contrast?** The n ≈ 7 projection
    assumes discriminability measured on eyes-open/closed transfers to adaptive-vs-sham.
 5. **Do the crossfades sound acceptable?** Never judged on non-chattering audio.
-6. **Novelty check**: "this literature does not report latency" rests on MindMelody read
-   directly plus a field search. Check references 2–4 in `related_work.md` individually
-   before submission.
+6. ~~**Novelty check**~~ **DONE 9/5, and it changed the claim.** All six references in
+   `related_work.md` §1 resolved individually. Ehrlich et al. (2019) is a **partial
+   counterexample** — 4 s window, 0.5 s update rate, explicit reasoning about filter delay,
+   but no end-to-end figure — so the claim narrowed to "no *measured, decomposed*
+   end-to-end budget" and Ehrlich must be cited rather than found by a reviewer. Two
+   citations were wrong in detail, Neurophone had no citation at all (it runs on a
+   **Muse S**), and a 2026 near-neighbour was missing (Monroy-D'Croz et al.,
+   arXiv:2606.01473 — prefrontal EEG over LSL into Ableton; no latency, no control
+   condition, and their frontal alpha asymmetry explained **0.40%** of variance, which is
+   published support for trap 2). **Still open:** *Mind to Music* is paywalled and unread,
+   and its title advertises real-time operation.
 
 ---
 

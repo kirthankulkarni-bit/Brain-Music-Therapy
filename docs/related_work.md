@@ -16,11 +16,12 @@ and recent.
 
 | system | year | approach | what it reports |
 |---|---|---|---|
-| **MindMelody** `[VERIFY: Zhang, Sun, Gu]`, arXiv:2605.01235 | 2026 | Transformer-GNN affect encoder → RAG-LLM planner → hierarchical controller on **MusicGen-medium** | FAD 3.18, Emo-MSE 0.082, Emo-MOS 4.21, valence Δ0.22; within-subject pilot with 4 conditions |
-| **Mind to Music** `[VERIFY: Ran et al.]`, Int. J. Intelligent Systems | 2024 | EEG-driven real-time emotional music generation | system design, emotional alignment |
-| **Closed-loop music BCI for emotion mediation** `[VERIFY: Ehrlich et al.]`, PLOS ONE, PMID 30883569 | 2019 | music as feedback channel for affect | closed-loop emotion mediation |
-| **Neurophone** `[VERIFY]` | — | BCI music interface for emotional neurofeedback | — |
-| **AI-Based Affective Music Generation: A Review** `[VERIFY: Dash & Agres]`, arXiv:2301.06890 | 2023 | field review | methods and challenges |
+| **MindMelody** — Zhang, Sun, Gu & Jin, arXiv:2605.01235 | 2026 | Transformer-GNN affect encoder → RAG-LLM planner → hierarchical controller on **MusicGen-medium** | FAD 3.18, Emo-MSE 0.082, Emo-MOS 4.21, valence Δ0.22; within-subject pilot with 4 conditions |
+| **Mind to Music** — Ran et al., *Int. J. Intelligent Systems* 9618884, doi:10.1155/int/9618884 | 2024 | EEG-driven real-time emotional music generation, calibration for new users | system design, emotional alignment |
+| **Closed-loop music BCI for emotion mediation** — Ehrlich, Agres, Guan & Cheng, *PLOS ONE*, doi:10.1371/journal.pone.0213516 | 2019 | synthesized affective music as a feedback channel; two studies (n=11 listening, n=5 closed-loop) | **4 s window, 87.5% overlap, 0.5 s update rate**; explicit reasoning about filter delay |
+| **Neurophone** — Velasquez-Peña et al., *IEEE Int. Symposium on the Internet of Sounds (IS2)* | 2025 | **Muse S** → mobile app → OSC/WiFi → Ableton Live + Max for Live; consumer-grade by design | accessibility and portability of the stack |
+| **A Minimalist BCMI for Real-Time Emotion-Driven Sonification** — Monroy-D'Croz, Ramirez-Melendez & Cespedes-Guevara, arXiv:2606.01473 | 2026 | prefrontal EEG → Python DSP → Ableton Live, **synchronised over Lab Streaming Layer** | **negative result**: frontal alpha asymmetry did not separate instructed emotional states (0.40% of variance) |
+| **AI-Based Affective Music Generation Systems: A Review of Methods, and Challenges** — Dash & Agres, arXiv:2301.06890 | 2023 | field review | methods and challenges |
 
 ### What they do well, and better than this project
 
@@ -36,12 +37,15 @@ deliberately the simplest thing that works.
 
 ### What none of them report
 
-**End-to-end latency.** MindMelody describes itself as "closed-loop real-time" and reports
-no latency figure, no per-generation inference time, and no hardware specification. The
-same pattern holds across the group: architecture, decoding accuracy, and audio-quality or
-subjective metrics — not timing.
+**A measured end-to-end latency.** MindMelody describes itself as closed-loop and
+real-time, and its full text reports no latency figure, no per-generation inference time,
+and no hardware specification at all. The minimalist BCMI of Monroy-D'Croz et al. — the
+nearest architectural neighbour to this project, prefrontal EEG over Lab Streaming Layer
+into Ableton — reports none either. Across the group the pattern is architecture, decoding
+accuracy, and audio-quality or subjective metrics, not timing.
 
-That omission is the opening.
+That omission is the opening, but it is narrower than it first looked. **See the
+verification below: Ehrlich et al. is a partial counterexample and must be cited as one.**
 
 ---
 
@@ -126,6 +130,12 @@ path**, so work aimed at faster generation optimises the smaller term.
 
 Nobody in §1 reports this. Everybody in §2 would consider it mandatory.
 
+**Stated precisely, after the 9/5 verification:** no system in §1 reports a measured,
+decomposed end-to-end latency budget. Ehrlich et al. report an analysis window and update
+rate and reason about latency qualitatively, which is the closest anyone comes and must be
+cited as such. The contribution is the *measurement and decomposition*, not the observation
+that latency exists.
+
 ### C2. The analysis latency is a dominated configuration — *new, and the strongest result*
 
 See `finding_analysis_latency.md`. Measured against labelled ground truth, the deployed
@@ -174,9 +184,55 @@ Three changes follow.
    systems papers nor the fast-generation papers provide. Something closer to:
    *"Where the latency actually is in closed-loop EEG-driven music"*.
 
-**Risk to check before submission.** The novelty claim in C1 rests on MindMelody read
-directly plus a field-level search. References in §1 must be checked individually for any
-end-to-end timing figure. A single counterexample downgrades C1 from "unreported" to
-"rarely reported" — survivable, but only if cited rather than missed.
+**Risk checked 2026-09-05. It was a real risk, and it partly materialised.** Every
+reference in §1 was resolved individually. Findings, in order of consequence:
 
-C2 and C3 do not depend on that claim, which is a reason to lead with them.
+**1. Ehrlich et al. (2019) is a partial counterexample, and C1 must be narrowed.** It
+reports a 4 s analysis window with 87.5% overlap giving a 0.5 s update rate, states that
+zero-phase filtering was chosen to avoid delay, and describes tuning a feedback parameter
+against perceived latency. That is not an end-to-end measurement — no figure anywhere
+converts those components into a signal-to-audio delay — but it is considerably more than
+"reports no timing".
+
+So the claim cannot be *"this literature does not report latency"*. The defensible version:
+
+> No system in this group reports a **measured, decomposed end-to-end latency budget**.
+> One (Ehrlich et al.) reports its analysis window and update rate and reasons about
+> latency qualitatively; the rest report neither.
+
+That is a weaker claim and still an accurate one, and it is the honest framing given that
+Ehrlich's design — a 4 s window at a 0.5 s update — is close to the configuration this
+project measures. **Cite it explicitly rather than let a reviewer find it.**
+
+**2. A 2026 near-neighbour was missing entirely.** Monroy-D'Croz, Ramirez-Melendez &
+Cespedes-Guevara (arXiv:2606.01473, May 2026) build a minimalist BCMI on prefrontal EEG
+over Lab Streaming Layer into Ableton Live — architecturally the closest published system
+to this one. The original sweep did not surface it. It strengthens the position rather
+than weakening it, on two counts: it reports no latency, and it ran **no sham or control
+condition**.
+
+It also reports a **negative result that this project should cite in its own defence**:
+their frontal alpha asymmetry did not reliably separate instructed emotional states,
+accounting for 0.40% of signal variance, with individual differences explaining more than
+the manipulation. That is independent evidence that prefrontal affective indices are hard
+— directly relevant to `finding_channel_validation.md`, where this project's own AF7/AF8
+validation failed. The right framing is not that this project has a problem others have
+solved; it is that the problem is real, published, and this project is one of the few
+measuring it rather than assuming it away.
+
+**3. Neurophone is the nearest hardware neighbour and had no citation at all.** It was
+listed with no author, no year and no venue. Resolved: Velasquez-Peña et al., IEEE
+International Symposium on the Internet of Sounds, 2025 — and it runs on a **Muse S**,
+the same consumer headband family as this project, streaming over OSC into Ableton Live.
+A reviewer in this area will know it.
+
+**4. Two citations were wrong in detail.** MindMelody has a fourth author (Zhanpeng Jin)
+who was omitted. The Dash & Agres title was truncated. Both corrected in the table.
+
+**Still unverified.** *Mind to Music* (Ran et al.) is paywalled and its full text could not
+be checked for timing figures; its title advertises real-time operation, so it is the most
+likely remaining counterexample. **Do not submit C1 without reading it.** Neurophone's full
+text is likewise unread — an OSC-into-Ableton pipeline is exactly the kind of system whose
+authors may quote a latency.
+
+C2 and C3 do not depend on any of this, which is a reason to lead with them.

@@ -685,12 +685,31 @@ against the papers before submission.** Every URL below was accessed 2026-08-28.
 
 ### Outstanding literature work
 
-The novelty claim in §1 is that this literature does not report latency budgets. It
-currently rests on: MindMelody read directly, a field-level search, and reference 5 as
-the contrast. **Before submission this must be strengthened** by checking timing
-reporting in references 2–4 individually, and by a targeted search for any closed-loop
-EEG-audio paper that does report an end-to-end figure. A single counterexample does not
-sink the paper, but it must be cited and engaged with rather than missed.
+**Done 2026-09-05; the claim narrowed as a result.** Every reference in §1 was resolved
+individually — see the verification record at the end of
+[related_work.md](related_work.md). The claim is no longer that this literature does not
+report latency. It is:
+
+> No system in this group reports a **measured, decomposed end-to-end latency budget.**
+> Ehrlich et al. (2019) report a 4 s analysis window at a 0.5 s update rate and reason
+> explicitly about filter delay, without converting either into a signal-to-audio figure;
+> the rest report neither.
+
+Ehrlich et al. must be cited in §1 as the partial counterexample rather than left for a
+reviewer to find — particularly since their 4 s window at a 0.5 s update sits close to the
+configurations §3 measures.
+
+Two further changes fall out of the same check. A 2026 near-neighbour
+(Monroy-D'Croz et al., arXiv:2606.01473 — prefrontal EEG over Lab Streaming Layer into
+Ableton) was missing from §1 and belongs there; it reports no latency and ran no control
+condition, and its frontal alpha asymmetry explained 0.40% of variance, which is
+independent published support for the frontal-SNR limitation this paper reports in §8.
+And Neurophone runs on a Muse S, the same consumer headband family used here, so it is the
+nearest hardware neighbour in the table.
+
+**Still outstanding:** *Mind to Music* (Ran et al.) is paywalled and unread; its title
+advertises real-time operation, making it the most likely remaining counterexample. Read
+it before submission.
 
 Additional sources supporting the pre-registered effect size are in §8 of
 [analysis_plan.md](analysis_plan.md).
