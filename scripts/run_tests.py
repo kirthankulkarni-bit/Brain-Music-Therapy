@@ -469,6 +469,68 @@ def _session_args(tmp: str, **overrides):
     return args
 
 
+def test_cortex_gate_ground_truth(s: Suite) -> None:
+    """
+    The "is this cortex" gate, against the case it was built from.
+
+    signal_quality.py's docstring says it was VALIDATED AGAINST GROUND TRUTH before
+    being trusted, and records the numbers: prominence rises on eyes closure for TP9 and
+    TP10 and does not for AF7, the channel finding_channel_validation.md shows was
+    tracking blinks. That validation was done by hand and nothing re-ran it.
+
+    Two things were wrong with that, and the second is the serious one.
+
+    The docstring itself records that an EARLIER version of this estimator was discarded
+    for failing on exactly this known case - it scored TP9 as having no alpha peak in a
+    session where TP9 shows a validated 1.71x increase at p = 6e-21. So the risk of a
+    regression here is not hypothetical; it has already happened once, and nothing would
+    have caught the next one.
+
+    And the validated diagnostic was not the one the script computed. main() reported
+    prominence over the WHOLE recording, which averages eyes-open and eyes-closed
+    together. On this session that scores AF7 at 1.78 - "clear alpha peak" - a PASS on
+    the disqualified channel. next_session.md step 2 says to run this tool and read the
+    verdict on the starred channels; once the index moves to AF7/AF8 those become the
+    starred ones, so a trap-2 contamination would have passed the gate meant to catch it.
+    """
+    from session_logger import load_raw, load_session, real_sessions
+    from signal_quality import (EYES_CLOSED_RATIO_MIN, eyes_closed_ratio,
+                                labelled_blocks)
+    from eeg_features import MUSE_CHANNELS
+
+    found = real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))
+    if not found:
+        s.skip("cortex gate ground truth", "no alpha-validation session")
+        return
+
+    session = load_session(found[-1])
+    raw = load_raw(found[-1])
+    blocks = labelled_blocks(session)
+    s.check("the alpha session carries labelled eye-closure blocks", len(blocks) >= 4,
+            f"{len(blocks)} blocks")
+
+    ts = raw[:, 0].astype(float)
+    ts = ts - ts[0]
+    ratio = {}
+    for i, name in enumerate(MUSE_CHANNELS):
+        ratio[name] = eyes_closed_ratio(ts, raw[:, 1 + i].astype(float), blocks)[2]
+
+    # The channels that carry the validated effect must pass.
+    for name in ("TP9", "TP10"):
+        s.check(f"{name} shows the eyes-closed alpha rise",
+                ratio[name] >= EYES_CLOSED_RATIO_MIN, f"ratio {ratio[name]:.2f}")
+
+    # And the contaminated one must NOT, which is the half that actually protects the
+    # study. A detector that passes everything is not a gate.
+    s.check("AF7 does not, and is flagged",
+            ratio["AF7"] < EYES_CLOSED_RATIO_MIN,
+            f"ratio {ratio['AF7']:.2f} against a {EYES_CLOSED_RATIO_MIN:g} threshold")
+
+    s.check("the gate separates validated from contaminated channels",
+            min(ratio["TP9"], ratio["TP10"]) > ratio["AF7"] * 1.5,
+            f"TP9 {ratio['TP9']:.2f}, TP10 {ratio['TP10']:.2f} vs AF7 {ratio['AF7']:.2f}")
+
+
 def test_synthetic_sessions_are_excluded(s: Suite) -> None:
     """
     A demo or mock run must not be able to move a manuscript number by existing.
@@ -990,6 +1052,7 @@ def main() -> int:
     test_streaming_estimator(s)
 
     s.section("2. SESSION - a crash must never look like a success")
+    test_cortex_gate_ground_truth(s)
     test_synthetic_sessions_are_excluded(s)
     test_contact_gate(s)
     test_primary_outcome_ground_truth(s)

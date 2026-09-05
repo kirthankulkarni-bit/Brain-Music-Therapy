@@ -126,6 +126,74 @@ PROM_EYES_OPEN_TYPICAL = 1.10
 PROM_CLEAR_PEAK = 1.4
 
 
+# A channel carrying cortical alpha must gain prominence when the eyes close. Measured
+# on the alpha-validation session, this separates cleanly: TP9 and TP10 land near 2.0x
+# and AF7 - the channel independently shown to be tracking blinks - stays below 1.0.
+# The threshold sits between them with room on both sides.
+EYES_CLOSED_RATIO_MIN = 1.20
+
+# Seconds dropped from each end of a labelled block. The session clock and the raw
+# sample clock do not share an origin (+6.25 s here, and it is not a constant across
+# sessions - trap 3), so rather than compute the offset and depend on it, trim enough
+# that the answer does not move. Verified: across offsets of 0, 3, 6.25 and 9 s the
+# ratios stay 1.83-2.20 on TP9, 2.18-2.23 on TP10 and 0.75-0.92 on AF7. The conclusion
+# is the same at every offset, which is the property worth having.
+BLOCK_EDGE_TRIM_S = 8.0
+
+
+def labelled_blocks(session) -> list:
+    """Contiguous (phase, start_s, end_s) runs of eyes_open / eyes_closed windows."""
+    timeline = [(float(w["elapsed_s"]), w["phase"]) for w in session.get("windows", [])
+                if w.get("phase") in ("eyes_open", "eyes_closed")]
+    blocks, cur = [], None
+    for t, phase in timeline:
+        if cur is None or phase != cur[0]:
+            if cur:
+                blocks.append(tuple(cur))
+            cur = [phase, t, t]
+        else:
+            cur[2] = t
+    if cur:
+        blocks.append(tuple(cur))
+    return blocks
+
+
+def eyes_closed_ratio(ts: np.ndarray, x: np.ndarray, blocks: list) -> tuple:
+    """
+    (eyes-open prominence, eyes-closed prominence, ratio) for one channel.
+
+    THIS IS THE DIAGNOSTIC THE DOCSTRING ABOVE CLAIMS WAS VALIDATED, and until
+    2026-09-05 it was not the one this script computed. main() reported prominence over
+    the WHOLE recording, which averages the two conditions together - and on the
+    alpha-validation session that scores AF7 at 1.78, "clear alpha peak", a pass on the
+    channel that trap 2 disqualified. The validation was done by hand, written into the
+    docstring, and never wired up.
+
+    That mattered for the next hardware session specifically. next_session.md step 2
+    says to run this and read the verdict on the starred channels; with the index moved
+    to AF7/AF8 those become the starred ones, and a contaminated AF7 would have passed.
+    """
+    from numpy import median
+
+    def prominence_over(phase: str) -> float:
+        step = int(SEGMENT_S * FS)
+        proms = []
+        for ph, start, end in blocks:
+            if ph != phase:
+                continue
+            m = (ts >= start + BLOCK_EDGE_TRIM_S) & (ts < end - BLOCK_EDGE_TRIM_S)
+            seg = x[m]
+            for s0 in range(0, seg.size - step + 1, step):
+                pr, _ = alpha_prominence(seg[s0:s0 + step])
+                if np.isfinite(pr):
+                    proms.append(pr)
+        return float(median(proms)) if proms else float("nan")
+
+    op, cl = prominence_over("eyes_open"), prominence_over("eyes_closed")
+    ratio = cl / op if (np.isfinite(op) and op > 0 and np.isfinite(cl)) else float("nan")
+    return op, cl, ratio
+
+
 def verdict(prom: float, dom: float, art: float) -> str:
     """
     Interpretation, deliberately conservative about what it can conclude.
@@ -209,6 +277,34 @@ def main() -> int:
             print(f"    {used}{name:<6}{x.std():>8.1f}{art * 100:>9.1f}%{prom:>12.2f}"
                   f"{dom:>11.1f}   {verdict(prom, dom, art)}")
         print("    * = used by this session's arousal index")
+
+        # If the session carries an eye-closure manipulation, report the diagnostic that
+        # was actually validated. Whole-session prominence averages the two conditions
+        # and cannot separate "eyes-open cortex" from "not cortex"; the RATIO can, and it
+        # is what caught AF7.
+        blocks = labelled_blocks(session)
+        if sum(1 for b in blocks if b[0] == "eyes_closed") >= 2:
+            ts = raw[:, 0].astype(float)
+            ts = ts - ts[0]
+            print()
+            print("    EYE-CLOSURE CHECK - the validated diagnostic, on labelled blocks")
+            print(f"    {'chan':<7}{'open':>8}{'closed':>9}{'ratio':>8}   verdict")
+            print("    " + "-" * 66)
+            for i, name in enumerate(MUSE_CHANNELS):
+                op, cl, ratio = eyes_closed_ratio(ts, raw[:, 1 + i].astype(float), blocks)
+                used = "*" if name in index_pair else " "
+                if not np.isfinite(ratio):
+                    note = "no usable blocks"
+                elif ratio >= EYES_CLOSED_RATIO_MIN:
+                    note = "alpha rises on eye closure - cortical"
+                else:
+                    note = "NO EYES-CLOSED RISE - may not be cortex"
+                print(f"    {used}{name:<6}{op:>8.2f}{cl:>9.2f}{ratio:>8.2f}   {note}")
+            print()
+            print(f"    A channel below {EYES_CLOSED_RATIO_MIN:g}x is suspect EVEN IF its prominence")
+            print("    above looks healthy: AF7 scores a 'clear alpha peak' over the whole")
+            print("    recording and 0.75x here, and it is the channel finding_channel_")
+            print("    validation.md shows was tracking blinks.")
         print()
 
     print("  HOW TO READ THIS. Alpha depends strongly on eye closure, so an eyes-open")

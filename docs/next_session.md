@@ -25,7 +25,7 @@ Both are answered by the same session if it is run in the right order.
 python scripts/run_tests.py
 ```
 
-45 checks. If anything fails, fix it before recording.
+79 checks. If anything fails, fix it before recording.
 
 Charge the Muse. Run the laptop **on battery** — mains through the charger was the largest
 single source of 60 Hz contamination during rig validation.
@@ -71,6 +71,15 @@ Then, immediately:
 ```bash
 python scripts/signal_quality.py --session sessions/<the alphatest you just recorded>
 ```
+
+**As of 9/5 this now prints an EYE-CLOSURE CHECK below the main table**, and that is the
+row to read. The table above it reports prominence over the whole recording, which
+averages eyes-open and eyes-closed together — on the August session that scores AF7 at
+1.78, "clear alpha peak", a **pass on the channel trap 2 disqualified**. The eye-closure
+ratio scores the same channel at 0.75 and flags it. Since this session moves the index to
+AF7/AF8, those become the starred channels, so read the ratio and not the prominence.
+
+Anything below **1.2×** is suspect even if its prominence looks healthy.
 
 Read the verdict on the starred channels. `contact_check` answers "is it attached";
 this answers "is it cortex". AF7 previously passed the first and failed the second.
