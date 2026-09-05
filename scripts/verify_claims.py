@@ -259,6 +259,75 @@ def claim_streaming_latency_budget() -> tuple[float, str]:
 
 
 # claim -> (function, value asserted in the manuscript, tolerance)
+_SWEEP_CACHE: dict = {}
+
+
+def _sweep():
+    """
+    The estimator sweep, computed once: {name: {latency_s, d, n_eff_per_min, info}}.
+
+    This is the evidence for C2 - "the analysis latency is a dominated configuration",
+    which the preprint calls its strongest result - and nothing regenerated any of it
+    until 9/5. The n = 7 projection in finding_analysis_latency.md is derived from the
+    d and ind/min columns, so the study's feasibility argument rests on them too.
+
+    The sweep refuses to report below r = 0.9 against the session log, and that gate is
+    re-applied here rather than assumed.
+    """
+    if not _SWEEP_CACHE:
+        import estimator_sweep as es
+        d = sorted(glob.glob(os.path.join(_ROOT, "sessions", "alphatest*")))[-1]
+        session, chans, pair, timeline = es.load(d)
+        offset, r = es.find_offset(chans, pair, session, timeline)
+        if not np.isfinite(r) or r < 0.9:
+            raise RuntimeError(f"sweep reproduction r = {r:.3f} < 0.9")
+        rows = {}
+        for name, fn, kw in es.ESTIMATORS:
+            t, y = fn(chans, pair, **kw)
+            sc = es.score(t, y, timeline, offset)
+            sc["info"] = (sc["d"] * np.sqrt(sc["n_eff_per_min"])
+                          if np.isfinite(sc["d"]) else float("nan"))
+            rows[name] = sc
+        _SWEEP_CACHE.update(rows=rows, r=r, names=[n for n, _, _ in es.ESTIMATORS])
+    return _SWEEP_CACHE
+
+
+def claim_deployed_detection_latency() -> tuple[float, str]:
+    """Median seconds from a real state change to the estimator crossing the midpoint."""
+    c = _sweep()
+    row = c["rows"][c["names"][0]]
+    return float(row["latency_s"]), f"deployed 4 s / 1 s / tau 3, r = {c['r']:.3f}"
+
+
+def claim_deployed_info_per_min() -> tuple[float, str]:
+    """d x sqrt(independent observations per minute) for the deployed configuration."""
+    c = _sweep()
+    row = c["rows"][c["names"][0]]
+    return float(row["info"]), f"d {row['d']:.2f}, ind/min {row['n_eff_per_min']:.1f}"
+
+
+def claim_retuned_info_per_min() -> tuple[float, str]:
+    """The same for 2 s / 0.5 s / tau 0.5 - the configuration the dwell made usable."""
+    c = _sweep()
+    row = c["rows"]["pipeline 2s win, 0.5s hop, t=0.5"]
+    return float(row["info"]), f"d {row['d']:.2f}, ind/min {row['n_eff_per_min']:.1f}"
+
+
+def claim_alternatives_dominating_deployed() -> tuple[float, str]:
+    """
+    How many alternatives beat the deployed configuration on BOTH axes.
+
+    Both, not either: faster to detect AND more information per minute. That is what
+    "dominated" means and what makes this stronger than a trade-off.
+    """
+    c = _sweep()
+    base = c["rows"][c["names"][0]]
+    n = sum(1 for name in c["names"][1:]
+            if c["rows"][name]["latency_s"] < base["latency_s"]
+            and c["rows"][name]["info"] > base["info"])
+    return float(n), f"of {len(c['names']) - 1} alternatives tested"
+
+
 # Simulations per power cell. 1000 leaves required_n straddling a grid step (25 or 30
 # depending on seed); 2000 pins it at 25 with the power estimate varying by 0.010 across
 # seeds. The tolerances on the two power claims below are that measured spread, not a
@@ -446,6 +515,10 @@ CLAIMS = {
     "distinct prompts build_prompt emits":(claim_reachable_prompt_space,  5,      0),
     "power at the registered n = 10":     (claim_power_at_registered_n,   0.389,  0.02),
     "participants per arm for 0.15 z":    (claim_required_n_for_target_effect, 25, 5),
+    "deployed detection latency":         (claim_deployed_detection_latency, 5.67,  0.05),
+    "deployed info per minute":           (claim_deployed_info_per_min,      2.14,  0.03),
+    "retuned info per minute":            (claim_retuned_info_per_min,       4.20,  0.03),
+    "alternatives dominating deployed":   (claim_alternatives_dominating_deployed, 8, 0),
 }
 
 

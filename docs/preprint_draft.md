@@ -255,7 +255,7 @@ Per-sample discriminability falls as latency falls, as expected. But `d` alone d
 determine how well a session resolves a state difference — the number of *independent*
 observations matters equally, and heavy smoothing destroys independence. Scoring on
 `d × sqrt(ind/min)`, the t-statistic per root-minute, **the deployed configuration is
-dominated by 8 of 10 alternatives** (Figure 6). It is not on the efficient frontier.
+dominated by 8 of the 9 alternatives** (Figure 6). It is not on the efficient frontier.
 
 The mechanism connects this section to §7. At tau = 3 s consecutive outputs are nearly
 identical (rho = 0.962), yielding **1.2 independent observations per minute** — which is

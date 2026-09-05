@@ -11,7 +11,7 @@ Verify the state is still current before trusting anything below:
 python scripts/run_tests.py && python scripts/verify_claims.py
 ```
 
-Expected: **44 passed, 0 failed** and **25 claims reproduce**. If either disagrees,
+Expected: **44 passed, 0 failed** and **29 claims reproduce**. If either disagrees,
 something changed after this was written and the numbers here are stale.
 
 ---
@@ -81,7 +81,7 @@ Measured against labelled ground truth (`scripts/estimator_sweep.py`):
 | 2 s win, 0.5 s hop, tau=0.5 | 1.68 s | 1.14 | 13.6 | **4.20** |
 | streaming o4, tau=0.25 | 0.17 s | 0.70 | 30.9 | 3.91 |
 
-8 of 10 alternatives beat the deployed setting **on both axes**. The smoother is
+8 of the **9** alternatives beat the deployed setting **on both axes** (10 configurations were tested; one of them is the deployed setting). The smoother is
 simultaneously the largest latency term and the dominant cause of the autocorrelation
 that collapses statistical power — shortening it pays twice.
 

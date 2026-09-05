@@ -180,7 +180,7 @@ Every result JSON records `backend` for this reason.
 **The analysis path, not the GPU, is the bottleneck — and it is a configuration.**
 After the library fix, 85% of the 6.5 s budget is analysis. Measured against labelled
 ground truth, the deployed estimator takes 5.67 s to register a state change and yields
-1.2 independent observations per minute; **8 of 10 alternatives beat it on latency AND
+1.2 independent observations per minute; **8 of the 9 alternatives beat it on latency AND
 information rate simultaneously**. See [docs/finding_analysis_latency.md](docs/finding_analysis_latency.md).
 
 **Windows are not independent.** PILOT01's z has a lag-1 autocorrelation of 0.953 and

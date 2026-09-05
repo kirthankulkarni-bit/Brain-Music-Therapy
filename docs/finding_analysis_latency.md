@@ -62,7 +62,12 @@ observations matters equally, and heavy smoothing destroys independence.
 `n = (ind/min) × minutes`, this is the t-statistic per root-minute of recording: a
 duration-independent measure of how much a configuration extracts per unit time.
 
-**By that measure the deployed configuration is dominated by 8 of the 10 alternatives.**
+**By that measure the deployed configuration is dominated by 8 of the 9 alternatives.**
+
+(Ten configurations appear in the table; one of them is the deployed setting, so there
+are nine alternatives. Earlier revisions of this line said "8 of the 10", which
+understated the result — it is 8 of 9, not 8 of 10. `verify_claims.py` now asserts the
+count so the arithmetic cannot drift again.)
 It is not on the efficient frontier at all. Two examples:
 
 - **2 s window, 0.5 s hop, tau=0.5** — a two-parameter change, no new code:
