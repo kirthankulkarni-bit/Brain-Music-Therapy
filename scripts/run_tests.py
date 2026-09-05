@@ -211,6 +211,139 @@ def test_ladder_hysteresis(s: Suite) -> None:
             f"walked to rung {prev}, plain gives {state_rung(3.0)}")
 
 
+def test_ladder_hysteresis_does_not_latch(s: Suite, session_z: np.ndarray) -> None:
+    """
+    The regression for the latch. This is the test that was missing.
+
+    Everything above exercises state_rung in ISOLATION, called correctly - previous_rung
+    fed the previous state estimate. build_prompt wired it differently: it passed
+    _rung_of(previous_prompt), the rung being PLAYED, which is always one step toward the
+    target. That closes a loop, and with margin > 0 the controller latched on the goal
+    rung and stopped responding - zero prompt changes across all 1043 windows of PILOT01,
+    while the participant's own rung ranged up to 4.
+
+    Every unit test above passed throughout, because none of them drove the whole
+    controller with the margin enabled. A test that cannot fail is not a safeguard.
+    """
+    from music_engine import PromptGovernor
+
+    if session_z.size < 200:
+        s.skip("ladder hysteresis does not latch", "no session with enough windows")
+        return
+
+    for margin in (0.25, 0.5):
+        gov = PromptGovernor(target_z=-1.0, ladder_margin=margin)
+        prompts = [gov.update(float(v), now=float(i)) for i, v in enumerate(session_z)]
+        changes = sum(1 for a, b in zip(prompts, prompts[1:]) if a != b)
+        s.check(f"margin {margin} still responds to the participant", changes > 0,
+                f"{changes} changes over {len(prompts)} windows")
+
+    # The sharper version: a large sustained excursion must move the music, whatever
+    # the margin. A latched controller passes a change count and fails this.
+    for margin in (0.0, 0.25, 0.5):
+        gov = PromptGovernor(target_z=-1.0, ladder_margin=margin)
+        for _ in range(40):
+            gov.update(0.0, now=0.0)
+        settled = gov.prompt
+        for i in range(60):
+            gov.update(3.0, now=float(i))       # far above target, sustained
+        s.check(f"margin {margin} follows a sustained excursion", gov.prompt != settled,
+                "prompt moved" if gov.prompt != settled else "prompt never moved")
+
+
+def test_min_dwell(s: Suite) -> None:
+    """
+    The dwell must bound the RATE of change, and must not make the music stale.
+
+    A dwell of at least one crossfade is the condition for no switch arriving before the
+    previous crossfade finishes - which is what turns transitions into a continuous
+    blend of two independent renders. Replayed on PILOT01 at the retuned 2 s / 0.5 s /
+    tau 0.5 settings, 136 of 382 changes landed inside a crossfade with no dwell, and 0
+    with a 1 s dwell. See docs/finding_ladder_hysteresis.md.
+    """
+    from music_engine import PromptGovernor, build_prompt as bp
+
+    # Default off: identical to calling build_prompt directly, across the z range.
+    gov = PromptGovernor(target_z=-1.0)
+    same = all(gov.update(float(z), now=float(i)) ==
+               bp(float(z), -1.0, None, previous_prompt=(gov.prompt if i else None))
+               for i, z in enumerate(np.arange(-3, 3.01, 0.25)))
+    s.check("governor with no margin and no dwell matches build_prompt", same)
+
+    # A dwell of D means no two changes closer than D, by construction.
+    dwell, hop = 1.0, 0.25
+    z = np.tile([2.5, -2.5], 200)               # maximally adversarial: flip every hop
+    gov = PromptGovernor(target_z=-1.0, min_dwell_seconds=dwell)
+    times, prev = [], None
+    for i, v in enumerate(z):
+        now = i * hop
+        p = gov.update(float(v), now=now)
+        if prev is not None and p != prev:
+            times.append(now)
+        prev = p
+    gaps = np.diff(np.asarray(times)) if len(times) > 1 else np.array([np.inf])
+    s.check("dwell bounds the change rate", float(gaps.min()) >= dwell - 1e-9,
+            f"{len(times)} changes, min gap {gaps.min():.2f} s against a {dwell:g} s dwell")
+    s.check("dwell without a dwell would have chattered",
+            sum(1 for a, b in zip(z, z[1:]) if a != b) > len(times),
+            "the input alternates every hop")
+
+    # It is a rate limit, NOT a filter. When the dwell expires the governor must adopt
+    # what the controller wants NOW. Holding a stale request would make the music lag by
+    # up to a full dwell, which is the latency this project exists to reduce.
+    gov = PromptGovernor(target_z=-1.0, min_dwell_seconds=10.0)
+    gov.update(0.0, now=0.0)
+    gov.update(3.0, now=1.0)                    # requested, blocked by the dwell
+    gov.update(-3.0, now=1.5)                   # superseded while still blocked
+    after = gov.update(-3.0, now=20.0)          # dwell expired
+    s.check("dwell adopts the current request, not the stale one",
+            after == bp(-3.0, -1.0, None, previous_prompt=gov.prompt),
+            "no queued backlog of superseded prompts")
+
+
+def test_retuned_estimator_guard(s: Suite) -> None:
+    """
+    A retuned estimator without a dwell must refuse to start, not warn.
+
+    The resulting recording is not merely noisy - it is disqualified as a yoke source,
+    and that is discovered after the participant has gone home. finding_ladder_
+    hysteresis.md exists because this exact configuration was recommended in writing.
+    """
+    import live_music
+    from session_logger import SessionLogger
+
+    tmp = tempfile.mkdtemp(prefix="guardtest_")
+    try:
+        args = _session_args(tmp, window=2.0, hop=0.5, tau=0.5, baseline_seconds=8.0,
+                             duration=0.2)
+        state = live_music.SessionState(args.target)
+        logger = SessionLogger(args.participant, args.condition, root=tmp)
+        refused = False
+        try:
+            live_music.eeg_worker(args, state, logger)
+        except SystemExit:
+            refused = True
+        s.check("retuned estimator with no dwell refuses to start", refused)
+
+        # And must NOT refuse once the dwell is set, or the guard blocks the very
+        # configuration it exists to make safe.
+        args2 = _session_args(tmp, window=2.0, hop=0.5, tau=0.5, min_dwell=1.0,
+                              baseline_seconds=8.0, duration=0.2)
+        state2 = live_music.SessionState(args2.target)
+        logger2 = SessionLogger(args2.participant, args2.condition, root=tmp)
+        blocked = False
+        try:
+            live_music.eeg_worker(args2, state2, logger2)
+        except SystemExit:
+            blocked = True
+        except Exception:                        # noqa: BLE001 - any other failure is
+            blocked = False                      # not this guard's business
+        s.check("the guard does not block a dwell that satisfies it", not blocked)
+    finally:
+        import shutil
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_ladder_reachability(s: Suite) -> None:
     """Rungs 0 and 4 are unreachable under both arms - documented, not accidental."""
     reached = set()
@@ -273,32 +406,55 @@ def test_streaming_estimator(s: Suite) -> None:
     s.check("non-finite input is refused, not propagated", not np.isfinite(nan_out))
 
 
+def _session_args(tmp: str, **overrides):
+    """
+    A session's args, taken from live_music's OWN parser defaults.
+
+    These used to be hand-built Namespaces, one per test, each carrying a frozen copy of
+    the defaults. That meant a new flag broke the suite with an AttributeError, and -
+    worse - the tests could keep passing against defaults the real entry point no longer
+    used. Taking them from build_parser() means the tests exercise what a session
+    actually runs with.
+    """
+    import live_music
+
+    args = live_music.build_parser().parse_args([])
+    args.participant, args.condition = "RUNTESTS", "pilot"
+    args.mock, args.headless, args.out = True, True, tmp
+    args.engine, args.library = "library", os.path.join(_ROOT, "library")
+    for k, v in overrides.items():
+        setattr(args, k, v)
+    return args
+
+
 def test_session_failure_recording(s: Suite) -> None:
     """A crashed worker must record FAILED and must not record complete."""
-    import argparse as ap
+    import argparse as ap  # noqa: F401
 
     import live_music
-    from music_engine import build_prompt as real
+    from music_engine import PromptGovernor
     from session_logger import SessionLogger
 
+    # The fault is injected at the governor, because that is where the control loop
+    # now builds its prompt. It used to be injected by patching live_music.build_prompt,
+    # which the loop stopped calling directly when PromptGovernor was introduced - the
+    # patch still applied cleanly and intercepted nothing, so the test passed by
+    # constructing a session that never crashed. Injecting where the loop actually calls
+    # is the difference between testing the failure path and testing nothing.
     calls = {"n": 0}
 
-    def flaky(*a, **k):
-        calls["n"] += 1
-        if calls["n"] > 1:                      # succeed for the initial prompt
-            raise RuntimeError("injected fault")
-        return real(*a, **k)
+    class Flaky(PromptGovernor):
+        def update(self, *a, **k):
+            calls["n"] += 1
+            if calls["n"] > 1:                  # succeed once, then fail mid-session
+                raise RuntimeError("injected fault")
+            return super().update(*a, **k)
 
-    original = live_music.build_prompt
-    live_music.build_prompt = flaky
+    original = live_music.PromptGovernor
+    live_music.PromptGovernor = Flaky
     tmp = tempfile.mkdtemp(prefix="failtest_")
     try:
-        args = ap.Namespace(
-            participant="RUNTESTS", condition="pilot", target=-1.0, baseline_seconds=20.0,
-            duration=0.4, channels="AF7,AF8", reject_p2p=350.0, window=4.0, hop=1.0,
-            tau=3.0, segment=8.0, engine="library",
-            library=os.path.join(_ROOT, "library"), crossfade=1.0, yoke_from=None,
-            mock=True, mock_audio=False, headless=True, out=tmp)
+        args = _session_args(tmp, baseline_seconds=20.0, duration=0.4)
         state = live_music.SessionState(args.target)
         logger = SessionLogger(args.participant, args.condition, root=tmp)
         raised = False
@@ -315,7 +471,7 @@ def test_session_failure_recording(s: Suite) -> None:
         s.check("crash NOT recorded as complete", "session complete" not in msgs)
         s.check("phase marked failed", state.phase == "failed", f"phase={state.phase}")
     finally:
-        live_music.build_prompt = original
+        live_music.PromptGovernor = original
         import shutil
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -335,12 +491,7 @@ def test_baseline_abort(s: Suite) -> None:
 
     tmp = tempfile.mkdtemp(prefix="baselinetest_")
     try:
-        args = ap.Namespace(
-            participant="RUNTESTS", condition="pilot", target=-1.0, baseline_seconds=8.0,
-            duration=0.3, channels="AF7,AF8", reject_p2p=350.0, window=4.0, hop=1.0,
-            tau=3.0, segment=8.0, engine="library",
-            library=os.path.join(_ROOT, "library"), crossfade=1.0, yoke_from=None,
-            mock=True, mock_audio=False, headless=True, out=tmp)
+        args = _session_args(tmp, baseline_seconds=8.0, duration=0.3)
         state = live_music.SessionState(args.target)
         logger = SessionLogger(args.participant, args.condition, root=tmp)
         live_music.eeg_worker(args, state, logger)
@@ -456,11 +607,14 @@ def main() -> int:
     test_state_rung_monotonic(s)
     test_ladder_reachability(s)
     test_ladder_hysteresis(s)
+    test_ladder_hysteresis_does_not_latch(s, load_session_z())
+    test_min_dwell(s)
     test_chatter_regression(s, load_session_z())
     test_streaming_estimator(s)
 
     s.section("2. SESSION - a crash must never look like a success")
     test_session_failure_recording(s)
+    test_retuned_estimator_guard(s)
     test_baseline_abort(s)
 
     s.section("3. PRE-REGISTRATION - frozen before the data")

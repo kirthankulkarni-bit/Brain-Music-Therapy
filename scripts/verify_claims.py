@@ -262,6 +262,88 @@ def claim_streaming_latency_budget() -> tuple[float, str]:
 
 
 # claim -> (function, value asserted in the manuscript, tolerance)
+_REPLAY_CACHE: dict = {}
+
+
+def _replay_ctx():
+    """
+    The PILOT01 reconstruction, computed once and reused by the claims below.
+
+    Reconstructing z from raw runs the real FeatureExtractor over ~1300 s of 256 Hz
+    data, twice (two estimator configurations). Doing that per claim would put minutes
+    into a suite that has to stay cheap enough to run before every commit.
+    """
+    if not _REPLAY_CACHE:
+        import controller_replay as cr
+        d = sorted(glob.glob(os.path.join(_ROOT, "sessions", "PILOT*")))[-1]
+        session, chans, ts, pair, base = cr.load(d)
+        t0, v0 = cr.reconstruct(chans, ts, pair, cr.DEPLOYED[0], cr.DEPLOYED[1], 0.001)
+        offset, r = cr.align(t0, v0, session)
+        _REPLAY_CACHE.update(cr=cr, session=session, chans=chans, ts=ts, pair=pair,
+                             base=base, offset=offset, r=r)
+    return _REPLAY_CACHE
+
+
+def _replay_z(config):
+    c = _replay_ctx()
+    key = ("z", config)
+    if key not in c:
+        c[key] = c["cr"].z_series(c["chans"], c["ts"], c["pair"], c["session"],
+                                  c["base"], *config, c["offset"])
+    return c[key]
+
+
+def claim_replay_fidelity() -> tuple[float, str]:
+    """
+    How well the offline reconstruction reproduces the deployed pipeline.
+
+    Every retuned-estimator number depends on this, because no session log exists for a
+    configuration that was never run. Below 0.9 the replay describes a different system
+    - a hand-rolled Welch scores 0.05 - so this is the load-bearing assumption behind
+    the whole finding, and it is asserted rather than assumed.
+    """
+    c = _replay_ctx()
+    return float(c["r"]), f"offset {c['offset']:+.2f} s against the session log"
+
+
+def claim_retuned_chatter_no_dwell() -> tuple[float, str]:
+    """Switches arriving inside a crossfade at 2 s / 0.5 s / tau 0.5, no dwell."""
+    c = _replay_ctx()
+    z, t = _replay_z(c["cr"].RETUNED)
+    m = c["cr"].replay(z, t, -1.0, 0.0, 0.0, 1.0)
+    return float(m["under_crossfade"]), f"{m['changes']} changes over {z.size} windows"
+
+
+def claim_retuned_chatter_with_dwell() -> tuple[float, str]:
+    """
+    The same configuration with a dwell of one crossfade.
+
+    This is the result that makes the retuning usable at all: a dwell of at least one
+    crossfade is precisely the condition for no switch arriving before the previous
+    crossfade finishes, so the count is zero by construction rather than by tuning.
+    """
+    c = _replay_ctx()
+    z, t = _replay_z(c["cr"].RETUNED)
+    m = c["cr"].replay(z, t, -1.0, 0.0, 1.0, 1.0)
+    return float(m["under_crossfade"]), f"{m['changes']} changes, median gap " \
+                                        f"{m['median_gap']:.1f} s"
+
+
+def claim_ladder_margin_responds() -> tuple[float, str]:
+    """
+    Prompt changes at the deployed settings with ladder_margin 0.25.
+
+    Asserted because the interesting failure is ZERO. build_prompt used to derive the
+    previous rung from the previous PROMPT, which latched the controller on the goal
+    rung and produced no changes at all across a whole session. A count above zero is
+    the property that broke; the exact value is secondary.
+    """
+    c = _replay_ctx()
+    z, t = _replay_z(c["cr"].DEPLOYED)
+    m = c["cr"].replay(z, t, -1.0, 0.25, 0.0, 1.0)
+    return float(m["changes"]), f"median gap {m['median_gap']:.1f} s over {z.size} windows"
+
+
 CLAIMS = {
     "T4 best realtime factor":            (claim_t4_best_realtime,        1.05,   0.01),
     "T4 fp32<fp16-half<fp16 consistency": (claim_t4_precision_ordering,   1.00,   0.001),
@@ -280,6 +362,10 @@ CLAIMS = {
     "same effect on AF7/AF8":             (claim_channel_mismatch_af,     0.91,   0.03),
     "DEAP arousal rho (AF3/AF4)":         (claim_deap_arousal_rho,        0.303,  0.02),
     "streaming estimator budget":         (claim_streaming_latency_budget, 0.413, 0.01),
+    "replay fidelity vs the log":         (claim_replay_fidelity,         0.991,  0.005),
+    "retuned, no dwell: inside a xfade":  (claim_retuned_chatter_no_dwell, 136,   4),
+    "retuned, 1 s dwell: inside a xfade": (claim_retuned_chatter_with_dwell, 0,   0),
+    "ladder margin 0.25 still responds":  (claim_ladder_margin_responds,  8,      2),
 }
 
 

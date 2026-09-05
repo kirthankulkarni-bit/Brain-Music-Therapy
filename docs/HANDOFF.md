@@ -1,6 +1,7 @@
 # Handoff: everything a new session needs
 
-**Written 2026-08-28.** Read this first in a fresh conversation. It carries the state,
+**Written 2026-08-28. Updated 2026-09-05** — trap 1 was partly wrong and is now
+resolved; see the update inside it. Read this first in a fresh conversation. It carries the state,
 the numbers, the open decisions, and — most importantly — the traps, because several of
 them cost hours and look invisible.
 
@@ -10,7 +11,7 @@ Verify the state is still current before trusting anything below:
 python scripts/run_tests.py && python scripts/verify_claims.py
 ```
 
-Expected: **34 passed, 0 failed** and **17 claims reproduce**. If either disagrees,
+Expected: **45 passed, 0 failed** and **21 claims reproduce**. If either disagrees,
 something changed after this was written and the numbers here are stale.
 
 ---
@@ -129,9 +130,38 @@ crosses a half-integer: 217 times deployed, 1122 retuned. The deployed system su
 *accident* — `build_prompt` maps several `here` values onto one level, absorbing most
 flips. Less smoothing spends that absorption.
 
-`ladder_margin` now exists as an **opt-in** Schmitt trigger (default 0, byte-identical).
-On the deployed config it gives 36 → 14 changes and 3 s → 16 s median gap. It does **not**
-rescue the retuned estimator (28 sub-crossfade switches at margin 0.5).
+**UPDATE 2026-09-05 — half of this trap is resolved, and the `ladder_margin` advice that
+used to sit here was dangerous.** Read
+[finding_ladder_hysteresis.md](finding_ladder_hysteresis.md) before acting on any of it.
+
+Three things changed:
+
+**The numbers above are not reproducible and are ~20% too high.** They came from
+uncommitted code. `scripts/controller_replay.py` is the committed replacement, calibrated
+against a known result: replaying PILOT01's *logged* z at deployed settings gives 24
+changes, matching `verify_claims.py` exactly. It reads deployed 28 / retuned 382 / 136
+sub-crossfade, not 36 / 459 / 168. Two things had to be right first — the time axis must
+come from the LSL timestamps (PILOT01 has two dropouts, worst 10.67 s) and the fidelity
+check must compare unsmoothed against unsmoothed. Getting either wrong caps r at 0.66.
+
+**`ladder_margin` was latched, and turning it on would have frozen the music.** At margin
+0.25 it produced **zero prompt changes in twenty minutes** while the participant's rung
+ranged to 4. `build_prompt` fed the rung being *played* back in as the previous *state*
+estimate, and since play is always one rung toward the target, that closed a loop onto the
+goal rung. `build_prompt` now takes `previous_rung` explicitly and `PromptGovernor` owns
+it. Fixed, tested, and the test fails against the old wiring.
+
+**The retuning is viable now.** The missing piece was a minimum dwell, and the value is
+structural rather than tuned: **a dwell of one crossfade is exactly the condition for no
+switch arriving before the previous crossfade completes.** Retuned + `--min-dwell 1.0`
+gives 299 changes, 1.5 s median gap, **0 sub-crossfade**, and 3.68 s end-to-end against
+the deployed 6.67 s. The dwell is not free — the library engine acts within one crossfade,
+not one segment, so worst case is `dwell + crossfade`; an 8 s dwell would have eaten the
+entire gain.
+
+`live_music.py` **refuses to start** on a retuned estimator with `--min-dwell` below the
+crossfade. Still unjudged: whether 299 changes in twenty minutes sounds acceptable. It is
+click-free, which is not the same as good.
 
 ### Trap 2: the alpha validation used the WRONG CHANNELS
 
@@ -218,8 +248,13 @@ settings**.
 
 1. **Does the eyes-closed effect hold on AF7/AF8 with good contact?** Gates everything.
 2. **Should the inert trend suffix be deleted?** It cannot fire after calibration.
-3. **Should `ladder_margin` be turned on?** Clear win at deployed settings; changes what a
-   participant hears, so it is a therapeutic call.
+3. **Should `ladder_margin` be turned on?** It *works* now — as of 8/28 it did not, and
+   enabling it would have frozen the controller (trap 1). At deployed settings it gives
+   28 → 8 changes with a 21 s median gap. Still off by default, still a therapeutic call.
+7. **Does the retuned controller sound acceptable?** `--min-dwell 1.0` makes the retuned
+   estimator click-free at 299 changes in twenty minutes, against 28 deployed. Click-free
+   is a measurement; acceptable is a listening judgement, and nobody has made it. This
+   gates whether the 1.8x latency gain is actually collectable.
 4. **Does the information-rate gain survive the real contrast?** The n ≈ 7 projection
    assumes discriminability measured on eyes-open/closed transfers to adaptive-vs-sham.
 5. **Do the crossfades sound acceptable?** Never judged on non-chattering audio.
@@ -246,9 +281,10 @@ settings**.
 | `src/music_engine.py` | `build_prompt` — the controller |
 | `src/library_engine.py` | the default audio path |
 | `src/analyze_session.py` | outcomes, coupling, event-locked |
-| `scripts/run_tests.py` | 34 checks, one command |
+| `scripts/run_tests.py` | 45 checks, one command |
 | `scripts/verify_claims.py` | regenerates all 17 manuscript numbers |
 | `scripts/estimator_sweep.py` | latency vs information rate, needs a labelled session |
+| `scripts/controller_replay.py` | replays a recording through the real controller; chatter counts |
 | `scripts/signal_quality.py` | per-channel: cortex or ocular artefact |
 | `scripts/calibrate_hysteresis.py` | trend thresholds for a given estimator |
 | `scripts/validate_index_deap.py`, `compare_indices_deap.py` | index validity on DEAP |

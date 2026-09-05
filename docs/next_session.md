@@ -25,7 +25,7 @@ Both are answered by the same session if it is run in the right order.
 python scripts/run_tests.py
 ```
 
-30 checks. If anything fails, fix it before recording.
+45 checks. If anything fails, fix it before recording.
 
 Charge the Muse. Run the laptop **on battery** — mains through the charger was the largest
 single source of 60 Hz contamination during rig validation.
@@ -108,15 +108,21 @@ the ladder, not the suffix. Record the numbers; the controller work comes later.
 python src/live_music.py --participant PILOT02 --condition pilot --duration 20
 ```
 
-**Do not pass `--window 2 --hop 0.5 --tau 0.5`.** An earlier version of this document
-recommended it. That recommendation was tested against PILOT01's raw recording and is
-wrong: it produces 459 prompt changes with 168 arriving faster than a crossfade — worse
-than the defect that made PILOT01's audio unusable. See
-[finding_ladder_hysteresis.md](finding_ladder_hysteresis.md).
+**Do not pass `--window 2 --hop 0.5 --tau 0.5` on its own.** An earlier version of this
+document recommended it bare, and that was wrong: with no dwell it produces 382 prompt
+changes with 136 arriving faster than a crossfade — worse than the defect that made
+PILOT01's audio unusable. `live_music.py` now **refuses to start** in that configuration
+rather than letting you find out afterwards.
 
-The cause is not the estimator and not the trend thresholds. `state_rung` has **no
-hysteresis**, so the rung flips whenever z crosses a half-integer boundary; a less-smoothed
-z crosses them constantly. Fixing it needs controller work, not a flag.
+The cause is not the estimator and not the trend thresholds. The rung flips whenever z
+crosses a half-integer boundary, and a less-smoothed z crosses them constantly.
+
+As of 9/5 the controller work is done and those settings are survivable **with
+`--min-dwell 1.0`**: zero sub-crossfade switches, and 3.68 s end-to-end against the
+deployed 6.67 s. **Do not use them in this session anyway.** Its job is a clean yoke
+source at known-good settings, and nobody has yet listened to what the retuned controller
+sounds like — 299 changes in twenty minutes is click-free but unjudged. See
+[finding_ladder_hysteresis.md](finding_ladder_hysteresis.md).
 
 So this session has one purpose:
 

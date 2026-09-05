@@ -74,7 +74,12 @@ from eeg_features import (  # noqa: E402
     latency_budget,
 )
 from library_engine import LibraryConfig, LibraryMusicEngine  # noqa: E402
-from music_engine import MusicConfig, StreamingMusicEngine, build_prompt  # noqa: E402
+from music_engine import (  # noqa: E402
+    MusicConfig,
+    PromptGovernor,
+    StreamingMusicEngine,
+    build_prompt,
+)
 from session_logger import SessionLogger, load_session  # noqa: E402
 from stream_utils import get_inlet  # noqa: E402
 
@@ -189,6 +194,14 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
             if engine_kind == "library" else music_cfg.to_dict()
         ),
         smoother_tau_s=args.tau,
+        # The controller's own configuration. Two sessions with identical feature and
+        # engine configs are still not comparable if one held prompts for a crossfade
+        # and the other did not, so these belong beside the rest rather than only in
+        # the operator's shell history.
+        controller_config={
+            "ladder_margin": args.ladder_margin,
+            "min_dwell_seconds": args.min_dwell,
+        },
         target_z=args.target,
         baseline_seconds=args.baseline_seconds,
         intervention_seconds=args.duration * 60.0,
@@ -284,6 +297,35 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
             print(f"[eeg] SHAM (yoked): replaying {len(yoked_prompts)} prompts from {args.yoke_from}")
 
         initial_prompt = build_prompt(0.0, args.target, None)
+
+        # THE GUARD THAT ENCODES finding_ladder_hysteresis.md. A retuned estimator is
+        # less smoothed, so z crosses rung boundaries constantly and the prompt chatters:
+        # replayed on PILOT01 at 2 s / 0.5 s / tau 0.5, 136 of 382 changes arrived inside
+        # a crossfade, which is the defect that made PILOT01's own audio unusable.
+        #
+        # A dwell of at least one crossfade removes it by construction - no switch can
+        # arrive before the previous crossfade completes - and measured 0 sub-crossfade
+        # switches at every margin tested. This refuses to start rather than warn,
+        # because the resulting recording is not merely noisy, it is disqualified as a
+        # yoke source, and that is discovered after the participant has gone home.
+        _retuned = (args.window, args.hop, args.tau) != (4.0, 1.0, 3.0)
+        if _retuned and args.min_dwell < args.crossfade:
+            raise SystemExit(
+                f"[eeg] REFUSING TO START: estimator is retuned "
+                f"(window={args.window:g} hop={args.hop:g} tau={args.tau:g}) but "
+                f"--min-dwell is {args.min_dwell:g} s, below the {args.crossfade:g} s "
+                f"crossfade.\n"
+                f"       Less smoothing means the prompt chatters; on PILOT01 this "
+                f"produced 136 switches inside a crossfade.\n"
+                f"       Pass --min-dwell {args.crossfade:g} (or more), or run the "
+                f"deployed 4 / 1 / 3 settings.\n"
+                f"       See docs/finding_ladder_hysteresis.md."
+            )
+
+        governor = PromptGovernor(target_z=args.target,
+                                  ladder_margin=args.ladder_margin,
+                                  min_dwell_seconds=args.min_dwell,
+                                  initial_prompt=initial_prompt)
         if engine_kind == "library":
             # Explicit failure, never a silent fallback to streaming. A session that
             # quietly ran the 8 s-commitment engine when the operator asked for the
@@ -373,10 +415,10 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
                 elapsed = now - t_start
                 prompt = _yoked_prompt_at(yoked_prompts, elapsed)
             else:
-                # Previous prompt threaded through so build_prompt can apply
-                # hysteresis while staying a pure function.
-                prompt = build_prompt(z, target_z=args.target, trend=trend,
-                                      previous_prompt=engine.get_target_prompt())
+                # The governor owns the ladder state estimate and the dwell clock;
+                # build_prompt stays pure underneath it. At margin 0 and dwell 0 this
+                # is exactly the previous behaviour.
+                prompt = governor.update(z, trend=trend, now=now)
 
             changed = engine.set_target_prompt(prompt)
 
@@ -699,7 +741,14 @@ def run_dashboard(state: SessionState) -> int:
 # ----------------------------------------------------------------------- main
 
 
-def parse_args():
+def build_parser() -> argparse.ArgumentParser:
+    """
+    The parser, separated from parse_args so tests can take their defaults from it.
+
+    run_tests.py used to hand-build an argparse.Namespace per test, which meant every
+    new flag broke the suite with an AttributeError and every test silently encoded a
+    stale copy of the defaults. Defaults now have exactly one definition.
+    """
     p = argparse.ArgumentParser(description="Closed-loop EEG-driven music therapy session")
     p.add_argument("--participant", default="self")
     p.add_argument("--condition", default="adaptive", choices=["adaptive", "sham", "pilot"])
@@ -726,6 +775,15 @@ def parse_args():
                         "Passing it explicitly always wins, so --engine library --mock "
                         "exercises the real audio path against synthetic EEG.")
     p.add_argument("--library", default="library", help="library directory for --engine library")
+    p.add_argument("--ladder-margin", type=float, default=0.0,
+                   help="Schmitt trigger on the energy ladder, in z units. 0 = off. "
+                        "Changes what the participant hears, so it is a therapeutic "
+                        "decision - see docs/finding_ladder_hysteresis.md.")
+    p.add_argument("--min-dwell", type=float, default=0.0,
+                   help="minimum seconds a prompt is held once adopted. 0 = off. Set it "
+                        "to at least --crossfade whenever the estimator is retuned: "
+                        "that is the condition for no switch arriving before the "
+                        "previous crossfade completes.")
     p.add_argument("--crossfade", type=float, default=1.0,
                    help="crossfade seconds; this is THE latency knob for --engine library, "
                         "exactly as queue depth is for streaming")
@@ -733,7 +791,11 @@ def parse_args():
     p.add_argument("--mock", action="store_true", help="synthetic EEG and synthetic audio, no hardware")
     p.add_argument("--mock-audio", action="store_true", help="real EEG, synthesized pads instead of MusicGen")
     p.add_argument("--headless", action="store_true", help="no Qt dashboard")
-    return p.parse_args()
+    return p
+
+
+def parse_args():
+    return build_parser().parse_args()
 
 
 def main() -> int:

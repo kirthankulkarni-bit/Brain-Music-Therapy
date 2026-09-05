@@ -141,7 +141,15 @@ _DEADBAND_Z = 0.35  # within this much of target, stop steering
 
 
 def _rung_of(prompt: Optional[str]) -> Optional[int]:
-    """The ladder rung a previous prompt was on, or None. Used for ladder hysteresis."""
+    """
+    The ladder rung a prompt was on, or None.
+
+    DO NOT feed this back into state_rung as `previous_rung`. build_prompt used to, and
+    it silently froze the controller - see the note on `previous_rung` in build_prompt.
+    A prompt records what was PLAYED, which is always one rung toward the target; the
+    hysteresis needs what was last BELIEVED about the participant. They are different
+    quantities and confusing them is a feedback loop, not an approximation.
+    """
     if not prompt:
         return None
     for i, base in enumerate(_ENERGY_LADDER):
@@ -189,13 +197,36 @@ def state_rung(z: float, previous_rung: Optional[int] = None, margin: float = 0.
 
 def build_prompt(z: float, target_z: float = -1.0, trend: Optional[float] = None,
                  previous_prompt: Optional[str] = None,
-                 ladder_margin: float = 0.0) -> str:
+                 ladder_margin: float = 0.0,
+                 previous_rung: Optional[int] = None) -> str:
     """
     Map the normalized arousal index onto a graded musical prompt.
 
-    z         : current log(beta/alpha), z-scored against this participant's own baseline
-    target_z  : desired z (-1.0 = one SD below their resting baseline, i.e. relaxation)
-    trend     : z(t) - z(t-1), used to decide whether to hold or push
+    z             : current log(beta/alpha), z-scored against the participant's baseline
+    target_z      : desired z (-1.0 = one SD below their resting baseline, relaxation)
+    trend         : least-squares slope of z, used to decide whether to hold or push
+    previous_rung : the last estimate of the participant's OWN rung. Only read when
+                    ladder_margin > 0, and it must come from a caller that tracks the
+                    state estimate - PromptGovernor does. It is NOT recoverable from
+                    previous_prompt.
+
+    WHY previous_rung IS A PARAMETER RATHER THAN DERIVED FROM previous_prompt
+
+    It used to be derived, via _rung_of(previous_prompt), and that was a bug that made
+    ladder_margin unusable. The prompt encodes the rung being PLAYED, and build_prompt
+    always plays one rung toward the target. Feeding that back as the previous STATE
+    estimate closes a loop: the estimate is pulled toward the goal, which pulls the
+    output toward the goal, which pulls the estimate further, until it latches.
+
+    Measured on PILOT01 at ladder_margin 0.25: the output sat on rung 1 for all 1043
+    windows and the prompt never changed once in twenty minutes, while the participant's
+    own state rung ranged up to 4. The music stopped responding entirely. At margin 0 the
+    same replay gives 24 changes across three rungs.
+
+    docs/finding_ladder_hysteresis.md recommended enabling the margin on the strength of
+    "36 changes to 14, a clear win". That measurement tracked the state rung separately
+    and so never exercised this path. Enabling the flag as it was wired would have
+    shipped a controller that stops responding to the participant.
 
     THE ISO-PRINCIPLE. The prompt does not jump straight to the target state. It
     meets the participant roughly where they are and moves ONE rung toward the
@@ -214,7 +245,7 @@ def build_prompt(z: float, target_z: float = -1.0, trend: Optional[float] = None
     if not math.isfinite(z):
         return _ENERGY_LADDER[_LADDER_CENTRE]
 
-    here = state_rung(z, previous_rung=_rung_of(previous_prompt), margin=ladder_margin)
+    here = state_rung(z, previous_rung=previous_rung, margin=ladder_margin)
     goal = state_rung(target_z)
     error = z - target_z
 
@@ -311,6 +342,98 @@ def _trend_suffix(trend: Optional[float], error: float,
         return previous
 
     return desired
+
+
+# ------------------------------------------------------------------- governor
+
+
+class PromptGovernor:
+    """
+    The stateful wrapper around build_prompt: ladder hysteresis plus a minimum dwell.
+
+    WHY THIS IS A CLASS AND build_prompt IS NOT
+
+    build_prompt must stay pure. scripts/build_library.py enumerates the reachable
+    prompt set by sweeping it, and run_tests.py asserts that three identical calls give
+    identical answers. If it became stateful the library's coverage guarantee would
+    silently stop meaning anything. So the state lives here instead, and build_prompt is
+    called rather than modified.
+
+    WHAT THE DWELL IS FOR
+
+    docs/finding_ladder_hysteresis.md established that a less-smoothed estimator makes
+    the rung flip constantly - 1122 times on PILOT01 at 2 s / 0.5 s / tau 0.5 against 217
+    deployed - and that a Schmitt trigger on the rung helps but is not enough: at margin
+    0.5, still 28 changes arrived inside a crossfade. A switch inside a crossfade is a
+    click rather than a transition, which is the defect that made PILOT01's audio
+    unusable.
+
+    A margin bounds how far z must move to change the prompt. It cannot bound how OFTEN,
+    because z can cross a wide band quickly. The dwell bounds the rate directly: once a
+    prompt is adopted it is held for at least min_dwell_seconds, whatever the controller
+    would otherwise ask for.
+
+    IT IS A RATE LIMIT, NOT A FILTER. When the dwell expires the governor adopts what the
+    controller wants NOW, not what it wanted when the request was blocked. A stale request
+    would make the music lag the participant by up to a full dwell, which is exactly the
+    latency the rest of this project is trying to remove.
+
+    Hysteresis anchors on the SOUNDING prompt, not the suppressed one - previous_prompt
+    stays the prompt actually playing, so the ladder does not drift while held.
+
+    Defaults are margin 0 and dwell 0, which is byte-identical to calling build_prompt
+    directly. Both are opt-in because both change what a participant hears, and that is a
+    therapeutic decision rather than an engineering one.
+    """
+
+    def __init__(self, target_z: float = -1.0, ladder_margin: float = 0.0,
+                 min_dwell_seconds: float = 0.0,
+                 initial_prompt: Optional[str] = None) -> None:
+        self.target_z = float(target_z)
+        self.ladder_margin = max(0.0, float(ladder_margin))
+        self.min_dwell_seconds = max(0.0, float(min_dwell_seconds))
+        self.prompt: Optional[str] = initial_prompt
+        self._last_change_at: Optional[float] = None
+        self.suppressed = 0          # changes the dwell withheld, for the session log
+        # The running estimate of the PARTICIPANT'S rung, which is what the Schmitt
+        # trigger must hysteresise against. It is deliberately not derived from
+        # self.prompt: the prompt is the rung being played, and playing is offset one
+        # rung toward the target. See build_prompt's note on previous_rung.
+        self._state_rung: Optional[int] = None
+
+    def update(self, z: float, trend: Optional[float] = None,
+               now: Optional[float] = None) -> str:
+        """The prompt that should be sounding. `now` is seconds on any monotonic clock."""
+        wanted = build_prompt(z, target_z=self.target_z, trend=trend,
+                              previous_prompt=self.prompt,
+                              ladder_margin=self.ladder_margin,
+                              previous_rung=self._state_rung)
+
+        # Advance the state estimate on every window, including ones where the dwell
+        # suppresses the change. What the participant is doing does not pause because
+        # the music is holding, and freezing the estimate here would reintroduce a
+        # milder version of the latch this parameter was added to fix.
+        self._state_rung = state_rung(z, previous_rung=self._state_rung,
+                                      margin=self.ladder_margin)
+
+        if self.prompt is None:
+            self.prompt = wanted
+            self._last_change_at = now
+            return self.prompt
+
+        if wanted == self.prompt:
+            return self.prompt
+
+        if self.min_dwell_seconds > 0.0 and now is not None:
+            if self._last_change_at is None:
+                self._last_change_at = now
+            elif now - self._last_change_at < self.min_dwell_seconds:
+                self.suppressed += 1
+                return self.prompt
+
+        self.prompt = wanted
+        self._last_change_at = now
+        return self.prompt
 
 
 # -------------------------------------------------------------------- config
