@@ -469,6 +469,113 @@ def _session_args(tmp: str, **overrides):
     return args
 
 
+def test_primary_outcome_ground_truth(s: Suite) -> None:
+    """
+    The registered PRIMARY OUTCOME, tested against a session whose answers are known.
+
+    Until 9/5 the only assertion on analyze_session was that it completes without
+    raising on the six sessions on disk. That catches a crash and nothing else: mean z
+    is the primary outcome in analysis_plan.md section 3, and a sign error, an
+    off-by-one in the applied filter, or a wrong denominator would all "complete" and
+    all change the study's answer.
+
+    The coupling index has had ground truth since 8/16 (validate_coupling recovers a
+    known +6 s lag) and it is a SECONDARY measure. The primary one had none. Same
+    convention, applied where it matters most: test the tool against a known result
+    before trusting it on an unknown one.
+
+    The synthetic session below is built so every expected value is computable by hand.
+    """
+    from analyze_session import HOLD_SECONDS, TARGET_BAND_HALF_WIDTH, basic_metrics
+
+    target = -1.0
+    hop = 1.0
+
+    def session(zs, applied=None, valid=None):
+        applied = [True] * len(zs) if applied is None else applied
+        valid = [True] * len(zs) if valid is None else valid
+        return {
+            "dir": "synthetic",
+            "manifest": {"feature_config": {"hop_seconds": hop}, "target_z": target,
+                         "participant_id": "SYN", "condition": "pilot"},
+            "audio": [],
+            "windows": [{"phase": "intervention", "elapsed_s": float(i) * hop,
+                         "z": float(z), "applied": a, "valid": v}
+                        for i, (z, a, v) in enumerate(zip(zs, applied, valid))],
+        }
+
+    # 1. mean, sd and range over a series whose answers are arithmetic.
+    zs = [-2.0, -1.0, 0.0, 1.0, 2.0]
+    m = basic_metrics(session(zs))
+    s.check("z_mean is the mean of the applied windows", abs(m["z_mean"] - 0.0) < 1e-9,
+            f"got {m['z_mean']:+.6f} for {zs}")
+    s.check("z_min and z_max are the extremes",
+            m["z_min"] == -2.0 and m["z_max"] == 2.0)
+
+    # 2. UNAPPLIED WINDOWS MUST NOT COUNT. This is the filter most likely to rot, and
+    #    it silently shifts the primary outcome rather than failing.
+    zs = [-1.0, -1.0, 99.0, 99.0]
+    m = basic_metrics(session(zs, applied=[True, True, False, False]))
+    s.check("unapplied windows are excluded from the primary outcome",
+            abs(m["z_mean"] - (-1.0)) < 1e-9,
+            f"got {m['z_mean']:+.4f}; two windows at z=99 must not contribute")
+
+    # 3. in-band fraction, with a value exactly on the boundary (inclusive per the code).
+    edge = target + TARGET_BAND_HALF_WIDTH
+    zs = [target, target, edge, target + 5.0]
+    m = basic_metrics(session(zs))
+    s.check("time in band counts the boundary and excludes the excursion",
+            abs(m["time_in_band_fraction"] - 0.75) < 1e-9,
+            f"got {m['time_in_band_fraction']:.3f}, expected 0.750")
+
+    # 4. time_to_target must be nan when the band is never reached. The docstring calls
+    #    this out specifically: coding "never" as the session length would turn a
+    #    non-response into a slow response, which is a different clinical claim.
+    m = basic_metrics(session([target + 5.0] * int(HOLD_SECONDS * 3)))
+    s.check("time_to_target is nan when the band is never reached",
+            not np.isfinite(m["time_to_target_s"]), f"got {m['time_to_target_s']}")
+
+    # 5. ...and is measured from the first window when it is reached immediately.
+    m = basic_metrics(session([target] * int(HOLD_SECONDS * 3)))
+    s.check("time_to_target is 0 s when already in band at the start",
+            m["time_to_target_s"] == 0.0, f"got {m['time_to_target_s']}")
+
+    # 6. drift is second half minus first half, so a rise is positive.
+    m = basic_metrics(session([0.0, 0.0, 2.0, 2.0]))
+    s.check("z_drift is positive for a rising session",
+            abs(m["z_drift"] - 2.0) < 1e-9, f"got {m['z_drift']:+.3f}, expected +2.000")
+
+    # 7. A session where every window was REJECTED is the realistic degenerate case -
+    #    bad contact for twenty minutes - and it must yield nan rather than a number.
+    m = basic_metrics(session([1.0, 2.0, 3.0], applied=[False, False, False]))
+    s.check("a fully rejected session yields nan, not zero",
+            not np.isfinite(m["z_mean"]), f"got {m['z_mean']}")
+
+    # 8. A session with NO windows is a different case: basic_metrics returns an error
+    #    dict with none of these keys, and report() used to format the absent target_z
+    #    and raise TypeError. An operator running this right after a session that had
+    #    already gone wrong would see a traceback and conclude the ANALYSIS was broken.
+    #    The control loop's rule is that a crash must not look like a success; this is
+    #    the same rule pointing the other way.
+    import tempfile as _tf
+
+    empty = _tf.mkdtemp(prefix="emptysess_")
+    try:
+        with open(os.path.join(empty, "events.jsonl"), "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"type": "manifest", "participant_id": "EMPTY",
+                                 "condition": "pilot"}) + chr(10))
+        from analyze_session import report as _report
+        try:
+            out = _report(empty, skip_aci=True)
+            ok, why = "error" in out, f"reported {out.get('error')!r}"
+        except Exception as exc:  # noqa: BLE001
+            ok, why = False, f"raised {type(exc).__name__}: {exc}"
+        s.check("a session with no windows reports rather than crashes", ok, why)
+    finally:
+        import shutil
+        shutil.rmtree(empty, ignore_errors=True)
+
+
 def test_sham_path(s: Suite) -> None:
     """
     The sham arm, which is half the registered design and has never run.
@@ -737,6 +844,7 @@ def main() -> int:
     test_streaming_estimator(s)
 
     s.section("2. SESSION - a crash must never look like a success")
+    test_primary_outcome_ground_truth(s)
     test_sham_path(s)
     test_session_failure_recording(s)
     test_retuned_estimator_guard(s)

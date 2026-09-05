@@ -344,6 +344,27 @@ def _lagged_corr(x: np.ndarray, y: np.ndarray, lag: int) -> float:
 def report(session_dir: str, skip_aci: bool = False) -> Dict:
     session = load_session(session_dir)
     metrics = basic_metrics(session)
+
+    # A session that logged no windows is a real outcome, not an exceptional one: the
+    # LSL stream may never have delivered, or the worker may have died before the first
+    # hop. basic_metrics returns {"error": ...} for it, and the report below formats
+    # fields that are then absent - target_z reached f"{None:+.2f}" and raised
+    # TypeError. The operator, running this straight after a session that already went
+    # wrong, would see a traceback and reasonably conclude the ANALYSIS was broken.
+    #
+    # Say what happened instead. This mirrors the rule the control loop already follows
+    # in the other direction: a crash must not look like a success, and an empty session
+    # must not look like a crash.
+    if "error" in metrics:
+        print("=" * 74)
+        print(f"SESSION: {session_dir}")
+        print("=" * 74)
+        print(f"  NOT ANALYSABLE: {metrics['error']}")
+        print("  The session directory exists but holds no analysable windows. Check")
+        print("  events.jsonl for a 'session FAILED' note and the LSL stream status.")
+        print("=" * 74)
+        return metrics
+
     if not skip_aci:
         metrics.update(coupling_index(session))
         metrics.update(event_locked_response(session))
