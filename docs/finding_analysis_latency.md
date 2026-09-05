@@ -86,13 +86,33 @@ Shortening it pays twice. That connection is the finding.
 **For the system.** The obvious move looked like `--window 2 --hop 0.5 --tau 0.5`, using
 existing flags, taking end-to-end worst case from 6.5 s to about 2.7 s.
 
-**That was tested and it does not work.** Replayed against PILOT01, those settings produce
-459 prompt changes with 168 arriving inside a crossfade, because `state_rung` has no
-hysteresis and a less-smoothed z crosses rung boundaries constantly. Recalibrating the
-trend thresholds changes nothing — it is the ladder, not the suffix. See
-[finding_ladder_hysteresis.md](finding_ladder_hysteresis.md).
+**That was tested and, as a bare flag change, it does not work.** Replayed against
+PILOT01, those settings produce 382 prompt changes with 136 arriving inside a crossfade,
+because the rung has no hysteresis and a less-smoothed z crosses its boundaries
+constantly. Recalibrating the trend thresholds changes nothing — it is the ladder, not the
+suffix.
 
-The finding below still stands; the cost of acting on it is higher than a flag change.
+**UPDATE 2026-09-05: the controller work is done, and the move is now available.** A
+minimum dwell of one crossfade is exactly the condition for no switch arriving before the
+previous crossfade completes, so sub-crossfade switches go to zero by construction rather
+than by tuning. With `--min-dwell 1.0` the retuned estimator gives 299 prompt changes, a
+1.5 s median gap and **zero** sub-crossfade switches.
+
+The dwell is not free — the library engine acts within one crossfade, so worst case
+becomes `dwell + crossfade` — so the honest end-to-end comparison is:
+
+| configuration | detect | + dwell | + crossfade | end-to-end |
+|---|---|---|---|---|
+| deployed | 5.67 s | 0 | 1.0 s | **6.67 s** |
+| retuned + 1 s dwell | 1.68 s | 1.0 s | 1.0 s | **3.68 s** |
+
+**1.8x, not the 2.4x the bare flag change appeared to offer.** The dwell consumes part of
+the gain, and any dwell materially larger than one crossfade would consume all of it — an
+8 s dwell leaves the system slower than deployed. That is the corrected version of the
+claim in this section.
+
+See [finding_ladder_hysteresis.md](finding_ladder_hysteresis.md), and reproduce it with
+`python scripts/controller_replay.py --sweep`.
 
 **For the statistics.** More independent observations per minute directly attacks the
 power problem in `analysis_plan.md` §4, where achievable precision is limited by n_eff.
@@ -136,9 +156,17 @@ adaptive-versus-sham. If the subtler contrast degrades faster under a noisier es
 the gain shrinks — possibly a lot. Nothing here establishes that it does not.
 
 That assumption is directly measurable, and measuring it is the strongest argument for
-running PILOT02 at the retuned settings: it would yield the information rate for the real
-contrast rather than for a proxy, and either confirm the projection or kill it before the
-protocol is committed.
+eventually running a session at the retuned settings: it would yield the information rate
+for the real contrast rather than for a proxy, and either confirm the projection or kill
+it before the protocol is committed.
+
+**Not PILOT02, though.** As of 9/5 the retuned settings are safe to run — the chatter that
+disqualified them is fixed and guarded — but two things still argue against spending this
+session on them. PILOT02's job is a clean yoke source, without which the sham arm cannot
+run at all, and that is worth more than an information-rate measurement. And nobody has
+listened to the retuned controller: 299 changes in twenty minutes is click-free, which is
+not the same as acceptable. Establish the yoke source at known-good settings first, judge
+the audio second, measure the real-contrast information rate third.
 
 ## What this does not establish
 

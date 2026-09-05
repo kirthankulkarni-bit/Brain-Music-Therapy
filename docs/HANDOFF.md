@@ -119,14 +119,17 @@ PILOT01:
 
 | | changes | median gap | under a crossfade |
 |---|---|---|---|
-| deployed | 36 | 3.0 s | 0 |
-| retuned | **459** | 1.0 s | **168** |
+| deployed | ~~36~~ 28 | 3.0 s | 0 |
+| retuned | ~~459~~ **382** | 1.0 s | ~~168~~ **136** |
 
-37% sub-crossfade, worse than the original defect. **It is not the trend thresholds** —
-recalibrating them changes nothing (459 at 0.35, 0.191, and 0.170 alike).
+*Struck values are the original uncommitted measurement; the corrected ones come from
+`scripts/controller_replay.py`. See the update at the end of this trap.*
+
+36% sub-crossfade, worse than the original defect. **It is not the trend thresholds** —
+recalibrating them changes nothing.
 
 `state_rung(z)` is `round(2 + z)` with **no hysteresis**, so the rung flips whenever z
-crosses a half-integer: 217 times deployed, 1122 retuned. The deployed system survives by
+crosses a half-integer: 194 times deployed, 1006 retuned. The deployed system survives by
 *accident* — `build_prompt` maps several `here` values onto one level, absorbing most
 flips. Less smoothing spends that absorption.
 
@@ -140,7 +143,7 @@ Three things changed:
 uncommitted code. `scripts/controller_replay.py` is the committed replacement, calibrated
 against a known result: replaying PILOT01's *logged* z at deployed settings gives 24
 changes, matching `verify_claims.py` exactly. It reads deployed 28 / retuned 382 / 136
-sub-crossfade, not 36 / 459 / 168. Two things had to be right first — the time axis must
+sub-crossfade, not the 36 / 459 / 168 struck above. Two things had to be right first — the time axis must
 come from the LSL timestamps (PILOT01 has two dropouts, worst 10.67 s) and the fidelity
 check must compare unsmoothed against unsmoothed. Getting either wrong caps r at 0.66.
 

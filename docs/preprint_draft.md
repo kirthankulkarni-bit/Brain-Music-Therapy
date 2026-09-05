@@ -263,14 +263,44 @@ precisely the coefficient that produces an effective sample size of 25 from a 20
 session (§7.1). **The smoother is simultaneously the largest latency term and the dominant
 cause of the autocorrelation that collapses statistical power.** Shortening it pays twice.
 
-A two-parameter change within the existing code path gives 3.4× faster response and 2.0×
-more information per minute, taking the end-to-end worst case from 6.5 s to about 2.7 s.
+Adopting a faster estimator is available, but it is **not** the two-parameter change it
+first appears to be, and the gain is smaller than the estimator benchmark alone suggests.
 
-Two caveats. The benchmark ran on TP9/TP10, the only channels with labelled ground truth
-(§8), and the controller's hysteresis thresholds were calibrated against the deployed
-estimator's noise — adopting a faster one requires re-deriving them (measured: ENTER would
-rise from 0.35 to 0.51) or the chatter of §6.3 returns with a different appearance and the
-same cause.
+Changing only the estimator reproduces the chatter of §6.3 in a new form: replayed against
+the pilot, `2 s / 0.5 s / tau 0.5` produces 382 prompt changes with 136 arriving inside a
+crossfade — a larger fraction than the defect that made the pilot's own audio unusable.
+The cause is not the trend thresholds, which is where we first looked; recalibrating them
+changes the count not at all. It is the energy ladder, which quantises z with no
+hysteresis, so a less-smoothed z crosses its boundaries constantly. The deployed
+configuration survives this only because the prompt mapping happens to absorb most rung
+flips — a property of the mapping rather than a designed guarantee, and one that a lower
+noise level spends.
+
+The controller change that makes it safe is a **minimum dwell**, and its value is
+structural rather than tuned: a dwell of at least one crossfade is exactly the condition
+for no switch arriving before the previous crossfade completes, so sub-crossfade switches
+fall to zero by construction. Measured: 299 changes, 1.5 s median gap, zero inside a
+crossfade.
+
+The dwell is not free. The library engine (§4) acts on a prompt change within one
+crossfade rather than one segment, so a dwell raises worst-case audio latency from one
+crossfade to `dwell + crossfade`. The honest end-to-end comparison is therefore:
+
+| configuration | detection | dwell | crossfade | end-to-end |
+|---|---|---|---|---|
+| deployed | 5.67 s | — | 1.0 s | **6.67 s** |
+| retuned, 1 s dwell | 1.68 s | 1.0 s | 1.0 s | **3.68 s** |
+
+**1.8×, not the 2.4× available from the estimator in isolation.** The distinction matters
+beyond bookkeeping: a dwell materially larger than one crossfade consumes the entire gain,
+and an 8 s dwell would leave the system slower than the configuration it replaces. This is
+the general shape of the result — the estimator is not the whole loop, and a latency
+argument that stops at the estimator overstates what is collectable.
+
+Two caveats remain. The benchmark ran on TP9/TP10, the only channels with labelled ground
+truth (§8). And the retuned controller has not been listened to: zero sub-crossfade
+switches establishes that transitions are resolvable, not that 299 changes in twenty
+minutes is musically acceptable.
 
 ---
 
