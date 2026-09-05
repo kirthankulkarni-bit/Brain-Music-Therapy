@@ -543,6 +543,7 @@ def _load_yoked_prompts(session_dir: str, participant: Optional[str] = None) -> 
             schedule.append((event["elapsed_s"] - t0, event["prompt"]))
 
     _warn_if_source_chatters(session_dir, schedule)
+    _warn_if_source_outside_prompt_space(session_dir, schedule)
     _warn_if_self_yoked(session_dir, participant)
     return schedule
 
@@ -638,6 +639,59 @@ def _warn_if_source_chatters(session_dir: str, schedule: list[tuple[float, str]]
     print("[eeg]   Yoke to a session recorded after the hysteresis fix instead.")
     print("[eeg] " + "!" * 66)
     print()
+
+
+def _warn_if_source_outside_prompt_space(session_dir: str,
+                                         schedule: list[tuple[float, str]]) -> int:
+    """
+    Refuse to silently yoke to a schedule the current controller could not produce.
+
+    A yoked sham is a control because both arms draw from the SAME prompt space and
+    differ only in whether the sequence is contingent on the listener. If the source
+    schedule contains prompts build_prompt can no longer emit, that stops being true:
+    the sham plays music the adaptive arm structurally cannot, and the arms differ in
+    their acoustic vocabulary rather than only in contingency. No amount of replay
+    fidelity fixes that - a faithful replay of an unreachable schedule is precisely
+    the problem.
+
+    This is not hypothetical, and it is the reason the check exists. Removing the trend
+    suffix on 2026-09-05 shrank the reachable prompt space from 20 strings to 5.
+    PILOT01's schedule carries a suffix on 368 of its 492 entries, so yoking to it
+    today would deliver a sham built almost entirely from prompts the adaptive arm
+    cannot reach. Nothing would have reported that: the replay would be faithful, the
+    library still holds the segments, and the audio would sound fine.
+
+    It warns rather than aborts, matching _warn_if_source_chatters - replaying an old
+    schedule to reproduce a prior analysis is legitimate. Returns the count so callers
+    and tests can assert on it.
+    """
+    from music_engine import build_prompt
+
+    reachable = {build_prompt(float(z), t)
+                 for t in (-1.0, 1.0)
+                 for z in np.arange(-4.0, 4.05, 0.05)}
+    outside = {p for _, p in schedule if p not in reachable}
+    if not outside:
+        return 0
+
+    n = sum(1 for _, p in schedule if p in outside)
+    print()
+    print("[eeg] " + "!" * 66)
+    print(f"[eeg] WARNING: {os.path.basename(session_dir)} was recorded with a DIFFERENT")
+    print("[eeg]   controller. Its schedule contains prompts the current build_prompt")
+    print("[eeg]   cannot emit, so a sham replaying it would use music the adaptive arm")
+    print(f"[eeg]   structurally cannot reach: {n} of {len(schedule)} entries, "
+          f"{len(outside)} distinct.")
+    for p in sorted(outside)[:3]:
+        print(f"[eeg]     {p[:70]}")
+    if len(outside) > 3:
+        print(f"[eeg]     ... and {len(outside) - 3} more")
+    print("[eeg]   The arms would then differ in their acoustic vocabulary, not only in")
+    print("[eeg]   whether the sequence is contingent - which is what yoking controls for.")
+    print("[eeg]   Record a fresh yoke source with the current controller.")
+    print("[eeg] " + "!" * 66)
+    print()
+    return n
 
 
 def _yoked_prompt_at(schedule: list[tuple[float, str]], elapsed: float) -> str:

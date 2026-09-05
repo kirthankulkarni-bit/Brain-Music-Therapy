@@ -11,7 +11,7 @@ Verify the state is still current before trusting anything below:
 python scripts/run_tests.py && python scripts/verify_claims.py
 ```
 
-Expected: **44 passed, 0 failed** and **33 claims reproduce**. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
+Expected: **51 passed, 0 failed** and **33 claims reproduce**. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
 something changed after this was written and the numbers here are stale.
 
 ---
@@ -212,6 +212,21 @@ as having no alpha peak.
 Pre-fix ones for chatter; **all** of them for a 7.06 s replay-origin bias (fixed 8/28, but
 the bias is baked into existing logs). **The sham arm cannot run until PILOT02 exists.**
 
+**A third reason, added 9/5, and it is structural.** Removing the trend suffix shrank the
+reachable prompt space from 20 strings to 5. PILOT01's schedule carries a suffix on
+**368 of its 492 entries**, so a sham yoked to it would play music the adaptive arm
+**cannot reach at all**. That is worse than an acoustic mismatch: the arms would differ in
+their prompt vocabulary, which is the one thing yoking exists to control for.
+
+Nothing would have reported it. The replay would be faithful, the library still holds
+those segments, the audio sounds fine, and every existing check passes.
+`_warn_if_source_outside_prompt_space` now catches it, and it is asserted in both
+directions — it must fire on a pre-9/5 source and stay silent on a current one.
+
+The consequence for PILOT02: **a yoke source must be recorded with the current
+controller.** Any session predating 9/5 is unusable as one regardless of its quality, so
+this is not a bar PILOT02 has to clear so much as a reason no earlier session can.
+
 ---
 
 ## 5. Decisions already made — do not relitigate
@@ -301,7 +316,7 @@ settings**.
 | `src/music_engine.py` | `build_prompt` — the controller |
 | `src/library_engine.py` | the default audio path |
 | `src/analyze_session.py` | outcomes, coupling, event-locked |
-| `scripts/run_tests.py` | 44 checks, one command |
+| `scripts/run_tests.py` | 51 checks, one command |
 | `scripts/verify_claims.py` | regenerates all 17 manuscript numbers |
 | `scripts/estimator_sweep.py` | latency vs information rate, needs a labelled session |
 | `scripts/controller_replay.py` | replays a recording through the real controller; chatter counts |

@@ -469,6 +469,73 @@ def _session_args(tmp: str, **overrides):
     return args
 
 
+def test_sham_path(s: Suite) -> None:
+    """
+    The sham arm, which is half the registered design and has never run.
+
+    Nothing here was covered before 9/5. check_replay_fidelity carried a --self-test
+    that validates it catches the known -7.06 s origin bug, and the suite never ran it -
+    so the script that turns a one-off manual check into a standing assertion was itself
+    not standing. residual_contingency's positive control was likewise unasserted.
+
+    The third check is new and catches a study-invalidating mistake that nothing would
+    have reported: yoking to a schedule the current controller cannot produce. Removing
+    the trend suffix shrank the reachable prompt space from 20 strings to 5, which
+    retroactively disqualified every session on disk as a yoke source in a way unrelated
+    to chatter or to the origin bias. A replay of such a schedule is faithful, the
+    library still holds the segments, and the audio sounds fine - the arms simply draw
+    from different prompt spaces, which is the one thing yoking exists to prevent.
+    """
+    import live_music
+    from music_engine import build_prompt as bp
+
+    src = sorted(glob.glob(os.path.join(_ROOT, "sessions", "PILOT*")))
+    if not src:
+        s.skip("sham path", "no PILOT session to yoke from")
+        return
+
+    schedule = live_music._load_yoked_prompts(src[-1])
+    s.check("a yoke schedule loads and is non-trivial", len(schedule) > 10,
+            f"{len(schedule)} entries from {os.path.basename(src[-1])}")
+
+    # The prompt-space guard must fire on a pre-9/5 source and must NOT fire on a
+    # schedule built from the current controller. A guard that always fires is noise;
+    # one that never fires is decoration.
+    n_bad = live_music._warn_if_source_outside_prompt_space(src[-1], schedule)
+    s.check("prompt-space guard fires on a pre-suffix-removal source", n_bad > 0,
+            f"{n_bad} of {len(schedule)} entries unreachable")
+
+    current = [(float(i), bp(float(z), -1.0))
+               for i, z in enumerate(np.arange(-3, 3.01, 0.1))]
+    n_ok = live_music._warn_if_source_outside_prompt_space("synthetic", current)
+    s.check("prompt-space guard is silent on a current-controller schedule", n_ok == 0,
+            f"{n_ok} unreachable of {len(current)}")
+
+    # Lookup must be a step function that holds the last decision, not interpolate or
+    # run off the end - the sham plays to its own duration, not the source's.
+    first_t = schedule[0][0]
+    s.check("yoked lookup holds before the first entry",
+            live_music._yoked_prompt_at(schedule, first_t - 10.0) == schedule[0][1])
+    s.check("yoked lookup holds past the end",
+            live_music._yoked_prompt_at(schedule, schedule[-1][0] + 1e6) == schedule[-1][1])
+
+    # THE POSITIVE CONTROL, asserted rather than printed. residual_contingency.py is a
+    # report and always exits 0, so running it as a subprocess validator would have been
+    # a check that cannot fail. An adaptive session must register as contingent - if the
+    # detector cannot see contingency where it certainly exists, a sham that leaks
+    # contingency would pass silently, and that is the measurement the sham arm rests on.
+    import residual_contingency as rc
+
+    (z_t, z), (seg_t, seg_rung) = rc.load_session(src[-1])
+    if z.size < 100 or seg_rung.size < 5:
+        s.skip("residual contingency positive control", "pilot lacks z or a schedule")
+        return
+    r = rc.score(z_t, z, seg_t, seg_rung, target_z=rc.session_target_z(src[-1]))
+    s.check("an adaptive session registers as contingent", r["excess_z"] > 3.0,
+            f"excess {r['excess_z']:+.1f} sd, match {100 * r['match']:.1f}% "
+            f"vs chance {100 * r['chance']:.1f}%")
+
+
 def test_session_failure_recording(s: Suite) -> None:
     """A crashed worker must record FAILED and must not record complete."""
     import argparse as ap  # noqa: F401
@@ -670,6 +737,7 @@ def main() -> int:
     test_streaming_estimator(s)
 
     s.section("2. SESSION - a crash must never look like a success")
+    test_sham_path(s)
     test_session_failure_recording(s)
     test_retuned_estimator_guard(s)
     test_baseline_abort(s)
@@ -687,6 +755,11 @@ def main() -> int:
     # unreproducible papers.
     run_validator(s, "preprint claims still reproduce", "verify_claims.py",
                   ["--quick"] if args.quick else [])
+    # Both halves of sham validity: faithfully coupled to its SOURCE, and decoupled
+    # from the LISTENER. Neither implies the other, and neither was run by this suite.
+    run_validator(s, "replay fidelity catches the origin bug",
+                  "check_replay_fidelity.py", ["--self-test"])
+
     if args.quick:
         s.skip("coupling ground truth", "--quick")
     else:
