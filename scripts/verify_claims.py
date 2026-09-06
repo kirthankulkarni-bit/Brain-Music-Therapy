@@ -199,6 +199,40 @@ def claim_alpha_validation_ratio() -> tuple[float, str]:
     return float(10 ** (a[closed].mean() - a[~closed].mean())),         f"{closed.sum()} closed / {(~closed).sum()} open windows"
 
 
+def claim_alpha_ratio_at_deployed_rejection() -> tuple[float, str]:
+    """
+    The eyes-closed alpha ratio at the rejection threshold the pipeline actually uses.
+
+    The headline 2.13x is computed from the alpha session's logged windows, and that
+    session was recorded at 150 uV - a threshold this project abandoned, in response to
+    the very sensitivity analysis that measures it, in favour of 350 uV. At 150 uV the
+    conditions retain 72 open against 142 closed windows, a 2:1 imbalance that inflates
+    the contrast by stripping blink power from the open condition only.
+
+    At the deployed 350 uV the conditions are near-balanced (1.05) and the ratio is
+    1.90x. Both numbers are real; the second is the one the deployed pipeline would
+    produce, so it is the one to lead with and it needs to be regenerated rather than
+    remembered.
+    """
+    from alpha_sensitivity import ratio_at_threshold
+
+    return ratio_at_threshold(350.0)
+
+
+def claim_alpha_effect_survives_every_threshold() -> tuple[float, str]:
+    """
+    Fraction of rejection thresholds at which the eyes-closed effect stays significant.
+
+    This is the claim that matters more than any single ratio: the effect is not
+    manufactured by the rejection rule. It must be 1.0 - significant at every threshold
+    swept, including no rejection at all.
+    """
+    from alpha_sensitivity import significance_across_thresholds
+
+    frac, detail = significance_across_thresholds()
+    return frac, detail
+
+
 def claim_channel_mismatch_af() -> tuple[float, str]:
     """Eyes-closed alpha ratio on AF7/AF8 - the channels the study actually uses."""
     from eeg_features import FeatureConfig, FeatureExtractor
@@ -620,6 +654,8 @@ CLAIMS = {
     "laptop between-run max/min":         (claim_laptop_between_run_variance, 1.96, 0.02),
     "autocorrelation overstatement":      (claim_autocorrelation_overstatement, 6.4, 0.05),
     "DEAP montages positive (of 7)":      (claim_deap_montages_positive,     7,     0),
+    "alpha ratio at deployed 350 uV":     (claim_alpha_ratio_at_deployed_rejection, 1.90, 0.02),
+    "effect survives every threshold":    (claim_alpha_effect_survives_every_threshold, 1.0, 0.0),
 }
 
 

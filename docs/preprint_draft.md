@@ -401,6 +401,32 @@ frontal channels, which lack the occipital dominance of classic alpha demonstrat
 This is evidence the montage records cortical activity rather than amplifier noise
 (Figure 0).
 
+**That ratio is threshold-dependent, and the window counts above show why.** 151 closed
+against 76 open is a 2:1 imbalance, because artefact rejection removes eyes-open windows
+preferentially — blinks occur with the eyes open — and removing blink power from one
+condition only inflates the contrast. This session was recorded at a 150 µV
+peak-to-peak threshold; the pipeline now rejects at **350 µV**, a value changed in
+response to this very analysis and fixed in the pre-registration.
+
+Swept across thresholds on the same recording (`scripts/alpha_sensitivity.py`):
+
+| reject p2p > | n open | n closed | imbalance | ratio | p |
+|---|---|---|---|---|---|
+| 150 µV (as recorded) | 72 | 142 | 1.97 | **2.49×** | 1.4 × 10⁻³⁰ |
+| 300 µV | 142 | 158 | 1.11 | 1.94× | 1.0 × 10⁻²⁷ |
+| **350 µV (deployed)** | 151 | 158 | **1.05** | **1.90×** | 3.9 × 10⁻²⁷ |
+| 600 µV | 153 | 158 | 1.03 | 1.88× | 1.3 × 10⁻²⁶ |
+| none | 157 | 158 | 1.01 | 1.38× | 6.0 × 10⁻¹⁷ |
+
+**The effect survives every threshold, including no rejection at all**, so it is not
+manufactured by the rejection rule — only its magnitude is. At the deployed threshold,
+where the two conditions retain almost equal numbers of windows, the ratio is **1.90×**.
+That is the defensible figure to lead with, and it remains inside the expected range.
+
+The two extremes bound the truth from opposite directions: strict rejection inflates by
+stripping blink power from the open condition, no rejection deflates by leaving broadband
+blink energy in it.
+
 **Index construct validity.** Two separable claims underlie the measurement: that the
 electrodes record cortex, and that log(beta/alpha) measures *arousal*. The second was
 inherited from the literature and untested here, so we tested it on DEAP, which pairs
