@@ -469,6 +469,76 @@ def _session_args(tmp: str, **overrides):
     return args
 
 
+def test_registered_analysis_conformance(s: Suite) -> None:
+    """
+    Does the code implement the analysis the pre-registration registered?
+
+    Everything else in this suite asks whether the code is correct. This asks whether it
+    is the code that was PROMISED - a different question, and the one a pre-registration
+    exists to make answerable. The plan is frozen and hash-checked, so it cannot drift;
+    the code can, and nothing connected the two.
+
+    Three commitments are checked, all quoted from analysis_plan.md section 3.
+
+    The registered outcomes must be produced. Primary is "mean z across valid
+    intervention windows"; secondary are time in band, time to target, ACI peak r and
+    lag, and the event-locked response. An outcome the analysis does not compute is
+    discovered when the data is in.
+
+    The event-locked diagnostics must be PRINTED beside the effect. The plan says so
+    explicitly - "analyze_session.py prints elr_pre_slope_z_per_s and
+    elr_decays_after_onset beside the effect for exactly this reason" - because the
+    effect is uninterpretable without them. That is a behavioural promise, not an
+    internal detail.
+
+    And rejection rate and underruns must NOT be contrasts. The plan puts them under
+    "Not outcomes": they are signal-quality metrics, "not dependent variables and will
+    not be tested for an effect". Adding either to CONTRASTS would silently convert a
+    reported diagnostic into an outcome the study never registered.
+    """
+    import io
+    from contextlib import redirect_stdout
+
+    from analyze_session import CONTRASTS, basic_metrics, report
+    from session_logger import load_session, real_sessions
+
+    found = real_sessions(os.path.join(_ROOT, "sessions", "PILOT*"))
+    if not found:
+        s.skip("registered analysis conformance", "no pilot session")
+        return
+
+    metrics = basic_metrics(load_session(found[-1]))
+    for key in ("z_mean", "time_in_band_fraction", "time_to_target_s"):
+        s.check(f"registered outcome {key} is computed", key in metrics)
+
+    # The primary outcome is mean z, NOT time in band - the plan chose one over the
+    # other deliberately, at a stated cost of roughly 3x in detectable effect.
+    s.check("the primary outcome is the one contrasted", "z_mean" in CONTRASTS,
+            f"contrasts: {sorted(CONTRASTS)}")
+
+    not_outcomes = [k for k in CONTRASTS
+                    if "rejection" in k or "underrun" in k or "clipped" in k]
+    s.check("signal-quality metrics are not contrasted", not not_outcomes,
+            f"would test an unregistered outcome: {not_outcomes}"
+            if not_outcomes else "rejection and underruns stay descriptive")
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        full = report(found[-1])
+    printed = buf.getvalue()
+
+    for key in ("aci_peak_r", "aci_peak_lag_s", "elr_effect_z"):
+        s.check(f"registered outcome {key} is computed", key in full)
+
+    # The promise is that the reader SEES these, not merely that they exist in a dict.
+    s.check("the event-locked confound diagnostics are printed beside the effect",
+            "pre-onset slope" in printed and
+            ("DECAYS" in printed or "at onset" in printed),
+            "pre-onset slope and the onset/late comparison both appear")
+    s.check("the report warns that the event-locked effect needs the contrast",
+            "confound" in printed.lower() or "not interpretable" in printed.lower())
+
+
 def test_primary_contrast(s: Suite) -> None:
     """
     The adaptive - sham contrast: the code that produces the paper's headline result.
@@ -1116,6 +1186,7 @@ def main() -> int:
     test_streaming_estimator(s)
 
     s.section("2. SESSION - a crash must never look like a success")
+    test_registered_analysis_conformance(s)
     test_primary_contrast(s)
     test_cortex_gate_ground_truth(s)
     test_synthetic_sessions_are_excluded(s)
