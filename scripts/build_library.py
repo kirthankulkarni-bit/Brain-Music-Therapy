@@ -4,8 +4,14 @@ build_library.py - render every prompt the control loop can ever emit, offline.
 WHY THIS IS A COMPLETE SOLUTION AND NOT A DEGRADED FALLBACK
 
 The latency work concluded that live generation is infeasible: MusicGen runs
-1.14-6.3x slower than realtime across every machine and backend measured, including
-a datacenter T4 (benchmarks/, docs/results_latency.md). The obvious reading is that
+1.05-6.27x slower than realtime across every machine and backend measured, including
+a datacenter T4 (benchmarks/, docs/results_latency.md).
+
+(That lower bound read 1.14x until 2026-09-06, against a repository whose own best
+measured factor is 1.05x and has been an asserted claim since 8/16. verify_claims.py's
+docstring uses "the manuscript says 1.14x and the repository says 1.05x" as its
+motivating example of drift; the example was live, in this file, unnoticed. Both bounds
+are now asserted, over every benchmark cell on disk.) The obvious reading is that
 a precomputed library is a compromise - you give up open-ended generation to get
 realtime response.
 
