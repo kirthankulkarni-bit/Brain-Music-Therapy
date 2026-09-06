@@ -11,7 +11,7 @@ Verify the state is still current before trusting anything below:
 python scripts/run_tests.py && python scripts/verify_claims.py
 ```
 
-Expected: **79 passed, 0 failed** and **37 claims reproduce**. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
+Expected: **86 passed, 0 failed** and **37 claims reproduce**. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
 something changed after this was written and the numbers here are stale.
 
 ---
@@ -346,7 +346,7 @@ settings**.
 | `src/music_engine.py` | `build_prompt` — the controller |
 | `src/library_engine.py` | the default audio path |
 | `src/analyze_session.py` | outcomes, coupling, event-locked |
-| `scripts/run_tests.py` | 79 checks, one command |
+| `scripts/run_tests.py` | 86 checks, one command |
 | `scripts/verify_claims.py` | regenerates all 17 manuscript numbers |
 | `scripts/estimator_sweep.py` | latency vs information rate, needs a labelled session |
 | `scripts/controller_replay.py` | replays a recording through the real controller; chatter counts |

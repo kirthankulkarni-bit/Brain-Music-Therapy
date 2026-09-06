@@ -476,6 +476,55 @@ CONTRASTS = {
 }
 
 
+def contrast_of(rows: List[Dict]) -> Dict:
+    """
+    The adaptive - sham contrast, as data rather than as printed text.
+
+    Separated from compare() on 2026-09-06 so the study's PRIMARY ANALYSIS can be
+    asserted. compare() had no test and its contrast branch had never executed on any
+    input, because no adaptive/sham pair exists yet - only the early return for "no pair
+    here" had ever run. This is the code that produces the paper's headline result, once,
+    at the end, on data that costs twenty sessions to collect.
+
+    THE SIGN FOR z_mean IS DERIVED, NOT FIXED. It used to be hardcoded to -1: adaptive
+    should sit BELOW sham, which is right for a relaxation target and backwards for a
+    focus one. build_prompt is deliberately arm-agnostic - "the same function serves a
+    relaxation arm (target -1.0) and a focus arm (target +1.0) with no branching" - so
+    the analysis was the only part of the loop that assumed a direction. The registered
+    study is relaxation-only, so this was latent rather than live, but a focus session
+    would have had its result reported with the sign flipped.
+    """
+    by_condition: Dict[str, List[Dict]] = {}
+    for row in rows:
+        by_condition.setdefault(str(row.get("condition")), []).append(row)
+    adaptive = by_condition.get("adaptive") or by_condition.get("pilot") or []
+    sham = by_condition.get("sham") or []
+    if not adaptive or not sham:
+        return {"adaptive_n": len(adaptive), "sham_n": len(sham), "contrasts": {}}
+
+    targets = [r.get("target_z", -1.0) for r in adaptive
+               if isinstance(r.get("target_z"), (int, float))]
+    target_z = float(np.mean(targets)) if targets else -1.0
+
+    out: Dict = {"adaptive_n": len(adaptive), "sham_n": len(sham),
+                 "target_z": target_z, "contrasts": {}}
+    for key, (sign, expectation) in CONTRASTS.items():
+        if key == "z_mean":
+            # Toward the target, whichever side of baseline it is on.
+            sign = -1 if target_z < 0 else +1
+        a = float(np.nanmean([r.get(key, np.nan) for r in adaptive]))
+        s_ = float(np.nanmean([r.get(key, np.nan) for r in sham]))
+        if not (np.isfinite(a) and np.isfinite(s_)):
+            continue
+        diff = a - s_
+        out["contrasts"][key] = {
+            "adaptive": a, "sham": s_, "difference": diff,
+            "sign_supporting": sign, "supports": bool((diff * sign) > 0),
+            "expectation": expectation,
+        }
+    return out
+
+
 def compare(dirs: List[str]) -> None:
     """
     Side-by-side arms, plus the contrasts that are actually interpretable.
@@ -504,14 +553,11 @@ def compare(dirs: List[str]) -> None:
             cells += f"{value:>18.3f}" if isinstance(value, (int, float)) else f"{str(value):>18}"
         print(f"  {key:<26}{cells}")
 
-    by_condition: Dict[str, List[Dict]] = {}
-    for row in rows:
-        by_condition.setdefault(str(row.get("condition")), []).append(row)
+    result = contrast_of(rows)
+    adaptive = [r for r in rows if str(r.get("condition")) in ("adaptive", "pilot")]
+    sham = [r for r in rows if str(r.get("condition")) == "sham"]
 
-    adaptive = by_condition.get("adaptive") or by_condition.get("pilot") or []
-    sham = by_condition.get("sham") or []
-
-    if not adaptive or not sham:
+    if not result["contrasts"]:
         print()
         print("  No adaptive/sham pair here, so no contrast is computed.")
         print("  The yoked sham is what makes any of these numbers causal; without it")
@@ -522,14 +568,9 @@ def compare(dirs: List[str]) -> None:
     print()
     print("  CONTRAST (adaptive - sham)")
     print("  " + "-" * 74)
-    for key, (sign, expectation) in CONTRASTS.items():
-        a = np.nanmean([r.get(key, np.nan) for r in adaptive])
-        s = np.nanmean([r.get(key, np.nan) for r in sham])
-        if not (np.isfinite(a) and np.isfinite(s)):
-            continue
-        diff = a - s
-        supports = (diff * sign) > 0
-        print(f"    {key:<24} {diff:+8.3f}   {'supports' if supports else 'against '} - {expectation}")
+    for key, c in result["contrasts"].items():
+        print(f"    {key:<24} {c['difference']:+8.3f}   "
+              f"{'supports' if c['supports'] else 'against '} - {c['expectation']}")
 
     n_a, n_s = len(adaptive), len(sham)
     print()

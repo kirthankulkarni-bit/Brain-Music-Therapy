@@ -469,6 +469,70 @@ def _session_args(tmp: str, **overrides):
     return args
 
 
+def test_primary_contrast(s: Suite) -> None:
+    """
+    The adaptive - sham contrast: the code that produces the paper's headline result.
+
+    Until 9/6 it had no test and its contrast branch had never executed on any input.
+    Zero adaptive/sham pairs exist, so the only path ever exercised was the early return
+    for "no pair here". This runs once, at the end, on data that costs twenty sessions to
+    collect, and a sign error in it would invert the study's conclusion while producing a
+    perfectly plausible table.
+
+    Ground truth is constructed so the right answer is obvious: an adaptive arm placed
+    nearer the target than the sham must read as supporting, and the same arms swapped
+    must read as opposing. A contrast function that always says "supports" passes the
+    first half alone, which is why both directions are checked.
+    """
+    from analyze_session import CONTRASTS, contrast_of
+
+    def arm(condition, z_mean, target=-1.0, in_band=0.5):
+        return {"condition": condition, "target_z": target, "z_mean": z_mean,
+                "time_in_band_fraction": in_band, "elr_effect_z": 0.0, "aci_peak_r": 0.0}
+
+    # RELAXATION (target -1.0): adaptive nearer the target means LOWER z.
+    r = contrast_of([arm("adaptive", -0.80), arm("sham", -0.20)])
+    s.check("a contrast is computed for an adaptive/sham pair",
+            bool(r["contrasts"]), f"adaptive_n={r['adaptive_n']} sham_n={r['sham_n']}")
+    zc = r["contrasts"]["z_mean"]
+    s.check("relaxation: adaptive below sham reads as supporting",
+            zc["supports"] and abs(zc["difference"] - (-0.60)) < 1e-9,
+            f"difference {zc['difference']:+.2f}, supports={zc['supports']}")
+
+    # The same data with the arms swapped must read the other way. Without this a
+    # function that returned supports=True unconditionally would pass.
+    r2 = contrast_of([arm("adaptive", -0.20), arm("sham", -0.80)])
+    s.check("relaxation: adaptive above sham reads as opposing",
+            not r2["contrasts"]["z_mean"]["supports"],
+            f"difference {r2['contrasts']['z_mean']['difference']:+.2f}")
+
+    # FOCUS (target +1.0): the direction inverts. The sign used to be hardcoded to -1,
+    # so a focus session would have had its result reported backwards.
+    r3 = contrast_of([arm("adaptive", +0.80, target=+1.0),
+                      arm("sham", +0.20, target=+1.0)])
+    s.check("focus: adaptive above sham reads as supporting",
+            r3["contrasts"]["z_mean"]["supports"],
+            f"target {r3['target_z']:+.1f}, "
+            f"difference {r3['contrasts']['z_mean']['difference']:+.2f}")
+
+    # time_in_band is direction-free: more is better under either target.
+    r4 = contrast_of([arm("adaptive", -0.8, in_band=0.60),
+                      arm("sham", -0.8, in_band=0.30)])
+    s.check("more time in band reads as supporting",
+            r4["contrasts"]["time_in_band_fraction"]["supports"],
+            f"difference {r4['contrasts']['time_in_band_fraction']['difference']:+.2f}")
+
+    # A single arm must yield no contrast rather than a fabricated one.
+    r5 = contrast_of([arm("adaptive", -0.8)])
+    s.check("one arm alone yields no contrast", not r5["contrasts"],
+            f"adaptive_n={r5['adaptive_n']} sham_n={r5['sham_n']}")
+
+    # Every contrast the study reports must carry a stated direction, decided in advance.
+    s.check("every reported contrast has a pre-stated direction",
+            all(sign in (-1, +1) and text for sign, text in CONTRASTS.values()),
+            f"{len(CONTRASTS)} contrasts")
+
+
 def test_cortex_gate_ground_truth(s: Suite) -> None:
     """
     The "is this cortex" gate, against the case it was built from.
@@ -1052,6 +1116,7 @@ def main() -> int:
     test_streaming_estimator(s)
 
     s.section("2. SESSION - a crash must never look like a success")
+    test_primary_contrast(s)
     test_cortex_gate_ground_truth(s)
     test_synthetic_sessions_are_excluded(s)
     test_contact_gate(s)
