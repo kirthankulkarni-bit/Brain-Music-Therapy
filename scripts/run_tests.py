@@ -1146,8 +1146,14 @@ def main() -> int:
 
     if args.quick:
         s.skip("coupling ground truth", "--quick")
+        s.skip("event-locked ground truth", "--quick")
     else:
         run_validator(s, "coupling ground truth", "validate_coupling.py", [])
+        # The other estimator feeding the primary contrast. It had no ground truth until
+        # 9/6, carrying exactly the exposure that let the coupling index ship with an
+        # inverted sign: a signed quantity, a direction-folding step, and a permutation
+        # null, none of it checked against a case with a known answer.
+        run_validator(s, "event-locked ground truth", "validate_event_locked.py", [])
 
     print(f"\n{'=' * 74}")
     print(f"  {s.passed} passed, {len(s.failed)} failed, {len(s.skipped)} skipped")

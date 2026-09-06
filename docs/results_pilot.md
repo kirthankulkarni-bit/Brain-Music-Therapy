@@ -272,3 +272,46 @@ python scripts/power_analysis.py --sims 3000
 ```bash
 python scripts/ladder_policy.py --sessions "sessions/PILOT01_*"
 ```
+
+---
+
+## The event-locked effect, calibrated against known ground truth (added 2026-09-06)
+
+PILOT01's event-locked response is **+0.412 z (p = 0.107)**, and this document already
+warned that it is confounded by its own trigger: a rung change happens *because* z moved,
+so z continuing to move afterwards looks like a response. That was an argument. It is now
+a measurement.
+
+`scripts/validate_event_locked.py` builds sessions whose answer is known and runs the same
+estimator over them. Two are the relevant references — a **responder**, where z genuinely
+steps the way the music asked, and a **triggered** session with *no audio effect at all*,
+where a rung change is emitted whenever z crosses a boundary exactly as the real
+controller does.
+
+| session | effect | pre-slope (z/s) | at onset | late half | peaks then decays |
+|---|---|---|---|---|---|
+| synthetic responder (real effect) | +1.503 | +0.0012 | +0.725 | **+1.557** | no |
+| synthetic triggered (no effect) | +0.435 | +0.0573 | +0.606 | +0.378 | no |
+| **PILOT01 (measured)** | **+0.412** | **+0.1292** | +1.031 | +0.182 | **yes** |
+
+Two things follow, and neither is comfortable.
+
+**PILOT01's effect size is indistinguishable from the pure confound.** +0.412 against
++0.435 for a session constructed to contain no audio effect whatsoever.
+
+**Its trigger signature is stronger than the pure confound's.** The pre-window slope is
++0.1292 z/s, against +0.0573 for the synthetic confound and +0.0012 for a genuine
+response — 108× the responder. And it is the only one of the three whose curve peaks at
+onset and decays, which is the shape a trailing excursion makes and the opposite of the
+shape a real response makes (the responder rises *after* onset, from +0.725 to +1.557).
+
+So the honest reading of +0.412 is not "a promising effect that missed significance". It
+is **a textbook trigger artefact**, and the estimator's own diagnostics say so without
+needing the sham arm to prove it. That the sham arm is still required is unchanged; what
+has changed is that the within-arm number now has a calibrated interpretation rather than
+a caveat.
+
+The estimator itself is sound: it recovers +1.503 on a known responder, −1.467 on a known
+anti-responder, and +0.011 (p = 0.573) on an unrelated session. The sign convention is
+correct in both directions, which is the check the coupling index did not have before its
+own sign bug was found.
