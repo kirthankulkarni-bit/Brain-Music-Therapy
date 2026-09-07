@@ -141,12 +141,15 @@ it is invisible in systems that report only model inference time.
 ### 2.2 The controller emits a finite set of prompts
 
 `build_prompt(z, target_z, trend)` is a pure function. It selects one of five energy
-rungs and optionally appends one of three trend suffixes, so its range is at most twenty
-strings, and it cannot emit anything else. §4 depends on this.
+rungs, so its range is exactly five strings and it cannot emit anything else. §4 depends
+on this. (Until 2026-09-05 it also appended one of three trend suffixes, giving twenty
+reachable prompts; the suffix was removed because the slope it gated on is smaller than
+the noise of the estimator measuring it.)
 
-The design applies the iso-principle: the prompt is not set to the target state but to
-one rung from the participant's current state in the direction of the target `[CITE:
-iso-principle in music therapy]`.
+The design applies the **iso-principle** (Altshuler, 1948): the prompt is not set to the
+target state but to one rung from the participant's current state in the direction of the
+target — match first, then lead. Dropping an aroused listener straight into a sparse
+drone is the failure mode the principle exists to avoid.
 
 **The reachable set is smaller than the designed set, and we report the measured figure
 rather than the intended one.** Because the controller always moves exactly one rung
@@ -629,14 +632,31 @@ the regime in which that study found any effect at all.
 
 We do not think this invalidates the approach, but the argument must be made rather than
 assumed. Operant neurofeedback asks the participant to perceive a contingency and learn
-self-regulation, which is where the delay constraint is derived. This intervention asks
-nothing of the participant, who listens passively while the music tracks their state;
-the proposed mechanism is the iso-principle, mood induction by matching and gradually
-leading affect, which does not obviously require perceived agency `[CITE: iso-principle
-mechanism]`. **Whether a therapeutic effect survives a 6.5 s delay is an open empirical
-question, and it is not one this work answers.** It is the most important threat to the
-approach and should be tested directly — for example by manipulating delay
-experimentally.
+self-regulation, and that is where the delay constraint is derived — if the contingency
+is the mechanism, breaking it with delay should break the effect, which is what Asai et
+al. observed.
+
+This intervention asks nothing of the participant. The proposed mechanism is the
+iso-principle, and the evidence for it comes from studies with **no contingency at all**.
+Starcke, Mayr & von Georgi (2021) randomised 107 participants to four fixed music
+sequences after a sadness induction; the iso sequence (sad then happy) produced higher
+positive affect and valence and lower negative affect than the alternatives (η² = 0.08
+and 0.09), with participants listening **passively to a pre-set sequence**. Starcke & von
+Georgi (2024) replicate the direction against compensatory listening at d = 0.52. Whatever
+carries that effect, it is not a perceived contingency, because there was none to
+perceive.
+
+**That argument has a sharp edge, and we state it rather than leave it for a reviewer.**
+If matching-then-leading works at these effect sizes with a fixed playlist and no feedback
+whatsoever, then the burden on a closed-loop system is not to beat silence — it is to beat
+a fixed playlist. The yoked sham is exactly that comparison: identical music, identical
+sequence, contingency broken. So the design already asks the right question, and a null
+contrast would be informative rather than merely disappointing.
+
+**Whether a therapeutic effect survives a 6.5 s delay is an open empirical question, and
+it is not one this work answers.** It is the most important threat to the approach and
+should be tested directly — for example by manipulating delay experimentally, which the
+architecture in §4 makes cheap.
 
 **The controller is narrower than designed.** Only rungs 1–3 are reachable, one rung
 accounted for 96% of the pilot, and the trend suffix cannot fire after calibration. The
@@ -729,7 +749,31 @@ remains unread behind a paywall. URLs accessed 2026-08-28, re-checked 2026-09-06
    abolished it, and participants were unaware of the delay. This is the strongest
    single threat to the present approach and §8 states it as such.
 
-`[CITE: iso-principle in music therapy]` — needed for §2.2 and §8.
+7. **The past, present and future of psychiatric music therapy.** I. M. Altshuler,
+   *American Journal of Psychiatry* (1948). The origin of the iso-principle: match the
+   patient's present state first, then lead it. Cited in §2.2.
+
+8. **Emotion Modulation through Music after Sadness Induction — The Iso Principle in a
+   Controlled Experimental Study.** Katrin Starcke, Johanna Mayr & Richard von Georgi,
+   *International Journal of Environmental Research and Public Health* (2021).
+   PMC8656869 (open access).
+   n = 107, randomised to four fixed sequences after a film-clip sadness induction. The
+   iso sequence gave higher positive affect and valence and lower negative affect,
+   η² = 0.08 and 0.09. **Passive listening, no feedback and no contingency** — which is
+   what makes it the right evidence for §8. Note the effect appeared in female
+   participants and not male, a moderator this study is not powered to address.
+
+9. **Music listening according to the iso principle modulates affective state.** Katrin
+   Starcke & Richard von Georgi, *Musicae Scientiae* (2024).
+   doi:10.1177/10298649231175029
+   n = 59, iso versus compensatory listening, d = 0.52 on negative affect. Also passive.
+
+10. **Personalised affect-regulation playlists: a pre-registered experimental test of the
+    iso principle in the general population.** Xanthe Lowe-Brown, Solange Glasser, Greg
+    Wadley & Peter Koval, *Musicae Scientiae* (2026). doi:10.1177/10298649261421187
+    A pre-registered test in a non-clinical sample. **Not yet read in full** — obtain
+    before submission, since a pre-registered null in the general population would bear
+    directly on §8's mechanism argument.
 
 ### Outstanding literature work
 
