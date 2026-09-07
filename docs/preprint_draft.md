@@ -59,9 +59,9 @@ must integrate over time to get a usable estimate at all.
 generation latency is a property of the model class rather than an implementation detail.
 
 And delay is not a cosmetic concern. In neurofeedback, comparing 0 s, 1 s and 20 s
-feedback delays, real-time feedback improved performance where delayed feedback did not,
-and delays of about one second may already suffice to disturb the effect (Sato et al.,
-2022) `[VERIFY author list]`. The mechanism offered — sense of agency, and the forward
+feedback delays, **the feedback effect was observed only in the no-delay condition** —
+a one-second delay was enough to abolish it, and participants were unaware the delay had
+been inserted (Asai, Hamamoto, Kashihara & Imamizu, 2022). The mechanism offered — sense of agency, and the forward
 model linking intention to outcome — is not specific to operant protocols.
 
 So the question this paper asks is not whether such a system can be built. It is: **when
@@ -617,10 +617,15 @@ speaks to whether the intervention benefits anyone. The planned study (§9) is a
 feasibility study and is likewise not powered to establish efficacy.
 
 **The end-to-end latency is far outside the neurofeedback regime.** With the library
-engine the worst case is 6.5 s — 5.5 s analysis plus one crossfade. The literature
-finds that delays near 1 s already disturb neurofeedback learning (Sato et al., 2022).
-Our budget is several times that, and the 8× audio improvement does not change the
-conclusion because **analysis lag is now 85% of the budget**.
+engine the worst case is 6.5 s — 5.5 s analysis plus one crossfade. The closest empirical
+evidence is not that delay degrades learning gradually: Asai et al. (2022) found the
+feedback effect **only** at zero delay, with one second sufficient to abolish it in a
+protocol where participants could not consciously detect the delay.
+
+Our budget is roughly **6.5× that**, and the retuned configuration (§3) still sits at
+3.7×. The 8× audio improvement does not change the conclusion, because **analysis lag is
+now 85% of the budget**. No configuration we measured, or can currently propose, reaches
+the regime in which that study found any effect at all.
 
 We do not think this invalidates the approach, but the argument must be made rather than
 assumed. Operant neurofeedback asks the participant to perceive a contingency and learn
@@ -670,42 +675,59 @@ from mechanism rather than a measurement.
 
 ## References
 
-**Author lists marked `[VERIFY]` were inferred from search metadata and must be checked
-against the papers before submission.** Every URL below was accessed 2026-08-28.
+**Author lists were verified against the papers on 2026-09-05/06**, except where noted.
+One was wrong: reference 6 was attributed to "Sato et al." and is Asai et al. Reference 2
+remains unread behind a paywall. URLs accessed 2026-08-28, re-checked 2026-09-06.
 
 1. **MindMelody: A Closed-Loop EEG-Driven System for Personalized Music Intervention.**
-   Zhang, Sun & Gu `[VERIFY]`, arXiv:2605.01235 (May 2026).
+   Yimeng Zhang, Yueru Sun, Haoyu Gu & Zhanpeng Jin, arXiv:2605.01235 (May 2026).
    https://arxiv.org/abs/2605.01235
    MusicGen-medium backbone, Transformer-GNN affect encoder, RAG-LLM planner. Describes
    itself as closed-loop real-time; reports no end-to-end latency, inference time, or
    hardware. **The central example for §1.**
 
 2. **Mind to Music: An EEG Signal-Driven Real-Time Emotional Music Generation System.**
-   Ran et al. `[VERIFY]`, International Journal of Intelligent Systems (2024).
-   https://onlinelibrary.wiley.com/doi/10.1155/int/9618884
+   Ran et al., *International Journal of Intelligent Systems* (2024), article 9618884.
+   doi:10.1155/int/9618884
+   **STILL UNREAD — the last item blocking the §1 claim.** Paywalled; Wiley returns 403
+   and no open-access copy exists (checked 2026-09-06, direct fetch and search). Its
+   title advertises real-time operation, so it is the most likely remaining
+   counterexample to C1. Needs institutional access or an author request. Do not submit
+   the latency-reporting claim without it.
 
 3. **A closed-loop, music-based brain-computer interface for emotion mediation.**
-   Ehrlich et al. `[VERIFY]`, PLOS ONE (2019). PMID 30883569.
-   https://pubmed.ncbi.nlm.nih.gov/30883569/
+   Stefan K. Ehrlich, Kat R. Agres, Cuntai Guan & Gordon Cheng, *PLOS ONE* (2019).
+   doi:10.1371/journal.pone.0213516, PMID 30883569.
+   **The partial counterexample to C1, and it must be cited as one.** Reports a 4 s
+   analysis window at 87.5% overlap giving a 0.5 s update rate, states that zero-phase
+   filtering was chosen to avoid delay, and describes tuning a feedback parameter against
+   perceived latency — but converts none of it into a signal-to-audio figure. Note that
+   Kat R. Agres is also an author of reference 4.
 
 4. **AI-Based Affective Music Generation Systems: A Review of Methods, and Challenges.**
-   Dash & Agres `[VERIFY]`, arXiv:2301.06890 (2023). https://arxiv.org/abs/2301.06890
+   Adyasha Dash & Kat R. Agres, arXiv:2301.06890 (2023).
+   https://arxiv.org/abs/2301.06890
    Field review. **Check directly whether latency is discussed** — the PDF did not
    extract cleanly, so the claim that the field does not report timing rests on the
    individual papers and on search results, not yet on this review.
 
 5. **Gesture2Music: A Low-Latency Real-Time Framework for Continuous Gesture-Driven
-   Music Generation.** `[VERIFY authors]`, arXiv:2511.00793.
+   Music Generation.** Rathinaraja Jeyaraj, Barathi Subramanian, Kapilya Gangadharan &
+   Anand Paul, arXiv:2511.00793.
    https://arxiv.org/abs/2511.00793
    Reports ~25–30 ms inference, ~60–70 ms full-loop latency against a 100 ms interactive
    threshold. **The contrast case**: the practice exists in adjacent real-time music
    work.
 
 6. **Real-Time Detection and Feedback of Canonical Electroencephalogram Microstates:
-   Validating a Neurofeedback System as a Function of Delay.** Sato et al. `[VERIFY]`,
-   Frontiers in Systems Neuroscience (2022). https://doi.org/10.3389/fnsys.2022.786200
-   Tests 0 s / 1 s / 20 s feedback delay. Real-time improved performance where delayed
-   did not; cites prior work suggesting ~1 s may suffice to disturb the effect.
+   Validating a Neurofeedback System as a Function of Delay.** Tomohisa Asai, Takamasa
+   Hamamoto, Shiho Kashihara & Hiroshi Imamizu, *Frontiers in Systems Neuroscience*
+   (2022). doi:10.3389/fnsys.2022.786200
+   **Previously cited here as "Sato et al." — that attribution was wrong** and was
+   inferred from search metadata rather than the paper (corrected 2026-09-06).
+   Tests 0 s / 1 s / 20 s feedback delay and finds the effect **only** at 0 s; one second
+   abolished it, and participants were unaware of the delay. This is the strongest
+   single threat to the present approach and §8 states it as such.
 
 `[CITE: iso-principle in music therapy]` — needed for §2.2 and §8.
 

@@ -57,7 +57,7 @@ This is what makes the omission a gap rather than a convention.
 |---|---|---|
 | **Gesture2Music** `[VERIFY]`, arXiv:2511.00793 | gesture → music | ~25–30 ms inference, **60–70 ms full loop**, explicitly against a 100 ms interaction threshold |
 | **Designing Neural Synthesizers for Low-Latency Interaction** `[VERIFY]`, arXiv:2503.11562 | neural synthesis | latency as a first-class design constraint |
-| **Sato et al.** `[VERIFY]`, Front. Syst. Neurosci. (2022) | EEG neurofeedback | tests 0 s / 1 s / 20 s feedback delay; real-time improved performance, delayed did not |
+| **Asai, Hamamoto, Kashihara & Imamizu**, Front. Syst. Neurosci. (2022) — *previously miscited here as "Sato et al."* | EEG neurofeedback | tests 0 s / 1 s / 20 s feedback delay; the effect appears **only at 0 s**, one second abolishes it, and participants cannot detect the delay |
 | **Smetanin et al.** `[VERIFY]`, *Towards Zero-Latency Neurofeedback*, bioRxiv 424846 | EEG neurofeedback | least-squares FIR envelope estimation; explicit latency/accuracy trade-off |
 | **Real-time low-latency estimation of brain rhythms with DNNs** `[VERIFY]`, PMID 37683653 | EEG | TCN achieving >90% envelope correlation at **<10 ms** effective delay |
 
