@@ -644,10 +644,33 @@ microstates: the effect appeared only at zero delay, with one second enough to a
 and participants unable to consciously detect the delay that did so.
 
 Our budget is **13× the delay at which sustained alpha change had already disappeared**,
-and the retuned configuration of §3 still sits at 7×. The 8× audio improvement does not
-change this, because **analysis lag is now 85% of the budget**. No configuration we
-measured, or can currently propose, comes within an order of magnitude of the regime in
-which those studies found an effect.
+and the retuned configuration of §3 still sits at 5.5×. The 8× audio improvement does not
+change this, because **analysis lag is 85% of the budget**.
+
+**But the architecture has a floor, and it is inside the regime.** The delays in a
+streaming estimator are filter group delay and the smoother, and nothing else — no window
+centroid, no hop quantisation. At second order with τ = 0.1 s that is **0.189 s** of
+analysis path. The end-to-end figure then depends entirely on the crossfade:
+
+| analysis path | crossfade | end-to-end | vs the 500 ms result |
+|---|---|---|---|
+| deployed, 5.500 s | 1.00 s | 6.500 s | 13.0× |
+| retuned, 1.750 s | 1.00 s | 2.750 s | 5.5× |
+| streaming floor, 0.189 s | 1.00 s | 1.189 s | 2.4× |
+| streaming floor, 0.189 s | 0.25 s | **0.439 s** | **0.9× — inside** |
+
+Two things follow. **The claim that analysis is the dominant term is configuration-
+dependent, not architectural**: fix the analysis path and the crossfade becomes the
+binding constraint, inverting the decomposition this paper reports. And **reaching the
+neurofeedback regime is a measurement away rather than a redesign away** — it requires a
+streaming estimator, a crossfade near 0.25 s, and the dwell machinery of §2.3 to stop a
+lightly-smoothed index from chattering through it.
+
+What we have not shown is that it is *worth* reaching. Discriminability falls as the
+smoother shortens (§3), and no session has been run at these settings, so the honest
+statement is that the frontier is locatable and its cost is not yet measured. We name it
+because "the latency is too high" is a weaker and less useful claim than "here is the
+floor, here is what binds it, and here is what it would cost".
 
 We do not think this invalidates the approach, but the argument must be made rather than
 assumed. Operant neurofeedback asks the participant to perceive a contingency and learn

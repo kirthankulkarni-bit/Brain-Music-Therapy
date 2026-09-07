@@ -149,6 +149,33 @@ def claim_chatter_after() -> tuple[float, str]:
     return float(changes), f"replay of {z.size} windows"
 
 
+def claim_analysis_latency_floor() -> tuple[float, str]:
+    """
+    The lowest analysis-path latency any configuration in this architecture reaches.
+
+    The paper's headline is that the deployed 5.5 s analysis path is a configuration
+    rather than a floor. This is the floor: a second-order streaming estimator at
+    tau = 0.1 s, whose only delays are filter group delay and the smoother.
+
+    It matters because of what it makes the binding constraint. At 0.189 s the analysis
+    path is no longer 85% of the budget - the 1 s crossfade is - which inverts the
+    architecture's whole latency story and is the reason section 3 can state a frontier
+    rather than only a complaint.
+    """
+    from eeg_features import FeatureConfig, StreamingBandPower
+
+    cfg = FeatureConfig(sampling_rate=256.0)
+    best, where = float("inf"), ""
+    for order in (2, 4):
+        for tau in (0.1, 0.25, 0.5, 1.0):
+            total = StreamingBandPower(cfg, band="alpha", tau_seconds=tau,
+                                       order=order).latency_budget()[
+                "total_analysis_latency_s"]
+            if total < best:
+                best, where = total, f"streaming o{order}, tau={tau:g}"
+    return float(best), where
+
+
 def claim_slowest_realtime_factor() -> tuple[float, str]:
     """
     Worst realtime factor across every benchmark cell on disk.
@@ -698,6 +725,7 @@ CLAIMS = {
     "effect survives every threshold":    (claim_alpha_effect_survives_every_threshold, 1.0, 0.0),
     "slowest realtime factor measured":   (claim_slowest_realtime_factor,   6.27,   0.02),
     "PILOT01 dominant rung occupancy":    (claim_pilot_rung_occupancy,      0.959,  0.005),
+    "analysis-path latency floor":        (claim_analysis_latency_floor,    0.189,  0.005),
 }
 
 
