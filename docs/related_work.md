@@ -4,7 +4,7 @@ Compiled 2026-08-28 from a targeted search of arXiv and the neurofeedback litera
 Written to answer one question honestly: **after accounting for what already exists, what
 is left that is worth publishing?**
 
-Author lists marked `[VERIFY]` came from search metadata rather than the papers and must be
+Author lists were verified against the papers on 2026-09-05/06/07, except where a row says otherwise. Text below this line is retained from when they came from search metadata and must be
 checked before citation.
 
 ---
@@ -55,11 +55,12 @@ This is what makes the omission a gap rather than a convention.
 
 | work | domain | reports |
 |---|---|---|
-| **Gesture2Music** `[VERIFY]`, arXiv:2511.00793 | gesture → music | ~25–30 ms inference, **60–70 ms full loop**, explicitly against a 100 ms interaction threshold |
-| **Designing Neural Synthesizers for Low-Latency Interaction** `[VERIFY]`, arXiv:2503.11562 | neural synthesis | latency as a first-class design constraint |
+| **Gesture2Music** — Jeyaraj, Subramanian, Gangadharan & Paul, arXiv:2511.00793 | gesture → music | **30 ms inference** (verified); the 60–70 ms full-loop figure is from the full text and is *not* confirmed from the abstract — check before quoting |
+| **Designing Neural Synthesizers for Low-Latency Interaction** — Caspe, Shier, Sandler, Saitis & McPherson, arXiv:2503.11562 | neural synthesis | latency and jitter as first-class design constraints (BRAVE); no numeric figure in the abstract |
+| **Belinskaia, Smetanin, Lebedev & Ossadtchi**, *J. Neural Eng.* (2020), doi:10.1088/1741-2552/abc8d7 | **alpha-band** neurofeedback | immediate vs +250 ms vs +500 ms; sustained alpha change **negatively correlated with latency, and absent at 500 ms**. The most directly relevant delay evidence this project has — same rhythm, same closed loop |
 | **Asai, Hamamoto, Kashihara & Imamizu**, Front. Syst. Neurosci. (2022) — *previously miscited here as "Sato et al."* | EEG neurofeedback | tests 0 s / 1 s / 20 s feedback delay; the effect appears **only at 0 s**, one second abolishes it, and participants cannot detect the delay |
-| **Smetanin et al.** `[VERIFY]`, *Towards Zero-Latency Neurofeedback*, bioRxiv 424846 | EEG neurofeedback | least-squares FIR envelope estimation; explicit latency/accuracy trade-off |
-| **Real-time low-latency estimation of brain rhythms with DNNs** `[VERIFY]`, PMID 37683653 | EEG | TCN achieving >90% envelope correlation at **<10 ms** effective delay |
+| **Smetanin, Lebedev & Ossadtchi**, *Towards Zero-Latency Neurofeedback*, bioRxiv 10.1101/424846 | EEG neurofeedback | least-squares FIR envelope estimation; explicit latency/accuracy trade-off |
+| **Real-time low latency estimation of brain rhythms with deep neural networks**, *J. Neural Eng.* (2023), doi:10.1088/1741-2552/acf7f3, PMID 37683653 | EEG | TCN achieving >90% envelope correlation at **<10 ms** effective delay. *Author list not yet confirmed — PubMed blocks automated access.* |
 
 **Reported neurofeedback operating range: 300–1000 ms.** This project measured **5500 ms**
 for its analysis path alone — an order of magnitude outside it, and it did not know that
@@ -83,10 +84,10 @@ non-autoregressive model"). It is not speculative — it is published:
 
 | work | claim |
 |---|---|
-| **AudioLCM** `[VERIFY]`, arXiv:2406.00356 | latent consistency model, **333× faster than realtime** on a single 4090Ti |
-| **Music Consistency Models** `[VERIFY]`, arXiv:2404.13358 | consistency models for music generation |
-| **Musika!** `[VERIFY]`, arXiv:2208.08706 | fast infinite waveform music generation |
-| **Music2Latent** `[VERIFY]`, arXiv:2408.06500 | consistency autoencoders for latent audio |
+| **AudioLCM** — Liu, Huang, Liu, Cao, Wang, Cheng, Zheng & Zhao, arXiv:2406.00356 | latent consistency model, **333× faster than realtime** on a single 4090Ti (verified) |
+| **Music Consistency Models** — Fei, Fan & Huang, arXiv:2404.13358 | four sampling steps, **~1 s per minute of music** |
+| **Musika! Fast Infinite Waveform Music Generation** — Pasini & Schlüter, arXiv:2208.08706 | faster than realtime on a consumer **CPU**; no numeric factor in the abstract |
+| **Music2Latent: Consistency Autoencoders for Latent Audio Compression** — Pasini, Lattner & Fazekas, arXiv:2408.06500 (ISMIR 2024) | single-step reconstruction; no speed figure in the abstract |
 
 Non-autoregressive and consistency-model approaches reach faster-than-realtime generation
 today. A reviewer will ask why this system does not simply use one.

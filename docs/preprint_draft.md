@@ -9,7 +9,13 @@ system.*
 [analysis_plan.md](analysis_plan.md), frozen at tag `preregistration-v1`.
 
 Numbers in this draft are checked by `python scripts/verify_claims.py` (14/14 reproduce).
-Citations marked `[CITE: …]` are placeholders where a reference is needed and has not yet
+All `[CITE: …]` placeholders were resolved on 2026-09-05/07 and all author lists verified
+against the papers; one was wrong (reference 6 was attributed to "Sato et al." and is Asai
+et al.). Two items remain outstanding and are marked in the reference list: *Mind to
+Music* is paywalled and unread, and Lowe-Brown et al. (2026) has not been read in full.
+
+The paragraph below is retained from the drafting stage. Citations marked `[CITE: …]`
+were placeholders where a reference was needed and had not yet
 been selected — they are not claims awaiting support, they are known gaps.
 
 ---
@@ -30,7 +36,7 @@ Closed-loop EEG-driven music systems are an established and active line of work.
 have paired affect decoding with generative audio backbones (Zhang et al., 2026), built
 real-time emotional music generation from EEG (Ran et al., 2024), and used music as a
 feedback channel for emotion mediation in a BCI (Ehrlich et al., 2019); a 2023 review
-surveys the field (Dash & Agres, 2023) `[VERIFY author list]`. Building such a system is
+surveys the field (Dash & Agres, 2023). Building such a system is
 no longer novel, and this paper does not claim to.
 
 **What these systems do not report is how long their loop takes to close.**
@@ -45,7 +51,7 @@ decoding accuracy, and audio-quality or subjective-alignment metrics rather than
 The omission is not universal in real-time music research. Gesture2Music, a
 gesture-driven rather than EEG-driven system, reports 25–30 ms inference and 60–70 ms
 full-loop latency, explicitly against a 100 ms threshold for interactive use
-`[CITE: Gesture2Music, arXiv 2511.00793 — verify authors]`. The practice exists; it has
+(Jeyaraj, Subramanian, Gangadharan & Paul, arXiv:2511.00793). The practice exists; it has
 not crossed into the EEG case.
 
 It matters more in the EEG case, not less, for two reasons.
@@ -58,11 +64,15 @@ must integrate over time to get a usable estimate at all.
 **Generative audio models are autoregressive.** They emit audio a token at a time, so
 generation latency is a property of the model class rather than an implementation detail.
 
-And delay is not a cosmetic concern. In neurofeedback, comparing 0 s, 1 s and 20 s
-feedback delays, **the feedback effect was observed only in the no-delay condition** —
-a one-second delay was enough to abolish it, and participants were unaware the delay had
-been inserted (Asai, Hamamoto, Kashihara & Imamizu, 2022). The mechanism offered — sense of agency, and the forward
-model linking intention to outcome — is not specific to operant protocols.
+And delay is not a cosmetic concern. Training **parietal alpha** — the same rhythm this
+system measures — with visual neurofeedback delivered immediately, at +250 ms, or at
++500 ms, sustained post-training change was negatively correlated with latency and
+**absent at 500 ms** (Belinskaia, Smetanin, Lebedev & Ossadtchi, 2020). On EEG
+microstates the shape repeats: the effect appeared only at zero delay, one second was
+enough to abolish it, and participants could not consciously detect the delay that did
+so (Asai, Hamamoto, Kashihara & Imamizu, 2022). The mechanism offered — feedback arriving
+while the oscillation is still ongoing, and the forward model linking intention to
+outcome — is not specific to operant protocols, and §8 takes the threat seriously.
 
 So the question this paper asks is not whether such a system can be built. It is: **when
 one is measured rather than described, what is the number, and what follows from it?**
@@ -363,9 +373,10 @@ did not clip; it *could* have. The bound, not the observation, is what is now as
 ### 4.4 Why not simply use a faster generator?
 
 Non-autoregressive and consistency-model approaches reach faster-than-realtime audio
-generation today — AudioLCM reports 333× realtime on a single consumer GPU `[CITE:
-AudioLCM, arXiv 2406.00356]`, alongside Music Consistency Models `[CITE: arXiv
-2404.13358]`, Musika `[CITE: arXiv 2208.08706]` and Music2Latent `[CITE: arXiv
+generation today — AudioLCM reports 333× realtime on a single consumer GPU (Liu et al.,
+arXiv:2406.00356), alongside Music Consistency Models at roughly one second per minute of
+audio (Fei, Fan & Huang, arXiv:2404.13358), Musika (Pasini & Schlüter, arXiv:2208.08706)
+and Music2Latent (Pasini, Lattner & Fazekas, arXiv
 2408.06500]`. The decode-loop bound established in §3.2 is a property of MusicGen's model
 class, not of generative audio in general.
 
@@ -620,15 +631,23 @@ speaks to whether the intervention benefits anyone. The planned study (§9) is a
 feasibility study and is likewise not powered to establish efficacy.
 
 **The end-to-end latency is far outside the neurofeedback regime.** With the library
-engine the worst case is 6.5 s — 5.5 s analysis plus one crossfade. The closest empirical
-evidence is not that delay degrades learning gradually: Asai et al. (2022) found the
-feedback effect **only** at zero delay, with one second sufficient to abolish it in a
-protocol where participants could not consciously detect the delay.
+engine the worst case is 6.5 s — 5.5 s analysis plus one crossfade. The relevant evidence
+is not that delay degrades learning gradually, and the most directly comparable study is
+about the same rhythm this system measures.
 
-Our budget is roughly **6.5× that**, and the retuned configuration (§3) still sits at
-3.7×. The 8× audio improvement does not change the conclusion, because **analysis lag is
-now 85% of the budget**. No configuration we measured, or can currently propose, reaches
-the regime in which that study found any effect at all.
+Belinskaia, Smetanin, Lebedev & Ossadtchi (2020) trained **parietal alpha** with visual
+neurofeedback delivered immediately, at +250 ms, or at +500 ms. Sustained post-training
+change in alpha magnitude was negatively correlated with latency, maximal at the shortest,
+and **absent at 500 ms**. Their proposed mechanism is that feedback must arrive while the
+alpha spindle is still ongoing. Asai et al. (2022) report the same shape on EEG
+microstates: the effect appeared only at zero delay, with one second enough to abolish it,
+and participants unable to consciously detect the delay that did so.
+
+Our budget is **13× the delay at which sustained alpha change had already disappeared**,
+and the retuned configuration of §3 still sits at 7×. The 8× audio improvement does not
+change this, because **analysis lag is now 85% of the budget**. No configuration we
+measured, or can currently propose, comes within an order of magnitude of the regime in
+which those studies found an effect.
 
 We do not think this invalidates the approach, but the argument must be made rather than
 assumed. Operant neurofeedback asks the participant to perceive a contingency and learn
@@ -749,11 +768,19 @@ remains unread behind a paywall. URLs accessed 2026-08-28, re-checked 2026-09-06
    abolished it, and participants were unaware of the delay. This is the strongest
    single threat to the present approach and §8 states it as such.
 
-7. **The past, present and future of psychiatric music therapy.** I. M. Altshuler,
+7. **Short-delay neurofeedback facilitates training of the parietal alpha rhythm.**
+   Anastasiia Belinskaia, Nikolai Smetanin, Mikhail Lebedev & Alexei Ossadtchi,
+   *Journal of Neural Engineering* (2020). doi:10.1088/1741-2552/abc8d7, PMID 33166941.
+   Immediate versus +250 ms versus +500 ms visual feedback on parietal alpha. Sustained
+   change was negatively correlated with latency and absent at 500 ms.
+   **The sharpest and most directly relevant version of the delay threat**, because it
+   is the same rhythm this system measures rather than a different EEG feature. §8.
+
+8. **The past, present and future of psychiatric music therapy.** I. M. Altshuler,
    *American Journal of Psychiatry* (1948). The origin of the iso-principle: match the
    patient's present state first, then lead it. Cited in §2.2.
 
-8. **Emotion Modulation through Music after Sadness Induction — The Iso Principle in a
+9. **Emotion Modulation through Music after Sadness Induction — The Iso Principle in a
    Controlled Experimental Study.** Katrin Starcke, Johanna Mayr & Richard von Georgi,
    *International Journal of Environmental Research and Public Health* (2021).
    PMC8656869 (open access).
@@ -763,12 +790,12 @@ remains unread behind a paywall. URLs accessed 2026-08-28, re-checked 2026-09-06
    what makes it the right evidence for §8. Note the effect appeared in female
    participants and not male, a moderator this study is not powered to address.
 
-9. **Music listening according to the iso principle modulates affective state.** Katrin
+10. **Music listening according to the iso principle modulates affective state.** Katrin
    Starcke & Richard von Georgi, *Musicae Scientiae* (2024).
    doi:10.1177/10298649231175029
    n = 59, iso versus compensatory listening, d = 0.52 on negative affect. Also passive.
 
-10. **Personalised affect-regulation playlists: a pre-registered experimental test of the
+11. **Personalised affect-regulation playlists: a pre-registered experimental test of the
     iso principle in the general population.** Xanthe Lowe-Brown, Solange Glasser, Greg
     Wadley & Peter Koval, *Musicae Scientiae* (2026). doi:10.1177/10298649261421187
     A pre-registered test in a non-clinical sample. **Not yet read in full** — obtain
