@@ -49,14 +49,36 @@ def _median_gen(run: dict, precision: str, duration: float) -> float:
     return float("nan")
 
 
+# The pilot session the MANUSCRIPT DESCRIBES, pinned by name.
+#
+# These claims are statements about a particular recording, not about "whatever pilot is
+# newest". claim_chatter_before asserts 491 prompt changes: that is a historical fact
+# about PILOT01's pre-fix audio and the evidence behind section 6.3. PILOT02 will show
+# roughly 24, because the defect was fixed.
+#
+# Before this was pinned, recording PILOT02 would have silently re-based a dozen claims
+# onto it - and next_session.md told the operator that claims moving after a session is
+# "expected and correct, update the asserted values". Following that instruction would
+# have overwritten the documented pre-fix chatter figure with a post-fix one and quietly
+# deleted the evidence for the finding.
+#
+# New pilots are ADDITIVE. To describe a different session, add claims for it rather than
+# re-pointing these; to retire PILOT01 deliberately, change this constant in its own
+# commit and say why.
+PINNED_PILOT = "PILOT01_20260822_153652"
+
+
 def _pilot() -> dict:
-    # real_sessions, not glob: a --demo or --mock run must not be able to move a
-    # manuscript number by existing. See session_logger._SYNTHETIC_SOURCES.
-    from session_logger import load_session, real_sessions
-    dirs = real_sessions(os.path.join(_ROOT, "sessions", "PILOT*"))
-    if not dirs:
-        raise FileNotFoundError("no real PILOT session on disk")
-    return load_session(dirs[-1])
+    from session_logger import is_synthetic, load_session
+
+    path = os.path.join(_ROOT, "sessions", PINNED_PILOT)
+    if not os.path.isdir(path):
+        raise FileNotFoundError(
+            f"{PINNED_PILOT} is missing. These claims describe that recording "
+            "specifically; they are not about whichever pilot is newest.")
+    if is_synthetic(path):
+        raise RuntimeError(f"{PINNED_PILOT} is a synthetic session")
+    return load_session(path)
 
 
 def _pilot_z() -> np.ndarray:
@@ -458,6 +480,14 @@ _SWEEP_CACHE: dict = {}
 
 
 def _sweep_dir():
+    """
+    The NEWEST real alpha-validation session, deliberately unpinned.
+
+    Opposite convention to PINNED_PILOT, for a reason. The next hardware session exists
+    to redo the alpha validation on AF7/AF8 and replace Figure 0, so these claims are
+    SUPPOSED to move when a better recording lands. The pilot claims are about one
+    recording; these are about the best available validation.
+    """
     from session_logger import real_sessions
     return real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))[-1]
 
@@ -566,9 +596,11 @@ _POWER_SIMS = 2000
 
 
 def _power_ctx():
+    # Pinned too: the 38% power figure and the n = 25 anchor are in the FROZEN plan and
+    # were computed from this recording's autocorrelation. A different pilot would give
+    # different numbers and silently contradict the pre-registration.
     from power_analysis import session_stats
-    from session_logger import real_sessions
-    return session_stats(real_sessions(os.path.join(_ROOT, "sessions", "PILOT*"))[-1])
+    return session_stats(os.path.join(_ROOT, "sessions", PINNED_PILOT))
 
 
 def claim_power_at_registered_n() -> tuple[float, str]:
@@ -650,8 +682,7 @@ def _replay_ctx():
     """
     if not _REPLAY_CACHE:
         import controller_replay as cr
-        from session_logger import real_sessions
-        d = real_sessions(os.path.join(_ROOT, "sessions", "PILOT*"))[-1]
+        d = os.path.join(_ROOT, "sessions", PINNED_PILOT)
         session, chans, ts, pair, base = cr.load(d)
         t0, v0 = cr.reconstruct(chans, ts, pair, cr.DEPLOYED[0], cr.DEPLOYED[1], 0.001)
         offset, r = cr.align(t0, v0, session)

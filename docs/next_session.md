@@ -25,7 +25,7 @@ Both are answered by the same session if it is run in the right order.
 python scripts/run_tests.py
 ```
 
-79 checks. If anything fails, fix it before recording.
+98 checks. If anything fails, fix it before recording.
 
 Charge the Muse. Run the laptop **on battery** — mains through the charger was the largest
 single source of 60 Hz contamination during rig validation.
@@ -98,16 +98,25 @@ The sweep has only ever run on TP9/TP10, because that was the only labelled reco
 Running it on AF7/AF8 answers whether the dominated-configuration result holds on the
 channels the study uses.
 
-Then record what the retuned settings would need, for later analysis rather than for use
-today:
+~~Then record what the retuned settings would need…~~ **Removed 2026-09-07. That step
+could never have worked.** It named `calibrate_hysteresis.py --session <the alphatest>`,
+and that script refuses any session without a completed baseline — an alpha test has no
+baseline phase, so it would have printed a refusal and nothing else. Dry-run before you
+were standing there with the headset on.
+
+It is also obsolete twice over: the trend thresholds it derived belonged to the trend
+suffix, which was deleted on 9/5 because the slope it gated on is smaller than the noise
+of the estimator measuring it. The script now reports *whether the trend is measurable at
+all*, which is worth knowing on the new channels — but it needs a baseline, so run it in
+step 5 on PILOT02 instead:
 
 ```bash
-python scripts/calibrate_hysteresis.py --session sessions/<the alphatest> --window 2 --hop 0.5 --tau 0.5
+python scripts/calibrate_hysteresis.py --session sessions/<PILOT02> --window 2 --hop 0.5 --tau 0.5
 ```
 
 **Do not change `music_engine.py` during the session, and do not run a session at the
-retuned settings.** Recalibrating the trend thresholds does not fix the chatter — it is
-the ladder, not the suffix. Record the numbers; the controller work comes later.
+retuned settings** — not because they chatter (the dwell added on 9/5 fixes that) but
+because nobody has listened to them yet.
 
 ---
 
@@ -148,10 +157,15 @@ switches, so anything much faster means something else has changed.
 ## 5. Immediately after, before you put the headset away
 
 ```bash
-python src/analyze_session.py
+python src/analyze_session.py sessions/<PILOT02>
 python scripts/signal_quality.py --all
 python scripts/verify_claims.py
 ```
+
+**Name the session explicitly.** Bare `analyze_session.py` takes the most recently
+modified directory. That happens to be PILOT02 if you run these steps in order — but if
+you re-record the alpha test after PILOT02, or the session aborts and you retry, it
+silently analyses the wrong one and every check below becomes meaningless.
 
 Check, in order:
 
@@ -163,10 +177,31 @@ Check, in order:
   the session must be repeated before it can be used
 - the starred channels' verdicts
 
-`verify_claims` will now disagree with several stored numbers, because the alpha
-validation and estimator sweep will have new values. **That is expected and correct** —
-update the asserted values in `scripts/verify_claims.py` deliberately, once, rather than
-loosening the tolerances.
+### What `verify_claims` should and should not say afterwards
+
+**Expected to move — update these deliberately, once.** The alpha-validation claims track
+the *newest* recording on purpose, because replacing Figure 0 on AF7/AF8 is the point of
+this session:
+
+- `eyes-closed alpha ratio`, `same effect on AF7/AF8`
+- `alpha ratio at deployed 350 uV`, `effect survives every threshold`
+- `deployed detection latency`, `deployed info per minute`, `retuned info per minute`
+- `alternatives dominating deployed`, `info rate at the floor / deployed`
+
+**Expected NOT to move.** Every pilot claim is pinned to `PILOT01_20260822_153652` by
+name (`PINNED_PILOT` in `verify_claims.py`), so recording PILOT02 must not touch them. If
+one of these moves, something is wrong — do **not** update the asserted value:
+
+- `prompt changes before the fix` (491) — a fact about PILOT01's *pre-fix* audio, and the
+  evidence behind §6.3. PILOT02 will show ~24 because the defect was fixed; re-basing
+  this claim would delete the finding
+- `PILOT01 lag-1 autocorrelation`, `effective sample size`, `intervention rejection`
+- `power at the registered n = 10`, `participants per arm for 0.15 z` — both in the
+  **frozen** plan
+- the replay, ladder-margin and trend-noise claims
+
+A test asserts the pin, so a future edit that re-points the pilot claims fails the suite
+rather than passing quietly.
 
 ---
 

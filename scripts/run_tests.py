@@ -714,6 +714,19 @@ def test_synthetic_sessions_are_excluded(s: Suite) -> None:
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
+    # The manuscript's pilot claims must describe ONE named recording, not "whichever
+    # pilot is newest". claim_chatter_before asserts 491 prompt changes, which is a fact
+    # about PILOT01's pre-fix audio; PILOT02 will show roughly 24 because the defect was
+    # fixed. Re-basing on the newest pilot would make that claim fail for the wrong
+    # reason - and next_session.md tells the operator that claims moving after a session
+    # is expected, so the wrong recovery is the documented one.
+    import verify_claims as vc
+
+    s.check("the manuscript's pilot claims are pinned to a named session",
+            bool(getattr(vc, "PINNED_PILOT", "")) and
+            os.path.basename(vc._pilot()["dir"]) == vc.PINNED_PILOT,
+            f"pinned to {getattr(vc, 'PINNED_PILOT', '(unset)')}")
+
     # And nothing synthetic is currently sitting in the set the manuscript is built from.
     live = real_sessions(os.path.join(_ROOT, "sessions", "*"))
     s.check("no synthetic session is in the live manuscript set",
