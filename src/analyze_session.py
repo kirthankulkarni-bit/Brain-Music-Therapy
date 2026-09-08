@@ -466,6 +466,10 @@ COMPARE_KEYS = (
     "rejection_rate_intervention",
 )
 
+# Below this, a contrast displays as +0.000 and is reported as "no diff" rather than
+# being given a direction by the sign of a rounding error.
+_CONTRAST_DISPLAY_EPS = 5e-4
+
 # Contrasts where adaptive minus sham is the quantity of interest, and the sign that
 # would support the hypothesis. Sign is +1 when adaptive should EXCEED sham.
 CONTRASTS = {
@@ -517,9 +521,19 @@ def contrast_of(rows: List[Dict]) -> Dict:
         if not (np.isfinite(a) and np.isfinite(s_)):
             continue
         diff = a - s_
+        # A difference that displays as zero must not be given a direction. Without this
+        # a null contrast prints "supports" or "against" purely on the sign of a float
+        # that rounds away - seen live on a dry run, where two identical arms produced
+        # "+0.000 supports" and "+0.000 against" side by side. This study reports an
+        # interval and says explicitly that its WIDTH is the result and its position is
+        # secondary; a table that manufactures a direction out of 0.000 contradicts that
+        # in the one place a reader looks first.
+        negligible = abs(diff) < _CONTRAST_DISPLAY_EPS
         out["contrasts"][key] = {
             "adaptive": a, "sham": s_, "difference": diff,
-            "sign_supporting": sign, "supports": bool((diff * sign) > 0),
+            "sign_supporting": sign,
+            "supports": bool((diff * sign) > 0) and not negligible,
+            "negligible": bool(negligible),
             "expectation": expectation,
         }
     return out
@@ -569,8 +583,11 @@ def compare(dirs: List[str]) -> None:
     print("  CONTRAST (adaptive - sham)")
     print("  " + "-" * 74)
     for key, c in result["contrasts"].items():
-        print(f"    {key:<24} {c['difference']:+8.3f}   "
-              f"{'supports' if c['supports'] else 'against '} - {c['expectation']}")
+        if c["negligible"]:
+            verdict = "no diff "
+        else:
+            verdict = "supports" if c["supports"] else "against "
+        print(f"    {key:<24} {c['difference']:+8.3f}   {verdict} - {c['expectation']}")
 
     n_a, n_s = len(adaptive), len(sham)
     print()

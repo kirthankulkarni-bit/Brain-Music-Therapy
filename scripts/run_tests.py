@@ -597,6 +597,31 @@ def test_primary_contrast(s: Suite) -> None:
     s.check("one arm alone yields no contrast", not r5["contrasts"],
             f"adaptive_n={r5['adaptive_n']} sham_n={r5['sham_n']}")
 
+    # A NULL CONTRAST MUST NOT BE GIVEN A DIRECTION. Found by running --compare on a real
+    # pair for the first time: two identical arms printed "+0.000 supports" and
+    # "+0.000 against" side by side, purely on the sign of a float that rounds away. This
+    # study reports an interval and says its WIDTH is the result and its position
+    # secondary, so a table that manufactures a direction out of 0.000 contradicts the
+    # paper in the first place a reader looks.
+    # The difference must be TINY AND NONZERO, which is the case that actually occurred.
+    # Two exactly-identical arms give diff == 0.0, and `0.0 > 0` is already False, so a
+    # test built on identical arms passes with or without the guard - it cannot fail for
+    # the bug it describes. What was observed live was a float that rounds to +0.000 but
+    # rounds to +0.000 but lies in the SUPPORTING direction, which the old code labelled
+    # "supports". The direction matters: a tiny difference the other way already returned
+    # False, so a test written with the sign flipped passes either way and proves nothing.
+    tiny = contrast_of([arm("adaptive", -0.80 - 1e-6), arm("sham", -0.80)])
+    zc0 = tiny["contrasts"]["z_mean"]
+    s.check("a difference that displays as zero gets no direction",
+            zc0["negligible"] and not zc0["supports"],
+            f"difference {zc0['difference']:+.7f} displays as "
+            f"{zc0['difference']:+.3f}, supports={zc0['supports']}")
+
+    # And a real difference must still get one, or the guard has just disabled the table.
+    s.check("a real difference is still given a direction",
+            not r["contrasts"]["z_mean"]["negligible"],
+            f"difference {r['contrasts']['z_mean']['difference']:+.2f}")
+
     # Every contrast the study reports must carry a stated direction, decided in advance.
     s.check("every reported contrast has a pre-stated direction",
             all(sign in (-1, +1) and text for sign, text in CONTRASTS.values()),
