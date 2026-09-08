@@ -457,6 +457,11 @@ def claim_autocorrelation_overstatement() -> tuple[float, str]:
 _SWEEP_CACHE: dict = {}
 
 
+def _sweep_dir():
+    from session_logger import real_sessions
+    return real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))[-1]
+
+
 def _sweep():
     """
     The estimator sweep, computed once: {name: {latency_s, d, n_eff_per_min, info}}.
@@ -484,7 +489,8 @@ def _sweep():
             sc["info"] = (sc["d"] * np.sqrt(sc["n_eff_per_min"])
                           if np.isfinite(sc["d"]) else float("nan"))
             rows[name] = sc
-        _SWEEP_CACHE.update(rows=rows, r=r, names=[n for n, _, _ in es.ESTIMATORS])
+        _SWEEP_CACHE.update(rows=rows, r=r, offset=offset,
+                            names=[n for n, _, _ in es.ESTIMATORS])
     return _SWEEP_CACHE
 
 
@@ -507,6 +513,33 @@ def claim_retuned_info_per_min() -> tuple[float, str]:
     c = _sweep()
     row = c["rows"]["pipeline 2s win, 0.5s hop, t=0.5"]
     return float(row["info"]), f"d {row['d']:.2f}, ind/min {row['n_eff_per_min']:.1f}"
+
+
+def claim_info_rate_at_the_floor() -> tuple[float, str]:
+    """
+    Information per minute at the architecture's latency floor, over the deployed value.
+
+    The number that turns the floor from a trade-off into a free lunch. Per-sample d
+    collapses there - 1.99 deployed against about 0.6 - but independence rises more than
+    thirtyfold, and precision goes with the product. Above 1.0 means the fastest
+    configuration this architecture can reach is ALSO more informative than the one being
+    shipped.
+
+    Asserted because section 3 now leads with it, and because it is the kind of ratio
+    that would move quietly if the band edges or the filter order changed.
+    """
+    import estimator_sweep as es
+
+    c = _sweep()
+    base = c["rows"][c["names"][0]]
+    base_info = base["d"] * np.sqrt(base["n_eff_per_min"])
+
+    session, chans, pair, timeline = es.load(_sweep_dir())
+    t, y = es.est_streaming(chans, pair, order=2, tau_s=0.10)
+    sc = es.score(t, y, timeline, c["offset"])
+    info = sc["d"] * np.sqrt(sc["n_eff_per_min"])
+    return float(info / base_info), (f"streaming o2 tau=0.1: d {sc['d']:.2f}, "
+                                     f"ind/min {sc['n_eff_per_min']:.1f}")
 
 
 def claim_alternatives_dominating_deployed() -> tuple[float, str]:
@@ -726,6 +759,7 @@ CLAIMS = {
     "slowest realtime factor measured":   (claim_slowest_realtime_factor,   6.27,   0.02),
     "PILOT01 dominant rung occupancy":    (claim_pilot_rung_occupancy,      0.959,  0.005),
     "analysis-path latency floor":        (claim_analysis_latency_floor,    0.189,  0.005),
+    "info rate at the floor / deployed":  (claim_info_rate_at_the_floor,    1.83,   0.05),
 }
 
 

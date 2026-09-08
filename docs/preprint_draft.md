@@ -666,11 +666,22 @@ neurofeedback regime is a measurement away rather than a redesign away** — it 
 streaming estimator, a crossfade near 0.25 s, and the dwell machinery of §2.3 to stop a
 lightly-smoothed index from chattering through it.
 
-What we have not shown is that it is *worth* reaching. Discriminability falls as the
-smoother shortens (§3), and no session has been run at these settings, so the honest
-statement is that the frontier is locatable and its cost is not yet measured. We name it
-because "the latency is too high" is a weaker and less useful claim than "here is the
-floor, here is what binds it, and here is what it would cost".
+**And the floor is not a trade-off.** Measured on the same labelled recording, a
+second-order streaming estimator at τ = 0.1 gives d = 0.61 against the deployed 1.99 — a
+threefold loss in per-sample discriminability — while independence rises from 1.2 to 41.4
+observations per minute. Precision goes with the product, and **information per minute at
+the floor is 1.83× the deployed value**. The fastest configuration this architecture can
+reach is also the more informative one.
+
+One caveat the budget hides: measured detection latency does not fall monotonically with
+it. Below τ ≈ 0.25 the estimate is noisy enough that midpoint crossing becomes harder to
+time, so detection rises again even as the theoretical budget keeps dropping. The budget
+is a floor on delay, not a promise about detection.
+
+What remains unshown is that any of this survives contact with the real contrast. Every
+figure here is measured on an eyes-open/closed manipulation, which is gross compared to
+adaptive-versus-sham, and **no session has been run at these settings**. The frontier is
+located and priced on a proxy; it is not yet paid for.
 
 We do not think this invalidates the approach, but the argument must be made rather than
 assumed. Operant neurofeedback asks the participant to perceive a contingency and learn
