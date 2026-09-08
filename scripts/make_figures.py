@@ -394,18 +394,32 @@ def main() -> int:
 
     session_dir = args.session
     if session_dir is None:
-        from session_logger import real_sessions
-        candidates = real_sessions(os.path.join(_ROOT, "sessions", "PILOT*"))
-        if not candidates:
-            print("No PILOT session found. Pass --session explicitly.")
+        # PINNED, for the same reason verify_claims is pinned: five of the seven figures
+        # here describe ONE recording, and the manuscript's prose and captions describe
+        # that same one. Defaulting to the newest pilot means that recording PILOT02 and
+        # regenerating figures silently replaces Figures 1-5 with a different session
+        # while the text around them still refers to PILOT01.
+        #
+        # fig3_chatter is the clearest case: it shows PILOT01's PRE-FIX chatter, which is
+        # the evidence for section 6.3. PILOT02 will not chatter, so the figure would come
+        # back empty and the section would cite a blank panel.
+        #
+        # Figures 0 and 6 use the alpha-validation session and deliberately track the
+        # NEWEST one - replacing Figure 0 on AF7/AF8 is the point of the next session.
+        from verify_claims import PINNED_PILOT
+
+        session_dir = os.path.join(_ROOT, "sessions", PINNED_PILOT)
+        if not os.path.isdir(session_dir):
+            print(f"Pinned pilot {PINNED_PILOT} not found. Pass --session explicitly, "
+                  "or update PINNED_PILOT in verify_claims.py deliberately.")
             return 1
-        session_dir = candidates[-1]
 
     out = args.out if os.path.isabs(args.out) else os.path.join(_ROOT, args.out)
     os.makedirs(out, exist_ok=True)
     session = load_session(session_dir)
 
-    print(f"session: {os.path.basename(session_dir)}")
+    print(f"session: {os.path.basename(session_dir)}"
+          + ("" if args.session else "   (pinned; --session overrides)"))
     print(f"output : {out}\n")
 
     made = []

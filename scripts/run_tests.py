@@ -727,6 +727,35 @@ def test_synthetic_sessions_are_excluded(s: Suite) -> None:
             os.path.basename(vc._pilot()["dir"]) == vc.PINNED_PILOT,
             f"pinned to {getattr(vc, 'PINNED_PILOT', '(unset)')}")
 
+    # THE WHOLE CLASS, not the three instances. Anything that regenerates a manuscript
+    # artefact from "the newest pilot" breaks the same way: five of seven figures and the
+    # power analysis had this too, and fig3_chatter is the sharpest case - it plots
+    # PILOT01's PRE-FIX chatter, so re-basing it on PILOT02 returns an empty panel that
+    # section 6.3 still cites.
+    #
+    # The first version of this check was a single-line regex for `"PILOT*"...)[-1]`. It
+    # passed against the actual buggy make_figures.py, because that one assigned the glob
+    # on one line and indexed [-1] four lines later. A check that cannot catch the bug it
+    # was written for is worse than none, so this scans a WINDOW: a pilot glob followed
+    # within a few lines by an [-1] on the name it was bound to.
+    offenders = []
+    for name in ("make_figures.py", "power_analysis.py", "verify_claims.py"):
+        lines = open(os.path.join(_ROOT, "scripts", name),
+                     encoding="utf-8").read().split(chr(10))
+        for i, line in enumerate(lines):
+            if '"PILOT*"' not in line or line.lstrip().startswith("#"):
+                continue
+            var = line.split("=")[0].strip() if "=" in line else ""
+            window = chr(10).join(lines[i:i + 6])
+            indexed = "[-1]" in window and (not var or f"{var}[-1]" in window
+                                            or '"PILOT*"))[-1]' in window)
+            if indexed:
+                offenders.append(f"{name}:{i + 1}")
+    s.check("no manuscript artefact is rebuilt from whichever pilot is newest",
+            not offenders,
+            f"selects newest pilot at {offenders}" if offenders
+            else "figures, power analysis and claims all pin")
+
     # And nothing synthetic is currently sitting in the set the manuscript is built from.
     live = real_sessions(os.path.join(_ROOT, "sessions", "*"))
     s.check("no synthetic session is in the live manuscript set",

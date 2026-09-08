@@ -191,11 +191,21 @@ def main() -> int:
 
     session_dir = args.session
     if session_dir is None:
-        candidates = sorted(glob.glob(os.path.join(_ROOT, "sessions", "PILOT*")))
-        if not candidates:
-            candidates = [d for d in sorted(glob.glob(os.path.join(_ROOT, "sessions", "*")))
-                          if os.path.isdir(d)]
-        session_dir = candidates[-1]
+        # Pinned: the 38% power figure and the n = 25 anchor in the FROZEN plan were
+        # computed from this recording's autocorrelation. A newer pilot would give
+        # different numbers and silently contradict the pre-registration.
+        # No fallback to another pilot. Falling back is the failure being guarded: these
+        # numbers are registered, so quietly computing them from a different recording is
+        # worse than not computing them. Pass --session explicitly to override.
+        sys.path.insert(0, os.path.join(_ROOT, "scripts"))
+        from verify_claims import PINNED_PILOT
+
+        session_dir = os.path.join(_ROOT, "sessions", PINNED_PILOT)
+        if not os.path.isdir(session_dir):
+            print(f"Pinned pilot {PINNED_PILOT} not found. The power figures in the "
+                  "frozen plan were computed from that recording specifically.")
+            print("Pass a session explicitly, or update PINNED_PILOT deliberately.")
+            return 1
 
     stats = session_stats(session_dir)
     rng = np.random.default_rng(0)
