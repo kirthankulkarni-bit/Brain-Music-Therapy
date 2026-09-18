@@ -286,8 +286,7 @@ def main() -> int:
         dedup = inlet.summary() if hasattr(inlet, "summary") else {}
         if dedup.get("stream_duplicates_dropped"):
             logger.note("duplicated stream packets dropped", level="warning", **dedup)
-            print(f"
-  stream: dropped {dedup['stream_duplicates_dropped']} duplicated samples "
+            print(chr(10) + f"  stream: dropped {dedup['stream_duplicates_dropped']} duplicated samples "
                   f"of {dedup['stream_samples_received']} received")
         logger.close()
 

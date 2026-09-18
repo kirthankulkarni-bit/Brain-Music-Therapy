@@ -90,6 +90,30 @@ class Suite:
 # ------------------------------------------------------------------ unit tests
 
 
+def test_every_file_compiles(s: Suite) -> None:
+    """
+    Every module and script must at least parse.
+
+    On 2026-09-17 an edit left an unterminated string in alpha_test.py, and all 105
+    tests passed - nothing in the suite imports alpha_test, contact_check or
+    verify_sample_rate, because they need a headset. The break was found by launching the
+    alpha test with a participant already sitting with the headset on and eyes following
+    audio cues. Compiling every file costs under a second.
+    """
+    import py_compile
+
+    files = sorted(glob.glob(os.path.join(_ROOT, "src", "*.py")) +
+                   glob.glob(os.path.join(_ROOT, "scripts", "*.py")))
+    broken = []
+    for f in files:
+        try:
+            py_compile.compile(f, doraise=True)
+        except py_compile.PyCompileError as exc:
+            broken.append(f"{os.path.basename(f)}: {exc.msg.splitlines()[-1]}")
+    s.check("every module and script compiles", not broken,
+            f"{len(files)} files" if not broken else "; ".join(broken))
+
+
 def test_build_prompt_purity(s: Suite) -> None:
     """Same inputs must give the same output - build_library depends on it."""
     cases = [(0.5, -1.0, None), (2.0, -1.0, None),
@@ -1329,6 +1353,7 @@ def main() -> int:
     s = Suite()
 
     s.section("1. CONTROLLER - purity, hysteresis, and the chatter regression")
+    test_every_file_compiles(s)
     test_build_prompt_purity(s)
     test_trend_is_not_measurable(s, load_session_z())
     test_state_rung_monotonic(s)
