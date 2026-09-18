@@ -470,9 +470,15 @@ def eeg_worker(args, state: SessionState, logger: SessionLogger) -> None:
     finally:
         stats = engine.stats()
         engine.stop()
+        # Provenance: if the stream carried duplicated packets, the raw file on disk is the
+        # FILTERED stream. Record how much was dropped so no one mistakes it for the feed.
+        dedup = inlet.summary() if hasattr(inlet, "summary") else {}
+        if dedup.get("stream_duplicates_dropped"):
+            logger.note("duplicated stream packets dropped", level="warning", **dedup)
         if state.last_error is None:
             logger.note("session complete", level="info", engine_stats=stats,
-                        rejection_rate=state.rejection_rate, windows_total=state.windows_total)
+                        rejection_rate=state.rejection_rate, windows_total=state.windows_total,
+                        **dedup)
             print("\n\n[eeg] engine stats:", stats)
         print(f"[eeg] session written to {logger.dir}")
         state.phase = "done" if state.last_error is None else "failed"

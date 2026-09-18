@@ -19,6 +19,130 @@ from pylsl import resolve_streams, StreamInlet
 MIN_EEG_CHANNELS = 4
 EXPECTED_MUSE_RATE = 256.0
 
+# A backward timestamp step larger than this is a clock reset, not a duplicate, and is
+# accepted rather than filtered. Duplicated packets step back by one chunk (~43 ms);
+# filtering a genuine reset instead would silently discard every sample until the new
+# clock caught up with the old one.
+_CLOCK_RESET_S = 1.0
+
+
+# How long a sample is held before release, so a packet that arrives after a later one
+# can be slotted back into order. Measured on the live stream, 2026-09-17: 92 of 5148
+# unique samples arrived late, median 6.0 ms, p99 13.7 ms, max 13.9 ms. 50 ms covers that
+# with 3.5x margin and adds 50 ms to a 6.5 s end-to-end budget.
+_REORDER_HOLD_S = 0.05
+
+# Seen timestamps older than this behind the newest are forgotten, bounding memory.
+_SEEN_HORIZON_S = 5.0
+
+
+class DedupInlet:
+    """
+    An LSL inlet that removes duplicated packets and restores sample order.
+
+    WHY THIS EXISTS. On 2026-09-17 BlueMuse delivered every 12-sample packet more than
+    once - four copies at first, two after a full BlueMuse restart AND a Windows Bluetooth
+    reset. Of 8292 samples received in 8 s, 2052 were unique: exactly 256 Hz. Each packet
+    arrived, the timestamps stepped back 43 ms, and the same packet arrived again.
+
+    Nothing downstream checked. Every script counts samples, not time, so a duplicated
+    stream reads as the signal leaping backwards every 12 samples - a discontinuity large
+    enough that contact_check called AF7 and AF8 "RAILING" on a headset that was probably
+    fine. live_music would have recorded and analysed it as real data.
+
+    THE FIRST VERSION OF THIS WAS WRONG, and the way it was wrong is the design. It
+    dropped any sample whose timestamp did not advance. On a 10 s live capture that kept
+    2457 of 2568 genuine samples - it discarded 111 real ones, 4.3%, because the copies
+    interleave: a genuine packet sometimes arrives AFTER a copy of a later packet, and
+    "does not advance" cannot tell that from a duplicate. The truly unique stream was a
+    perfect 256.0 Hz; the loss was entirely the filter's.
+
+    So duplicates are identified by timestamp IDENTITY (a set of timestamps already seen),
+    not by order, and samples are held for _REORDER_HOLD_S and released sorted, so a late
+    genuine packet slots back into place. A sample later than the hold - never observed -
+    is dropped and counted separately as late, rather than being emitted out of order.
+
+    A backward jump beyond _CLOCK_RESET_S is a clock reset: the buffer is flushed and
+    state restarts, rather than discarding real data until the new clock catches up.
+
+    Counts are kept so each session records that filtering happened and how much - the
+    raw file on disk is the filtered stream, and a reader needs to know.
+    """
+
+    def __init__(self, inlet):
+        self._inlet = inlet
+        self._seen = set()
+        self._pending = []          # (ts, sample) awaiting release
+        self._newest = None         # highest timestamp received
+        self._last_out = None       # highest timestamp released
+        self.received = 0
+        self.dropped = 0            # duplicates
+        self.late = 0               # genuine but later than the hold
+        self._warned = False
+
+    def _release(self, flush=False):
+        if not self._pending:
+            return [], []
+        if flush:
+            ready = self._pending
+            self._pending = []
+        else:
+            cutoff = self._newest - _REORDER_HOLD_S
+            ready = [p for p in self._pending if p[0] <= cutoff]
+            self._pending = [p for p in self._pending if p[0] > cutoff]
+        ready.sort(key=lambda p: p[0])
+        out_s, out_t = [], []
+        for ts, sample in ready:
+            if self._last_out is not None and ts <= self._last_out:
+                self.late += 1
+                continue
+            out_s.append(sample)
+            out_t.append(ts)
+            self._last_out = ts
+        return out_s, out_t
+
+    def pull_chunk(self, timeout=0.0, max_samples=1024):
+        samples, timestamps = self._inlet.pull_chunk(timeout=timeout, max_samples=max_samples)
+        pre_s, pre_t = [], []
+        for sample, ts in zip(samples or [], timestamps or []):
+            self.received += 1
+            if self._newest is not None and ts < self._newest - _CLOCK_RESET_S:
+                # Clock reset: release everything held, then start over on the new clock.
+                fs, ft = self._release(flush=True)
+                pre_s += fs
+                pre_t += ft
+                self._seen.clear()
+                self._newest = None
+                self._last_out = None
+            if ts in self._seen:
+                self.dropped += 1
+                continue
+            self._seen.add(ts)
+            self._pending.append((ts, sample))
+            if self._newest is None or ts > self._newest:
+                self._newest = ts
+        if self._newest is not None and len(self._seen) > 4096:
+            horizon = self._newest - _SEEN_HORIZON_S
+            self._seen = {t for t in self._seen if t >= horizon}
+        if self.dropped and not self._warned:
+            self._warned = True
+            print(chr(10) + "[stream] WARNING: duplicated packets on the EEG stream - removing them. "
+                  "The data kept is unaffected; see stream_utils.DedupInlet.")
+        out_s, out_t = self._release()
+        return pre_s + out_s, pre_t + out_t
+
+    def summary(self):
+        """Counts for the session log."""
+        frac = self.dropped / self.received if self.received else 0.0
+        return {"stream_samples_received": self.received,
+                "stream_duplicates_dropped": self.dropped,
+                "stream_duplicate_fraction": round(frac, 4),
+                "stream_late_samples_dropped": self.late,
+                "stream_reorder_hold_s": _REORDER_HOLD_S}
+
+    def __getattr__(self, name):
+        return getattr(self._inlet, name)
+
 
 def list_streams(timeout=5.0):
     """Return every LSL stream on the network as a list of info objects."""
@@ -81,7 +205,7 @@ def get_inlet(timeout=5.0, verbose=True):
         print(describe_streams(all_streams))
         print()
 
-    inlet = StreamInlet(target)
+    inlet = DedupInlet(StreamInlet(target))
     sampling_rate = inlet.info().nominal_srate()
     print(f"Connected to: {target.name()}  [type={target.type()}, "
           f"{target.channel_count()} ch, {sampling_rate:g} Hz]")

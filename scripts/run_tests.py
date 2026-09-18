@@ -817,6 +817,93 @@ def test_synthetic_sessions_are_excluded(s: Suite) -> None:
     s.check("synthetic sessions are gitignored", "sessions/DEMO_*" in ignored)
 
 
+def test_duplicate_packet_filter(s: Suite) -> None:
+    """
+    stream_utils.DedupInlet against the exact failure seen live on 2026-09-17.
+
+    BlueMuse delivered each 12-sample packet more than once: the packet arrived, the
+    timestamps stepped back 43 ms, and the same packet arrived again - four copies, then
+    two after a full BlueMuse and Bluetooth reset. Every script counts samples rather
+    than time, so this read as the signal jumping backwards every 12 samples, and
+    contact_check reported AF7/AF8 as RAILING on a headset that was probably fine.
+
+    The fake inlet below replays that shape. The filter must keep every unique sample
+    once, in order, and drop every copy - and it must NOT drop a genuine clock reset,
+    because filtering one would silently discard real data until the new clock caught
+    up with the old.
+    """
+    from stream_utils import DedupInlet
+
+    fs, chunk, copies = 256.0, 12, 3
+    unique_ts = [i / fs for i in range(chunk * 20)]
+
+    class Replaying:
+        """Emits each 12-sample packet `copies` times, as BlueMuse did."""
+        def __init__(self):
+            self.queue = []
+            for k in range(0, len(unique_ts), chunk):
+                pkt = unique_ts[k:k + chunk]
+                for _ in range(copies):
+                    self.queue.append(pkt)
+        def pull_chunk(self, timeout=0.0, max_samples=1024):
+            if not self.queue:
+                return [], []
+            ts = self.queue.pop(0)
+            return [[t * 1000.0] * 4 for t in ts], list(ts)
+
+    def drain(inlet):
+        got = []
+        while inlet._inlet.queue:
+            got += inlet.pull_chunk()[1]
+        got += inlet._release(flush=True)[1]
+        return got
+
+    inl = DedupInlet(Replaying())
+    got = drain(inl)
+    s.check("duplicated packets are dropped, every unique sample kept once",
+            got == unique_ts,
+            f"kept {len(got)} of {inl.received} received, {inl.dropped} dropped; "
+            f"expected {len(unique_ts)}")
+    s.check("the drop count is reported for the session log",
+            inl.summary()["stream_duplicates_dropped"] == len(unique_ts) * (copies - 1))
+
+    # THE CASE THAT BROKE THE FIRST VERSION. Copies interleave, so a genuine packet can
+    # arrive AFTER a copy of a later one: A, B, A', C, B', ... A filter that drops "does
+    # not advance" throws the late genuine packet away - live, that cost 111 of 2568 real
+    # samples (4.3%). Identity-based dedup plus a short reorder hold must keep all of them.
+    pk = [unique_ts[k:k + chunk] for k in range(0, len(unique_ts), chunk)]
+    order = []
+    for n in range(len(pk)):
+        order.append(pk[n])
+        if n >= 1:
+            order.append(pk[n - 1])          # a stale copy arrives after the newer packet
+    # One packet jumps the queue, so the genuine packet it overtook (pk[3]) arrives
+    # AFTER a later one. That is the exact case version 1 discarded.
+    order.insert(5, pk[4])
+
+    class Interleaved(Replaying):
+        def __init__(self):
+            self.queue = list(order)
+
+    inl2 = DedupInlet(Interleaved())
+    got2 = drain(inl2)
+    s.check("interleaved copies: every genuine sample kept, in order",
+            got2 == unique_ts and inl2.late == 0,
+            f"kept {len(got2)} of {len(unique_ts)} genuine, late-dropped {inl2.late}")
+
+    class Reset:
+        """A genuine clock reset: time jumps back 5 s and continues."""
+        def __init__(self):
+            self.q = [[10.0, 10.004, 10.008], [5.0, 5.004, 5.008]]
+        def pull_chunk(self, timeout=0.0, max_samples=1024):
+            return ([[0.0] * 4] * 3, self.q.pop(0)) if self.q else ([], [])
+
+    r = DedupInlet(Reset())
+    kept = r.pull_chunk()[1] + r.pull_chunk()[1] + r._release(flush=True)[1]
+    s.check("a genuine clock reset is kept, not filtered", len(kept) == 6 and r.dropped == 0,
+            f"kept {len(kept)} of 6, dropped {r.dropped}")
+
+
 def test_contact_gate(s: Suite) -> None:
     """
     The contact classifier, against channels whose quality is known by construction.
@@ -1257,6 +1344,7 @@ def main() -> int:
     test_primary_contrast(s)
     test_cortex_gate_ground_truth(s)
     test_synthetic_sessions_are_excluded(s)
+    test_duplicate_packet_filter(s)
     test_contact_gate(s)
     test_primary_outcome_ground_truth(s)
     test_sham_path(s)

@@ -281,6 +281,14 @@ def main() -> int:
     except KeyboardInterrupt:
         print("\n\nInterrupted - analyzing what was collected.")
     finally:
+        # Record duplicate-packet filtering before closing - the raw file is the filtered
+        # stream, and the session must say so. See stream_utils.DedupInlet.
+        dedup = inlet.summary() if hasattr(inlet, "summary") else {}
+        if dedup.get("stream_duplicates_dropped"):
+            logger.note("duplicated stream packets dropped", level="warning", **dedup)
+            print(f"
+  stream: dropped {dedup['stream_duplicates_dropped']} duplicated samples "
+                  f"of {dedup['stream_samples_received']} received")
         logger.close()
 
     # ------------------------------------------------------------------ stats
