@@ -102,8 +102,11 @@ def fig_alpha_validation(out: str) -> str:
     """
     from scipy import stats as sps
 
-    from session_logger import real_sessions
-    dirs = real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))
+    # Pinned: Figure 0 describes the recording the manuscript describes. Replacing it
+    # with a newer one is a decision about the paper - see PINNED_ALPHA.
+    from verify_claims import PINNED_ALPHA
+    pinned = os.path.join(_ROOT, "sessions", PINNED_ALPHA)
+    dirs = [pinned] if os.path.isdir(pinned) else []
     if not dirs:
         return ""
     session = load_session(dirs[-1])
@@ -304,7 +307,9 @@ def fig_estimator(out: str) -> str:
     import subprocess
     import re
 
-    proc = subprocess.run([sys.executable, os.path.join(_ROOT, "scripts", "estimator_sweep.py")],
+    from verify_claims import PINNED_ALPHA
+    proc = subprocess.run([sys.executable, os.path.join(_ROOT, "scripts", "estimator_sweep.py"),
+                           "--session", os.path.join(_ROOT, "sessions", PINNED_ALPHA)],
                           capture_output=True, text=True, cwd=_ROOT)
     rows = []
     for line in proc.stdout.splitlines():

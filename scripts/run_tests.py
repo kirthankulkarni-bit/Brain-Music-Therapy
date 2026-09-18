@@ -526,7 +526,7 @@ def test_registered_analysis_conformance(s: Suite) -> None:
     from analyze_session import CONTRASTS, basic_metrics, report
     from session_logger import load_session, real_sessions
 
-    found = real_sessions(os.path.join(_ROOT, "sessions", "PILOT*"))
+    found = _pinned_pilot_dirs()
     if not found:
         s.skip("registered analysis conformance", "no pilot session")
         return
@@ -788,11 +788,13 @@ def test_synthetic_sessions_are_excluded(s: Suite) -> None:
     # was written for is worse than none, so this scans a WINDOW: a pilot glob followed
     # within a few lines by an [-1] on the name it was bound to.
     offenders = []
-    for name in ("make_figures.py", "power_analysis.py", "verify_claims.py"):
+    for name in ("make_figures.py", "power_analysis.py", "verify_claims.py", "run_tests.py"):
         lines = open(os.path.join(_ROOT, "scripts", name),
                      encoding="utf-8").read().split(chr(10))
         for i, line in enumerate(lines):
             if '"PILOT*"' not in line or line.lstrip().startswith("#"):
+                continue
+            if "'\"PILOT*\"" in line:        # this guard's own search literal
                 continue
             var = line.split("=")[0].strip() if "=" in line else ""
             window = chr(10).join(lines[i:i + 6])
@@ -839,6 +841,73 @@ def test_synthetic_sessions_are_excluded(s: Suite) -> None:
 
     ignored = open(os.path.join(_ROOT, ".gitignore"), encoding="utf-8").read()
     s.check("synthetic sessions are gitignored", "sessions/DEMO_*" in ignored)
+
+
+def test_raw_timestamp_precision(s: Suite) -> None:
+    """
+    Raw timestamps must stay precise however long the laptop has been up.
+
+    They were written as raw LSL time cast to float32. LSL time is seconds since boot, so
+    precision depended on uptime: ~8 ms for PILOT01, but 0.25 s for both 2026-09-17
+    recordings, made after 27 days up. Every sample in a quarter-second shared one
+    timestamp. The fix stores time relative to the first sample and logs the origin.
+
+    The clock here starts at 2,339,650 s - the value measured on the night.
+    """
+    import shutil
+    import tempfile as _tf
+
+    from session_logger import SessionLogger, load_raw, load_session
+
+    root = _tf.mkdtemp(prefix="rawts_")
+    try:
+        origin = 2339650.123456
+        with SessionLogger("TSTEST", "pilot", root=root) as lg:
+            for k in range(0, 2560, 12):
+                lg.log_raw([origin + (k + i) / 256.0 for i in range(12)], [[0.0] * 5] * 12)
+            d = lg.dir
+        step = np.diff(load_raw(d)[:, 0].astype(float))
+        s.check("raw timestamps keep sample-level precision on a long-running clock",
+                abs(step.min() - 1 / 256) < 1e-4 and abs(step.max() - 1 / 256) < 1e-4,
+                f"steps {step.min() * 1000:.3f}-{step.max() * 1000:.3f} ms, expected 3.906")
+        note = [n for n in load_session(d)["notes"] if n.get("message") == "raw time origin"]
+        s.check("the absolute LSL origin is logged at full precision",
+                bool(note) and abs(note[0]["lsl_time_origin"] - origin) < 1e-6)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_sample_clock(s: Suite) -> None:
+    """
+    session_logger.sample_clock: sample counting, corrected for stream dropouts.
+
+    The estimator sweep counted samples to keep time. The 2026-09-17 alpha test lost
+    11.75 s and then 20.25 s of stream, so by the end every window was 32 s early and
+    the sweep's reproduction fell to r = 0.77 and refused to report. It must recover the
+    gaps - including from timestamps quantised to 0.25 s, which that recording has - and
+    must return exactly arange(n) / fs for a recording without dropouts, so nothing that
+    was already correct moves.
+    """
+    from session_logger import sample_clock
+
+    fs = 256.0
+    n = 256 * 60
+    clean = np.arange(n) / fs + 1000.0
+    s.check("no dropouts: identical to counting samples",
+            np.array_equal(sample_clock(clean, fs), np.arange(n) / fs))
+
+    true_t = np.arange(n) / fs
+    true_t[n // 3:] += 11.75
+    true_t[2 * n // 3:] += 20.25
+    ts = (true_t + 2339650.0).astype(np.float32)          # quantised as on the night
+    got = sample_clock(ts, fs)
+    err = np.abs((got - got[0]) - (true_t - true_t[0]))
+    s.check("dropouts are recovered from quarter-second timestamps",
+            err.max() <= 0.25 + 1e-9,
+            f"worst error {err.max():.3f} s against 32 s of dropout")
+    naive = np.abs(np.arange(n) / fs - (true_t - true_t[0])).max()
+    s.check("and counting samples alone would have been wrong by the full gap",
+            naive > 30.0, f"{naive:.1f} s")
 
 
 def test_duplicate_packet_filter(s: Suite) -> None:
@@ -1116,7 +1185,7 @@ def test_sham_path(s: Suite) -> None:
     import live_music
     from music_engine import build_prompt as bp
 
-    src = sorted(glob.glob(os.path.join(_ROOT, "sessions", "PILOT*")))
+    src = _pinned_pilot_dirs()
     if not src:
         s.skip("sham path", "no PILOT session to yoke from")
         return
@@ -1322,23 +1391,37 @@ def run_validator(s: Suite, name: str, script: str, args: list[str]) -> None:
     s.check(name, proc.returncode == 0, tail[0].strip()[:60])
 
 
+def _pinned_pilot_dirs() -> list:
+    """
+    [the pilot these tests describe], or [] if it is missing.
+
+    Several tests here assert properties OF PILOT01 - that its z drives a margin-0.25
+    controller through a few prompt changes, that its schedule makes a non-trivial yoke
+    source, that its event-locked diagnostics print. They used to pick "the newest pilot"
+    or "the session with the most windows". Recording PILOT02 on 2026-09-17 made it both,
+    and PILOT02 played one prompt for twenty minutes - so eight tests failed describing a
+    session they were never about. Same newest-wins bug as the figures and the claims,
+    one layer further in.
+    """
+    from verify_claims import PINNED_PILOT
+
+    d = os.path.join(_ROOT, "sessions", PINNED_PILOT)
+    return [d] if os.path.isdir(d) else []
+
+
 def load_session_z() -> np.ndarray:
+    """Intervention z from the pinned pilot. See _pinned_pilot_dirs."""
     from session_logger import load_session
-    best = np.array([], dtype=float)
-    for d in sorted(glob.glob(os.path.join(_ROOT, "sessions", "*"))):
-        if not os.path.isdir(d):
-            continue
-        try:
-            sess = load_session(d)
-        except Exception:  # noqa: BLE001
-            continue
-        z = np.array([w["z"] for w in sess["windows"]
-                      if w.get("phase") == "intervention" and w.get("valid")
-                      and isinstance(w.get("z"), (int, float)) and np.isfinite(w["z"])],
-                     dtype=float)
-        if z.size > best.size:
-            best = z
-    return best
+
+    found = _pinned_pilot_dirs()
+    if not found:
+        return np.array([], dtype=float)
+    sess = load_session(found[0])
+    z = np.array([w["z"] for w in sess["windows"]
+                  if w.get("phase") == "intervention" and w.get("valid")
+                  and isinstance(w.get("z"), (int, float)) and np.isfinite(w["z"])],
+                 dtype=float)
+    return z
 
 
 def main() -> int:
@@ -1369,6 +1452,8 @@ def main() -> int:
     test_primary_contrast(s)
     test_cortex_gate_ground_truth(s)
     test_synthetic_sessions_are_excluded(s)
+    test_raw_timestamp_precision(s)
+    test_sample_clock(s)
     test_duplicate_packet_filter(s)
     test_contact_gate(s)
     test_primary_outcome_ground_truth(s)

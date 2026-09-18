@@ -1,7 +1,7 @@
 # Handoff: everything a new session needs
 
-**Written 2026-08-28. Updated 2026-09-05** — trap 1 was partly wrong and is now
-resolved; see the update inside it. Read this first in a fresh conversation. It carries the state,
+**Written 2026-08-28. Updated 2026-09-05, and after the hardware session of 2026-09-17**
+— start with §0, which is what that session found. Read this first in a fresh conversation. It carries the state,
 the numbers, the open decisions, and — most importantly — the traps, because several of
 them cost hours and look invisible.
 
@@ -11,8 +11,91 @@ Verify the state is still current before trusting anything below:
 python scripts/run_tests.py && python scripts/verify_claims.py
 ```
 
-Expected: **106 passed, 0 failed** and **39 claims reproduce**. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
+Expected: **111 passed, 0 failed** and **44 claims reproduce**. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
 something changed after this was written and the numbers here are stale.
+
+---
+
+## 0. The 2026-09-17 hardware session — what it found
+
+The session in `next_session.md` was run. Two recordings, both clean enough to use:
+`alphatest_20260917_214726` (AF7/AF8 alpha validation) and `PILOT02_20260917_220343`
+(20 min at deployed settings). The headline is not either recording — it is two findings
+that change what the study can be.
+
+### 1. PILOT02 played ONE prompt for twenty minutes
+
+0 prompt changes, 301 segments of "calm ambient piano", 0 underruns, 0 sub-crossfade
+switches, 7.5% rejection. Technically perfect, and useless as a yoke source.
+
+This is the controller working as designed. With the relaxation target (z = −1), the goal
+is rung 1 and the controller always moves one rung toward it, so **every z from −∞ up to
++0.5 outputs rung 1**. The music only changes when z rises 1.5 SD *above* target. PILOT02
+sat at z = **−1.46** (SD 0.67), at or past target from the first window. PILOT01 was the
+same, less extremely (rung 1 for 95.9%).
+
+Consequence: for any participant who relaxes, the adaptive arm is a fixed one-prompt
+playlist, and a yoked sham replaying it is **acoustically identical**. The adaptive-vs-sham
+contrast has no stimulus difference to test. **This is the study's biggest open design
+problem**, it is a therapeutic/design decision, and any fix is a deviation from the frozen
+plan. See §7 question 8.
+
+(PILOT02 also sat 1.46 SD below its own baseline from the first second of music. n = 1,
+no sham, could be sound onset itself — descriptive only.)
+
+### 2. The AF7/AF8 alpha validation is mixed, not a clean pass
+
+| | 9/17 AF7/AF8 | Aug AF7/AF8 | Aug TP9/TP10 |
+|---|---|---|---|
+| alpha_test ratio (arithmetic) | 1.84× | 0.91× | 1.85× |
+| logged-window ratio (geometric) | **1.34×** | — | 2.13× |
+| d (log alpha) | 0.61 | −0.17 | 1.23 |
+| p | 5 × 10⁻⁷ | 0.26 | 2 × 10⁻²⁵ |
+| rejected | 6.8% | 48% | 3% |
+| **eye-closure prominence ratio** | **AF7 1.09, AF8 1.13 — FAIL (< 1.2)** | AF7 0.75 | TP9 2.46, TP10 1.91 (9/17) |
+
+Alpha *power* rises significantly on eye closure, with good contact and balanced windows
+(151 open / 143 closed). But the validated diagnostic — does a distinct alpha *peak* rise —
+fails on both frontal channels while passing clearly on TP9/TP10 in the same recording, and
+the median ratio is only 1.23×. Classification against `next_session.md` step 2: **"effect
+present but weak"** — usable, reporting frontal SNR as a measured limitation. The script's
+own "PASS … belongs in the paper" banner overstates it.
+
+**Figure 0 has NOT been replaced.** The manuscript's alpha claims are now pinned to the
+August recording (`PINNED_ALPHA` in `verify_claims.py`); the 9/17 numbers are asserted as
+separate claims. Replacing Figure 0 with a weaker, mixed result is a decision about the
+paper — §7 question 9.
+
+### 3. The dominated-configuration result holds on AF7/AF8
+
+Sweep on the 9/17 recording (reproduction r = 0.982): **7 of 9** alternatives beat the
+deployed setting on both axes (8 of 9 on TP9/TP10). Everything is roughly halved — deployed
+d 1.06 (vs 1.99), info/min 1.14 (vs 2.14) — and the latency floor gives **1.94×** the
+deployed information rate (1.83× on TP9/TP10). Detection latencies on this recording are
+noisy (5 transitions, weak signal, non-monotonic across τ); don't quote them.
+
+### 4. Three recording bugs, all found at the headset, all fixed
+
+- **BlueMuse duplicated packets** — trap 9. It is why the first contact checks read
+  "RAILING". Filtered in `stream_utils.DedupInlet`; the first version of that filter was
+  itself wrong.
+- **Raw timestamps lost precision with laptop uptime** — trap 10.
+- **A syntax error in `alpha_test.py` passed all 105 tests**, because nothing in the suite
+  parsed the headset-only scripts. The suite now compiles every file.
+
+The estimator sweep also counted samples to keep time, which the two 9/17 dropouts (11.75 s,
+20.25 s) broke; it now uses `session_logger.sample_clock`. And eight tests plus Figures 0 and
+6 were quietly selecting "the newest" recording — the same bug as the manuscript claims,
+further in. All pinned; a test guards it.
+
+### What to do next
+
+1. **Decide what to do about the one-prompt controller** (§7 q8). Nothing downstream is
+   worth running until the adaptive arm can produce a stimulus difference.
+2. Decide whether Figure 0 is replaced (§7 q9).
+3. The link: duplicates were 47% during the alpha test and 0.7% during PILOT02 after a
+   BlueMuse restart; two dropouts in the first recording, none in the second. Restart
+   BlueMuse fully before every session and keep the laptop within a metre, in front.
 
 ---
 
@@ -28,7 +111,7 @@ plays a matching precomputed segment.
 | | count |
 |---|---|
 | benchmark runs | 9 |
-| closed-loop sessions | 1 (self-administered, unblinded) |
+| closed-loop sessions | 2 (self-administered, unblinded; PILOT02 had 0 prompt changes) |
 | adaptive/sham pairs | **0** |
 | participants | **0** |
 
@@ -40,8 +123,8 @@ No claim about whether the intervention helps anyone can appear anywhere.
 
 | | |
 |---|---|
-| tests | 34 passing (`scripts/run_tests.py`) |
-| verified claims | 17 (`scripts/verify_claims.py`) |
+| tests | 111 passing (`scripts/run_tests.py`) |
+| verified claims | 44 (`scripts/verify_claims.py`) — 39 manuscript, pinned to PILOT01 and the August alpha test; 5 describing 9/17 |
 | figures | 7, at 300 dpi (`docs/figures/`) |
 | pre-registration | **FROZEN**, tag `preregistration-v1`, commit `e45bd32` |
 | plan sha256 (LF) | `538328a2dac75fc9bab76fecb7f7cfa11ef88db9b08f6cf7e187bd1fe4fe4ce5` |
@@ -50,7 +133,8 @@ No claim about whether the intervention helps anyone can appear anywhere.
 
 **The pre-registration is hash-checked by the test suite.** Editing
 `docs/analysis_plan.md` fails `run_tests.py`. That is deliberate. Post-freeze changes go
-in §9 as dated deviations, or become `preregistration-v2`.
+in `docs/deviations.md` as dated deviations (not §9 — §9 is inside the hashed file), or
+become `preregistration-v2`.
 
 `preregistration-v1` is an **annotated** tag, so `git rev-parse preregistration-v1`
 returns the tag object (`7a94667`), not the commit. Use `preregistration-v1^{commit}` to
@@ -237,6 +321,42 @@ still reads as synthetic — the wrong way round to fail would be reading as rea
 
 ---
 
+### Trap 9: BlueMuse can deliver every packet two to four times
+
+Found 2026-09-17. `verify_sample_rate` counted **1048 samples/s against a median spacing of
+3.906 ms (256 Hz)** — both cannot be true. Each 12-sample packet arrived, timestamps stepped
+back 43 ms, and the same packet arrived again: 8292 received in 8 s, **2052 unique**. The
+EEG was fine. Four copies at first; two after restarting BlueMuse *and* resetting Windows
+Bluetooth; 0.7% during PILOT02.
+
+Every script counts samples, not time, so duplicates read as the signal jumping backwards
+every 12 samples — which is what `contact_check` reported as AF7/AF8 **"RAILING"** on a
+headset that was probably fine. Nothing downstream checked.
+
+`stream_utils.get_inlet` now returns a `DedupInlet`, so all four live scripts are covered.
+**The first version was wrong**: it dropped any sample whose timestamp did not advance, and
+lost 111 of 2568 *genuine* samples (4.3%), because copies interleave and a real packet can
+arrive after a copy of a later one. Checked by comparing against the true unique set rather
+than accepting "249 Hz, close enough". The fix dedups by timestamp *identity* and holds
+samples 50 ms to reorder (measured lateness: max 13.9 ms). Sessions log `stream_*` counts.
+
+**Before any session:** end BlueMuse *and* LSL Bridge in Task Manager, reopen, Start
+Streaming **once**, then check the stream is duplicate-free before trusting a contact check.
+
+### Trap 10: raw timestamps depended on how long the laptop had been up
+
+`SessionLogger.log_raw` cast LSL time straight to float32. LSL time is seconds since boot,
+so precision was ~8 ms for PILOT01 (clock ~70,000 s) and **0.25 s for both 9/17 recordings**
+(clock ~2,339,000 s, 27 days up). Fixed: timestamps are stored relative to the first sample
+(~0.1 ms over a session) and the absolute origin is logged as a `raw time origin` note.
+
+The two 9/17 recordings keep their quarter-second timestamps. Use
+`session_logger.sample_clock` — sample counting, corrected for dropouts located from the
+timestamps — for anything that aligns them by time. It returns exactly `arange(n)/fs` when
+there are no dropouts, so nothing already correct moves.
+
+---
+
 ### Trap 7: every session on disk is disqualified as a yoke source
 
 Pre-fix ones for chatter; **all** of them for a 7.06 s replay-origin bias (fixed 8/28, but
@@ -256,6 +376,11 @@ directions — it must fire on a pre-9/5 source and stay silent on a current one
 The consequence for PILOT02: **a yoke source must be recorded with the current
 controller.** Any session predating 9/5 is unusable as one regardless of its quality, so
 this is not a bar PILOT02 has to clear so much as a reason no earlier session can.
+
+**Update 2026-09-17: PILOT02 exists and is also unusable, for a new reason.** It is clean,
+current-controller, chatter-free — and has **zero prompt changes**, so a sham replaying it
+is identical to the adaptive arm. See §0.1. The sham arm is still blocked, now on a design
+decision rather than on a recording.
 
 ---
 
@@ -278,23 +403,27 @@ At n = 10, power for 0.15 z is **38%**. The primary outputs are a confidence int
 ## 6. What is blocked on what
 
 ```
-SRC approval ──────────────────────────► participant data
-                                              ▲
-AF7/AF8 alpha validation ─────────────────────┤  (gates it)
-                                              │
-PILOT02 (clean yoke source) ──────────────────┘  (sham arm impossible without it)
+SRC approval ─────────────────────────────────────► participant data
+                                                         ▲
+AF7/AF8 alpha validation   DONE 9/17 — mixed ────────────┤  (usable with a stated limitation)
+                                                         │
+controller produces a stimulus difference  ◄── NEW ──────┤  (PILOT02: one prompt, 20 min)
+        │                                                │
+        └──► a yoke source with prompt changes ──────────┘  (sham arm impossible without it)
 ```
 
-**Next hardware session is fully specified in `docs/next_session.md`** — every command
-verified to exist and take the flags quoted. Summary: contact gate on AF7/AF8 → alpha
-validation on AF7/AF8 → estimator sweep on that recording → PILOT02 **at deployed
-settings**.
+`docs/next_session.md` was run on 2026-09-17; its results are in §0. **The next hardware
+session cannot be specified until §7 question 8 is decided** — recording another
+deployed-settings pilot would reproduce PILOT02.
 
 ---
 
 ## 7. Open questions
 
-1. **Does the eyes-closed effect hold on AF7/AF8 with good contact?** Gates everything.
+1. ~~**Does the eyes-closed effect hold on AF7/AF8 with good contact?**~~ **Answered
+   9/17: partly.** Alpha power rises (1.34× geometric, d = 0.61, p = 5 × 10⁻⁷, 6.8%
+   rejected), but the eye-closure prominence check fails on both frontal channels (AF7
+   1.09×, AF8 1.13×) while TP9/TP10 pass (2.46×, 1.91×). "Effect present but weak." §0.2.
 2. ~~**Should the inert trend suffix be deleted?**~~ **DONE 9/5 — deleted.** Not for being
    inert, but because the quantity it thresholded is **not measurable**: the largest
    genuine 60 s drift in PILOT01 is 0.0385 z/hop against slope-estimator noise of 0.0681
@@ -325,6 +454,18 @@ settings**.
    condition, and their frontal alpha asymmetry explained **0.40%** of variance, which is
    published support for trap 2). **Still open:** *Mind to Music* is paywalled and unread,
    and its title advertises real-time operation.
+8. **NEW 9/17 — the controller cannot produce a stimulus difference for a calm
+   participant.** Under the relaxation target every z below +0.5 outputs rung 1; PILOT02
+   played one prompt for 20 minutes. Options, none free: set the target relative to where
+   the participant actually sits rather than at a fixed −1; make the ladder finer near the
+   target so small movements change the music; lead toward the target from the
+   participant's rung even when already in band; or accept it and reframe the contrast as
+   "contingent vs non-contingent music" when the music rarely varies. All change what a
+   participant hears; all are deviations from the frozen plan. **Blocks the sham arm.**
+9. **NEW 9/17 — replace Figure 0 with the AF7/AF8 recording?** It validates the channels
+   the index actually uses, which is the argument for; it is weaker and fails the
+   eye-closure check, which is the argument against. Adopting it = change `PINNED_ALPHA`
+   in `verify_claims.py` in its own commit and update the manuscript to match.
 
 ---
 

@@ -64,7 +64,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(_ROOT, "src"))
 
 from eeg_features import FeatureConfig, FeatureExtractor, MUSE_CHANNELS  # noqa: E402
-from session_logger import load_raw, load_session  # noqa: E402
+from session_logger import load_raw, load_session, sample_clock  # noqa: E402
 
 ALPHA_BAND = (8.0, 13.0)      # matches DEFAULT_BANDS["alpha"]
 EDGE_GUARD_S = 8.0
@@ -75,7 +75,8 @@ FS = 256.0
 
 
 def est_pipeline(chans: np.ndarray, pair: tuple[str, str], window_s: float,
-                 hop_s: float, tau_s: float) -> tuple[np.ndarray, np.ndarray]:
+                 hop_s: float, tau_s: float,
+                 t_samples: np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
     """
     The deployed pipeline, via the real FeatureExtractor, at arbitrary window/hop/tau.
 
@@ -90,7 +91,11 @@ def est_pipeline(chans: np.ndarray, pair: tuple[str, str], window_s: float,
     for s0 in range(0, chans.shape[1] - n_win + 1, n_hop):
         f = ex.extract(chans[:, s0:s0 + n_win])
         if f.valid and np.isfinite(f.alpha) and f.alpha > 0:
-            t.append((s0 + n_win) / FS)
+            # The sample clock, not s0 / FS: after a dropout the index runs behind real
+            # time by the dropout's length. See session_logger.sample_clock.
+            # + 1/FS: the window is reported just AFTER its last sample, as before.
+            t.append(t_samples[s0 + n_win - 1] + 1.0 / FS if t_samples is not None
+                     else (s0 + n_win) / FS)
             v.append(f.alpha)
     if not v:
         return np.array([]), np.array([])
@@ -108,7 +113,8 @@ def est_pipeline(chans: np.ndarray, pair: tuple[str, str], window_s: float,
 
 
 def est_streaming(chans: np.ndarray, pair: tuple[str, str], order: int, tau_s: float,
-                  decim: int = 16) -> tuple[np.ndarray, np.ndarray]:
+                  decim: int = 16,
+                  t_samples: np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
     """
     Causal, per-sample alternative: DC-block, notch, narrowband, square, one-pole.
 
@@ -132,7 +138,8 @@ def est_streaming(chans: np.ndarray, pair: tuple[str, str], order: int, tau_s: f
     power = narrow ** 2
     alpha = 1.0 - np.exp(-1.0 / (tau_s * FS))
     sm = sps.lfilter([alpha], [1.0, -(1.0 - alpha)], power)
-    return np.arange(x.size)[::decim] / FS, sm[::decim]
+    t = t_samples if t_samples is not None else np.arange(x.size) / FS
+    return t[::decim], sm[::decim]
 
 
 ESTIMATORS = [
@@ -168,7 +175,7 @@ FRONTIER = [
 ]
 
 
-def report_frontier(chans, pair, timeline, offset, base) -> None:
+def report_frontier(chans, pair, timeline, offset, base, t_samples=None) -> None:
     """
     What the latency floor costs, measured rather than assumed.
 
@@ -188,7 +195,7 @@ def report_frontier(chans, pair, timeline, offset, base) -> None:
           f"{'info/min':>10}{'vs deployed':>13}")
     print("    " + "-" * 79)
     for name, kw in FRONTIER:
-        t, y = est_streaming(chans, pair, **kw)
+        t, y = est_streaming(chans, pair, t_samples=t_samples, **kw)
         sc = score(t, y, timeline, offset)
         info = sc["d"] * np.sqrt(sc["n_eff_per_min"]) if np.isfinite(sc["d"]) else float("nan")
         budget = StreamingBandPower(cfg, band="alpha", tau_seconds=kw["tau_s"],
@@ -213,18 +220,19 @@ def load(session_dir: str):
     session = load_session(session_dir)
     raw = load_raw(session_dir)
     chans = raw[:, 1:].T.astype(float)
+    t_samples = sample_clock(raw[:, 0], FS)
     pair = tuple(session["manifest"].get("index_channels") or ("TP9", "TP10"))
     timeline = [(float(w["elapsed_s"]), w["phase"]) for w in session["windows"]
                 if w.get("phase") in ("eyes_open", "eyes_closed")]
-    return session, chans, pair, timeline
+    return session, chans, pair, timeline, t_samples
 
 
-def find_offset(chans, pair, session, timeline) -> float:
+def find_offset(chans, pair, session, timeline, t_samples=None) -> float:
     """
     Session elapsed_s minus raw sample time. Found by correlating a faithful
     reproduction against the logged alpha rather than assumed to be zero.
     """
-    t, v = est_pipeline(chans, pair, 4.0, 1.0, 0.001)
+    t, v = est_pipeline(chans, pair, 4.0, 1.0, 0.001, t_samples=t_samples)
     w = [q for q in session["windows"]
          if isinstance(q.get("alpha"), (int, float)) and np.isfinite(q["alpha"])]
     wt = np.asarray([q["elapsed_s"] for q in w])
@@ -310,7 +318,7 @@ def score(t, y, timeline, offset):
             "n": len(lats), "rho": rho, "n_eff_per_min": n_eff_per_min}
 
 
-def report_channels(chans, session, timeline, offset) -> None:
+def report_channels(chans, session, timeline, offset, t_samples=None) -> None:
     """The channel-pair comparison behind docs/finding_channel_validation.md."""
     print("\n" + "=" * 78)
     print("CHANNEL PAIR COMPARISON - does the eyes-closed effect hold on the study's pair?")
@@ -329,7 +337,9 @@ def report_channels(chans, session, timeline, offset) -> None:
             if not (f.valid and np.isfinite(f.alpha) and f.alpha > 0):
                 rej += 1
                 continue
-            ph = phase_at(timeline, (s0 + nw) / FS + offset)
+            t_end = (t_samples[s0 + nw - 1] + 1.0 / FS if t_samples is not None
+                     else (s0 + nw) / FS)
+            ph = phase_at(timeline, t_end + offset)
             (op if ph == "eyes_open" else cl if ph == "eyes_closed" else []).append(f.alpha)
         if len(op) < 10 or len(cl) < 10:
             print(f"  {'/'.join(pair):<12}{'insufficient data':>40}")
@@ -360,8 +370,8 @@ def main() -> int:
             return 1
         d = cands[-1]
 
-    session, chans, pair, timeline = load(d)
-    offset, r = find_offset(chans, pair, session, timeline)
+    session, chans, pair, timeline, t_samples = load(d)
+    offset, r = find_offset(chans, pair, session, timeline, t_samples)
 
     print("=" * 78)
     print("ANALYSIS-PATH LATENCY: is 5.5 s structural, or a configuration?")
@@ -377,7 +387,7 @@ def main() -> int:
         return 2
 
     if args.report_channels:
-        report_channels(chans, session, timeline, offset)
+        report_channels(chans, session, timeline, offset, t_samples)
         return 0
 
     print()
@@ -386,7 +396,7 @@ def main() -> int:
     base = None
     base_info = None
     for name, fn, kw in ESTIMATORS:
-        t, y = fn(chans, pair, **kw)
+        t, y = fn(chans, pair, t_samples=t_samples, **kw)
         s = score(t, y, timeline, offset)
         if base is None:
             base = s
@@ -405,7 +415,7 @@ def main() -> int:
               f"{s['rho']:>7.3f}{s['n_eff_per_min']:>9.1f}{info:>10.2f}{mark}")
 
     print()
-    report_frontier(chans, pair, timeline, offset, base)
+    report_frontier(chans, pair, timeline, offset, base, t_samples)
     print()
     print("  detect  = median seconds from a real state change to crossing the midpoint")
     print("  d       = Cohen's d between states, measured away from transitions")

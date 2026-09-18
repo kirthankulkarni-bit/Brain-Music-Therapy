@@ -74,6 +74,7 @@ class SessionLogger:
         self._raw = open(self.raw_path, "ab")
         self._t0 = time.time()
         self.n_raw_samples = 0
+        self.raw_time_origin: Optional[float] = None
         self.counts: Dict[str, int] = {}
 
     # ------------------------------------------------------------- lifecycle
@@ -120,7 +121,7 @@ class SessionLogger:
             "started_utc": datetime.now(timezone.utc).isoformat(),
             "n_channels": self.n_channels,
             "raw_dtype": "float32",
-            "raw_layout": "[lsl_timestamp, ch0..chN]",
+            "raw_layout": "[seconds since first sample, ch0..chN]; absolute LSL origin in the raw time origin note",
         }
         manifest.update(fields)
         if "sampling_rate" not in manifest:
@@ -131,10 +132,32 @@ class SessionLogger:
         return manifest
 
     def log_raw(self, timestamps: Iterable[float], samples: Iterable[Iterable[float]]) -> None:
-        """Append a pulled LSL chunk to the raw binary file."""
-        ts = np.asarray(list(timestamps), dtype=np.float32).reshape(-1, 1)
-        if ts.size == 0:
+        """
+        Append a pulled LSL chunk to the raw binary file.
+
+        TIMESTAMPS ARE STORED RELATIVE TO THE FIRST SAMPLE. They used to be written as raw
+        LSL time cast straight to float32. LSL time is seconds since the machine booted,
+        and float32 carries 24 bits of mantissa, so the stored precision depends on UPTIME:
+        about 8 ms after a fresh boot (PILOT01, clock ~70,000 s), but 0.25 s once the laptop
+        had been up 27 days (the 2026-09-17 alpha test and PILOT02, clock ~2,339,000 s).
+        Every sample in a quarter-second shared one timestamp, and anything aligning by time
+        - the estimator sweep, the replay, the eye-closure check - was working from a
+        quarter-second staircase.
+
+        The subtraction happens in float64, before the cast. Relative to the first sample
+        a twenty-minute session needs values up to ~1300 s, where float32 resolves ~0.1 ms,
+        and even three hours stays under 1 ms. The absolute origin is logged once, at full
+        precision, as a note - so nothing is lost, and every existing reader, which only
+        ever uses differences, is unaffected.
+        """
+        ts64 = np.asarray(list(timestamps), dtype=np.float64).reshape(-1, 1)
+        if ts64.size == 0:
             return
+        if self.raw_time_origin is None:
+            self.raw_time_origin = float(ts64[0, 0])
+            self.note("raw time origin", level="info", lsl_time_origin=self.raw_time_origin,
+                      raw_timestamps="seconds relative to lsl_time_origin")
+        ts = (ts64 - self.raw_time_origin).astype(np.float32)
         data = np.asarray([list(s)[: self.n_channels] for s in samples], dtype=np.float32)
         if data.shape[0] != ts.shape[0]:
             return
@@ -237,6 +260,45 @@ def load_raw(session_dir: str, n_channels: int = 4) -> np.ndarray:
     width = 1 + n_channels
     usable = (flat.size // width) * width
     return flat[:usable].reshape(-1, width)
+
+
+def sample_clock(timestamps: np.ndarray, sampling_rate: float,
+                 min_gap_s: float = 0.5) -> np.ndarray:
+    """
+    Per-sample times in seconds from the first sample, corrected for stream dropouts.
+
+    Samples are counted at the nominal rate - the most precise clock available, because
+    the headset samples at exactly 256 Hz - and each dropout's duration is added where
+    the timestamps show one. Neither source alone is right:
+
+      sample_index / fs   exact between dropouts, but after one it runs behind real time
+                          by the dropout's length, permanently. The 2026-09-17 alpha test
+                          lost 11.75 s and then 20.25 s, so by the end every window was
+                          32 s early and the estimator sweep's reproduction fell to
+                          r = 0.77 and refused to report.
+
+      raw timestamps      locate dropouts, but on sessions written before 2026-09-17
+                          they can be quantised to 0.25 s (see SessionLogger.log_raw), so
+                          they cannot be used sample by sample.
+
+    A step of more than min_gap_s between consecutive stored timestamps is a dropout;
+    normal steps are one sample, or at worst the 0.25 s quantisation. Each dropout's
+    estimated length carries that quantisation as error (up to 0.25 s), against gaps
+    of tens of seconds. With no dropouts this returns exactly arange(n) / fs, so
+    recordings without gaps are unchanged.
+    """
+    ts = np.asarray(timestamps, dtype=np.float64)
+    n = ts.size
+    t = np.arange(n, dtype=np.float64) / float(sampling_rate)
+    if n < 2:
+        return t
+    step = np.diff(ts)
+    gaps = np.where(step > min_gap_s)[0]
+    if gaps.size:
+        extra = np.zeros(n, dtype=np.float64)
+        extra[gaps + 1] = step[gaps] - 1.0 / float(sampling_rate)
+        t = t + np.cumsum(extra)
+    return t
 
 
 # Manifest values of sampling_rate_source that mean the recording is SYNTHETIC. The

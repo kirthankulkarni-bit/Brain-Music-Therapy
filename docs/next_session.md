@@ -1,5 +1,11 @@
 # Next hardware session: what to run, and why each step earns its place
 
+> **RUN ON 2026-09-17.** Results are in `HANDOFF.md` §0. In short: the AF7/AF8 alpha effect
+> is present but weak; PILOT02 is clean but played one prompt for twenty minutes, so it
+> cannot serve as a yoke source; and three recording bugs were found and fixed. **Do not
+> rerun this document as-is** — another deployed-settings pilot would reproduce PILOT02.
+> The next session waits on HANDOFF §7 question 8.
+
 Written 2026-08-28. Supersedes the "run PILOT02" plan, because two findings changed what
 the session needs to accomplish.
 
@@ -179,9 +185,10 @@ Check, in order:
 
 ### What `verify_claims` should and should not say afterwards
 
-**Expected to move — update these deliberately, once.** The alpha-validation claims track
-the *newest* recording on purpose, because replacing Figure 0 on AF7/AF8 is the point of
-this session:
+**Superseded 2026-09-17.** The alpha-validation claims are now pinned to the August
+recording (`PINNED_ALPHA`); a new alpha recording gets its own claims and replaces the
+manuscript's only by a deliberate change to that constant. The list below is what *used*
+to be expected to move:
 
 - `eyes-closed alpha ratio`, `same effect on AF7/AF8`
 - `alpha ratio at deployed 350 uV`, `effect survives every threshold`

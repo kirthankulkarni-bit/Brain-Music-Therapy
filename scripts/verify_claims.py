@@ -67,6 +67,33 @@ def _median_gen(run: dict, precision: str, duration: float) -> float:
 # commit and say why.
 PINNED_PILOT = "PILOT01_20260822_153652"
 
+# The alpha-validation recording the manuscript describes - Figure 0, the 2.13x, the
+# estimator sweep and every number derived from it. Pinned for the same reason as the
+# pilot, decided on 2026-09-17 when a second alpha recording landed.
+#
+# These claims used to track the NEWEST alpha recording, on the reasoning that the next
+# session would replace Figure 0. But whether a new recording replaces the manuscript's
+# is a decision about the paper, not a side effect of a file appearing on disk. The
+# 2026-09-17 AF7/AF8 recording is weaker and mixed - significant alpha rise, but the
+# eye-closure prominence check fails on both frontal channels - so replacing Figure 0 with
+# it is exactly the kind of call that must be made deliberately.
+#
+# To adopt a newer recording: change this constant in its own commit, say why, and update
+# the manuscript to match. Until then the newer recording is described by its own claims
+# (SECOND_ALPHA below), which are regenerated and visible but overwrite nothing.
+PINNED_ALPHA = "alphatest_20260816_015511"
+
+# The 2026-09-17 alpha test: AF7/AF8, good contact, two stream dropouts (11.75 s and
+# 20.25 s) and heavy duplicate packets that the recorder filtered. Described separately.
+SECOND_ALPHA = "alphatest_20260917_214726"
+
+
+def _alpha_dir(name: str = PINNED_ALPHA) -> str:
+    d = os.path.join(_ROOT, "sessions", name)
+    if not os.path.isdir(d):
+        raise FileNotFoundError(f"{name} is missing; these claims describe it specifically")
+    return d
+
 
 def _pilot() -> dict:
     from session_logger import is_synthetic, load_session
@@ -274,18 +301,20 @@ def claim_coupling_recovers_lag() -> tuple[float, str]:
     return float(got), "synthetic session, true lag +6.0 s"
 
 
-def claim_alpha_validation_ratio() -> tuple[float, str]:
-    """Eyes-closed alpha increase - the evidence the rig measures cortex."""
+def _logged_alpha_ratio(d: str) -> tuple[float, str]:
     from session_logger import load_session
-    from session_logger import real_sessions
-    dirs = real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))
-    session = load_session(dirs[-1])
+    session = load_session(d)
     rows = [w for w in session["windows"]
             if w.get("phase") in ("eyes_open", "eyes_closed")
             and isinstance(w.get("alpha"), (int, float)) and np.isfinite(w["alpha"])]
     a = np.log10(np.asarray([w["alpha"] for w in rows], dtype=float))
     closed = np.asarray([w["phase"] == "eyes_closed" for w in rows], dtype=bool)
     return float(10 ** (a[closed].mean() - a[~closed].mean())),         f"{closed.sum()} closed / {(~closed).sum()} open windows"
+
+
+def claim_alpha_validation_ratio() -> tuple[float, str]:
+    """Eyes-closed alpha increase - the evidence the rig measures cortex."""
+    return _logged_alpha_ratio(_alpha_dir())
 
 
 def claim_alpha_ratio_at_deployed_rejection() -> tuple[float, str]:
@@ -305,7 +334,7 @@ def claim_alpha_ratio_at_deployed_rejection() -> tuple[float, str]:
     """
     from alpha_sensitivity import ratio_at_threshold
 
-    return ratio_at_threshold(350.0)
+    return ratio_at_threshold(350.0, session_dir=_alpha_dir())
 
 
 def claim_alpha_effect_survives_every_threshold() -> tuple[float, str]:
@@ -318,29 +347,29 @@ def claim_alpha_effect_survives_every_threshold() -> tuple[float, str]:
     """
     from alpha_sensitivity import significance_across_thresholds
 
-    frac, detail = significance_across_thresholds()
+    frac, detail = significance_across_thresholds(session_dir=_alpha_dir())
     return frac, detail
 
 
 def claim_channel_mismatch_af() -> tuple[float, str]:
-    """Eyes-closed alpha ratio on AF7/AF8 - the channels the study actually uses."""
+    """
+    Eyes-closed alpha ratio on AF7/AF8 - the channels the study actually uses.
+
+    This used to align windows to blocks with a HARDCODED +6.25 s clock offset and
+    sample-index time. +6.25 s was measured on the August recording only; trap 3 in the
+    handoff says the offset must be found by correlation, never assumed, and the
+    2026-09-17 recording measured +6.00 s. It also had two stream dropouts (11.75 s and
+    20.25 s), after which sample-index time runs behind by the dropout. Both are now taken
+    from the sweep's own alignment: the correlated offset and the gap-corrected sample
+    clock.
+    """
     from eeg_features import FeatureConfig, FeatureExtractor
-    from session_logger import load_raw, load_session
+    import estimator_sweep as es
 
-    from session_logger import real_sessions
-    d = real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))[-1]
-    chans = load_raw(d)[:, 1:].T.astype(float)
-    session = load_session(d)
-    tl = [(float(w["elapsed_s"]), w["phase"]) for w in session["windows"]
-          if w.get("phase") in ("eyes_open", "eyes_closed")]
-
-    def phase_at(t):
-        prev = None
-        for tt, ph in tl:
-            if tt > t:
-                return prev
-            prev = ph
-        return prev
+    d = _alpha_dir()
+    c = _sweep(d)
+    session, chans, pair, tl, t_samples = es.load(d)
+    offset = c["offset"]
 
     cfg = FeatureConfig(sampling_rate=256.0, frontal_channels=("AF7", "AF8"))
     ex = FeatureExtractor(cfg)
@@ -350,11 +379,11 @@ def claim_channel_mismatch_af() -> tuple[float, str]:
         f = ex.extract(chans[:, s0:s0 + nw])
         if not (f.valid and np.isfinite(f.alpha) and f.alpha > 0):
             continue
-        ph = phase_at((s0 + nw) / 256.0 + 6.25)
+        ph = es.phase_at(tl, t_samples[s0 + nw - 1] + 1.0 / 256.0 + offset)
         (op if ph == "eyes_open" else cl if ph == "eyes_closed" else []).append(f.alpha)
     if len(op) < 10 or len(cl) < 10:
         return float("nan"), "insufficient"
-    return float(10 ** (np.log10(cl).mean() - np.log10(op).mean())),         f"{len(op)} open / {len(cl)} closed windows"
+    return float(10 ** (np.log10(cl).mean() - np.log10(op).mean())),         f"{len(op)} open / {len(cl)} closed windows, offset {offset:+.2f} s"
 
 
 _DEAP_CACHE: dict = {}
@@ -480,21 +509,14 @@ _SWEEP_CACHE: dict = {}
 
 
 def _sweep_dir():
-    """
-    The NEWEST real alpha-validation session, deliberately unpinned.
-
-    Opposite convention to PINNED_PILOT, for a reason. The next hardware session exists
-    to redo the alpha validation on AF7/AF8 and replace Figure 0, so these claims are
-    SUPPOSED to move when a better recording lands. The pilot claims are about one
-    recording; these are about the best available validation.
-    """
-    from session_logger import real_sessions
-    return real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))[-1]
+    """The alpha recording the manuscript's sweep numbers describe. See PINNED_ALPHA."""
+    return _alpha_dir(PINNED_ALPHA)
 
 
-def _sweep():
+def _sweep(d: str = None):
     """
-    The estimator sweep, computed once: {name: {latency_s, d, n_eff_per_min, info}}.
+    The estimator sweep on one recording, computed once per recording:
+    {rows: {name: {latency_s, d, n_eff_per_min, info}}, r, offset, t_samples, names}.
 
     This is the evidence for C2 - "the analysis latency is a dominated configuration",
     which the preprint calls its strongest result - and nothing regenerated any of it
@@ -502,26 +524,87 @@ def _sweep():
     d and ind/min columns, so the study's feasibility argument rests on them too.
 
     The sweep refuses to report below r = 0.9 against the session log, and that gate is
-    re-applied here rather than assumed.
+    re-applied here rather than assumed. Time comes from the gap-corrected sample clock;
+    see session_logger.sample_clock.
     """
-    if not _SWEEP_CACHE:
+    d = d or _sweep_dir()
+    if d not in _SWEEP_CACHE:
         import estimator_sweep as es
-        from session_logger import real_sessions
-        d = real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))[-1]
-        session, chans, pair, timeline = es.load(d)
-        offset, r = es.find_offset(chans, pair, session, timeline)
+        session, chans, pair, timeline, t_samples = es.load(d)
+        offset, r = es.find_offset(chans, pair, session, timeline, t_samples)
         if not np.isfinite(r) or r < 0.9:
-            raise RuntimeError(f"sweep reproduction r = {r:.3f} < 0.9")
+            raise RuntimeError(f"sweep reproduction r = {r:.3f} < 0.9 on {os.path.basename(d)}")
         rows = {}
         for name, fn, kw in es.ESTIMATORS:
-            t, y = fn(chans, pair, **kw)
+            t, y = fn(chans, pair, t_samples=t_samples, **kw)
             sc = es.score(t, y, timeline, offset)
             sc["info"] = (sc["d"] * np.sqrt(sc["n_eff_per_min"])
                           if np.isfinite(sc["d"]) else float("nan"))
             rows[name] = sc
-        _SWEEP_CACHE.update(rows=rows, r=r, offset=offset,
-                            names=[n for n, _, _ in es.ESTIMATORS])
-    return _SWEEP_CACHE
+        _SWEEP_CACHE[d] = dict(rows=rows, r=r, offset=offset, t_samples=t_samples,
+                               names=[n for n, _, _ in es.ESTIMATORS])
+    return _SWEEP_CACHE[d]
+
+
+def _floor_info_ratio(d: str) -> tuple[float, str]:
+    import estimator_sweep as es
+
+    c = _sweep(d)
+    base = c["rows"][c["names"][0]]
+    base_info = base["d"] * np.sqrt(base["n_eff_per_min"])
+    session, chans, pair, timeline, t_samples = es.load(d)
+    t, y = es.est_streaming(chans, pair, order=2, tau_s=0.10, t_samples=t_samples)
+    sc = es.score(t, y, timeline, c["offset"])
+    info = sc["d"] * np.sqrt(sc["n_eff_per_min"])
+    return float(info / base_info), (f"streaming o2 tau=0.1: d {sc['d']:.2f}, "
+                                     f"ind/min {sc['n_eff_per_min']:.1f}")
+
+
+def _eye_closure_ratio(d: str, channel: str) -> tuple[float, str]:
+    """The signal_quality eye-closure prominence ratio for one channel."""
+    from eeg_features import MUSE_CHANNELS
+    from session_logger import load_raw, load_session
+    from signal_quality import eyes_closed_ratio, labelled_blocks
+
+    raw = load_raw(d)
+    ts = raw[:, 0].astype(float)
+    ts = ts - ts[0]
+    op, cl, ratio = eyes_closed_ratio(ts, raw[:, 1 + MUSE_CHANNELS.index(channel)].astype(float),
+                                      labelled_blocks(load_session(d)))
+    return float(ratio), f"prominence open {op:.2f}, closed {cl:.2f}"
+
+
+# -------------------------------------------- the 2026-09-17 AF7/AF8 recording
+#
+# Described here rather than substituted into the manuscript's claims. Asserted so that
+# the numbers the handoff quotes for that session are regenerated, not remembered.
+
+
+def claim_second_alpha_ratio() -> tuple[float, str]:
+    """Logged-window eyes-closed alpha ratio on AF7/AF8, 2026-09-17."""
+    return _logged_alpha_ratio(_alpha_dir(SECOND_ALPHA))
+
+
+def claim_second_af7_eye_closure() -> tuple[float, str]:
+    """AF7 prominence ratio, 2026-09-17. Below 1.2 = the eye-closure check fails."""
+    return _eye_closure_ratio(_alpha_dir(SECOND_ALPHA), "AF7")
+
+
+def claim_second_af8_eye_closure() -> tuple[float, str]:
+    """AF8 prominence ratio, 2026-09-17. Below 1.2 = the eye-closure check fails."""
+    return _eye_closure_ratio(_alpha_dir(SECOND_ALPHA), "AF8")
+
+
+def claim_second_deployed_d() -> tuple[float, str]:
+    """Deployed estimator's discriminability on AF7/AF8, 2026-09-17 (1.99 on TP9/TP10)."""
+    c = _sweep(_alpha_dir(SECOND_ALPHA))
+    row = c["rows"][c["names"][0]]
+    return float(row["d"]), f"r = {c['r']:.3f}, offset {c['offset']:+.2f} s"
+
+
+def claim_second_floor_info() -> tuple[float, str]:
+    """Floor info rate over deployed on AF7/AF8, 2026-09-17 (1.83x on TP9/TP10)."""
+    return _floor_info_ratio(_alpha_dir(SECOND_ALPHA))
 
 
 def claim_deployed_detection_latency() -> tuple[float, str]:
@@ -558,18 +641,7 @@ def claim_info_rate_at_the_floor() -> tuple[float, str]:
     Asserted because section 3 now leads with it, and because it is the kind of ratio
     that would move quietly if the band edges or the filter order changed.
     """
-    import estimator_sweep as es
-
-    c = _sweep()
-    base = c["rows"][c["names"][0]]
-    base_info = base["d"] * np.sqrt(base["n_eff_per_min"])
-
-    session, chans, pair, timeline = es.load(_sweep_dir())
-    t, y = es.est_streaming(chans, pair, order=2, tau_s=0.10)
-    sc = es.score(t, y, timeline, c["offset"])
-    info = sc["d"] * np.sqrt(sc["n_eff_per_min"])
-    return float(info / base_info), (f"streaming o2 tau=0.1: d {sc['d']:.2f}, "
-                                     f"ind/min {sc['n_eff_per_min']:.1f}")
+    return _floor_info_ratio(_sweep_dir())
 
 
 def claim_alternatives_dominating_deployed() -> tuple[float, str]:
@@ -791,6 +863,11 @@ CLAIMS = {
     "PILOT01 dominant rung occupancy":    (claim_pilot_rung_occupancy,      0.959,  0.005),
     "analysis-path latency floor":        (claim_analysis_latency_floor,    0.189,  0.005),
     "info rate at the floor / deployed":  (claim_info_rate_at_the_floor,    1.83,   0.05),
+    "9/17 AF7/AF8 alpha ratio (logged)":  (claim_second_alpha_ratio,        1.34,   0.02),
+    "9/17 AF7 eye-closure ratio":         (claim_second_af7_eye_closure,    1.09,   0.03),
+    "9/17 AF8 eye-closure ratio":         (claim_second_af8_eye_closure,    1.13,   0.03),
+    "9/17 deployed d on AF7/AF8":         (claim_second_deployed_d,         1.06,   0.03),
+    "9/17 floor info / deployed":         (claim_second_floor_info,         1.94,   0.05),
 }
 
 
