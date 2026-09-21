@@ -1,0 +1,472 @@
+% Where the latency actually is in closed-loop EEG-driven music
+%
+% Compiles with pdflatex (no unicode, no exotic packages):
+%     pdflatex arxiv_short.tex && pdflatex arxiv_short.tex
+% Two passes so the hyperref/table references settle.
+%
+% Source of truth for the numbers is docs/arxiv_short.md and, behind it,
+% `python scripts/verify_claims.py`. If a number here disagrees with that, the
+% script is right.
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
+\title{Where the latency actually is in closed-loop EEG-driven music\\
+       \large A measured architecture, and four statistical properties of
+       closed-loop EEG data}
+\author{Kirthan Kulkarni}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Closed-loop systems that drive music generation from EEG are an active area, and a working
+one: several have been built and described. What is not reported is how long they take.
+Across the systems we could resolve individually, none publishes a measured, decomposed
+end-to-end latency budget; one reports its analysis window and update rate and reasons about
+delay qualitatively.
+
+We build such a system on consumer hardware---a four-channel Muse headband, a frontal
+$\log(\beta/\alpha)$ index $z$-scored against the participant's own baseline, a nine-rung
+prompt ladder, and a resident library of pre-rendered audio---and measure it. Generation with
+MusicGen runs $1.05$--$6.27\times$ slower than realtime across every machine, backend and
+precision we tested, including a datacenter T4, so a precomputed library is not a compromise
+but the correct architecture for a finite prompt space. End-to-end worst case is $6.5$~s, of
+which $84.6\%$ is the analysis path, not the model.
+
+That decomposition turns out to be configuration-dependent rather than architectural.
+Against labelled eyes-open/closed ground truth, the deployed estimator is dominated by 8 of
+its 9 alternatives on both detection latency and information per minute simultaneously. The
+architecture's floor is $0.189$~s of analysis path, and at that floor information rate is
+$1.83\times$ the deployed value---the fastest configuration is also the more informative one.
+With a $0.25$~s crossfade the end-to-end figure is $0.439$~s, inside the regime where
+published alpha-neurofeedback studies still find an effect and where our deployed
+configuration is $13\times$ too slow.
+
+We also report four statistical properties of closed-loop EEG data that affect any study of
+this kind, three of which cost us designs before we measured them: autocorrelation inflates
+apparent evidence $6.4\times$; continuous audio-neural coupling loses power precisely when
+the intervention succeeds; event-locked responses are confounded by their own trigger to a
+degree we calibrate against synthetic ground truth; and dichotomised outcomes cost roughly
+$3\times$ in detectable effect.
+
+\textbf{This is a systems and methods paper. It makes no claim that the intervention helps
+anyone.} Two self-administered unblinded sessions exist; zero adaptive/sham pairs; zero
+participants.
+\end{abstract}
+
+\section{What is missing from a crowded field}
+
+Building an EEG-to-music loop is not a contribution. MindMelody~\cite{mindmelody} pairs a
+transformer-GNN affect encoder with a retrieval-augmented planner over MusicGen-medium; Ran
+et al.~\cite{mindtomusic} drive real-time emotional music generation from EEG; Ehrlich et
+al.~\cite{ehrlich} close the loop with synthesised affective music; Velasquez-Pena et
+al.~\cite{neurophone} do it on a consumer Muse S into Ableton Live; Monroy-D'Croz et
+al.~\cite{minimalist} build a minimalist BCMI on prefrontal EEG over Lab Streaming Layer.
+Dash and Agres~\cite{dashagres} survey the field.
+
+These systems decode affect better than ours. We use a single hand-built index on two
+electrodes; MindMelody reports $76.8\%$ valence and $72.4\%$ arousal cross-subject on DEAP.
+Any claim of novelty in system capability is unavailable to us, and we make none.
+
+What they do not report is timing. MindMelody describes itself as closed-loop and real-time
+and gives no latency figure, no inference time and no hardware specification.
+Monroy-D'Croz et al.---architecturally the closest published system to ours---reports none
+either, and ran no control condition.
+
+One paper is a partial counterexample and we state it rather than leave it for a reviewer.
+Ehrlich et al.\ report a $4$~s analysis window at $87.5\%$ overlap giving a $0.5$~s update
+rate, say that zero-phase filtering was chosen to avoid delay, and describe tuning a feedback
+parameter against perceived latency. They convert none of this into a signal-to-audio figure.
+So the defensible claim is not that this literature ignores latency; it is that \emph{no
+system in this group reports a measured, decomposed end-to-end latency budget}.
+
+The adjacent fields treat it as mandatory. Gesture2Music~\cite{gesture2music} reports $30$~ms
+inference against a stated $100$~ms interaction threshold. Neurofeedback work treats delay as
+the independent variable: Belinskaia et al.~\cite{belinskaia} trained parietal alpha with
+feedback at $0$~ms, $+250$~ms and $+500$~ms and found sustained post-training change
+negatively correlated with latency and absent at $500$~ms; Asai et al.~\cite{asai} found an
+effect on EEG microstates only at zero delay, with one second enough to abolish it and
+participants unable to detect the delay that did so.
+
+Our question is therefore not whether such a system can be built. It is: when one is measured
+rather than described, what is the number, and what follows from it?
+
+\section{The system}
+
+\paragraph{Sensing.} A Muse 2 streams four channels at $256$~Hz over LSL. Frontal AF7/AF8 are
+averaged; each window is detrended, band-passed $1$--$45$~Hz, notched at $60$~Hz, and
+Welch-transformed. The index is $\log(\beta/\alpha)$, smoothed with a one-pole filter
+($\tau = 3$~s) and $z$-scored against the participant's own $120$~s eyes-open baseline.
+Windows exceeding a $350~\mu$V peak-to-peak threshold are rejected and do not update the
+smoother.
+
+\paragraph{Control.} A nine-rung energy ladder spans arousal at $0.5$~SD per rung. The
+controller applies the iso-principle~\cite{altshuler}: it does not jump to the target state
+but moves one rung from the participant's current rung toward it. Output is therefore a pure
+function of $(z, \mathrm{target})$, with a finite range of exactly nine strings.
+
+\paragraph{Audio.} Each rung has $32$ pre-rendered $8$~s segments ($288$ total, $38.4$
+minutes). A prompt change abandons the current segment mid-playback and equal-power
+crossfades into one drawn from the new rung.
+
+Two properties of this design carry the paper.
+
+\emph{The prompt space is finite and small, so generation is unnecessary rather than merely
+slow.} A library covering nine strings covers the controller's entire output space exactly.
+Even given an infinitely fast generator, re-synthesising one of nine prompts is strictly
+worse than selecting a pre-rendered variant. This argument survives arbitrarily fast models;
+the latency argument below does not.
+
+\emph{The library responds in one crossfade, not one segment.} Streaming commits: once a
+segment is queued it plays to completion, so a prompt change waits up to
+$\mathrm{queue\_depth} \times \mathrm{segment\_seconds}$ regardless of GPU speed. Worst-case
+audio latency drops from $8.0$~s to $1.0$~s---$8\times$, and it is the architecture, not the
+hardware, that buys it.
+
+\section{The latency budget, measured}
+
+\subsection{Generation is slower than realtime everywhere we looked}
+
+Nine benchmark runs across two GPU tiers, two backends and three precision modes. Every one
+of $44$ configuration cells lands between $1.05\times$ and $6.27\times$ slower than realtime.
+The best case is a datacenter T4.
+
+The bound is the sequential decode loop, not arithmetic, established by giving the workload
+$8\times$ the arithmetic and watching it get slower: on the T4, fp32 beats fp16-half by a
+factor of $0.952$, and fp32 $<$ fp16-half $<$ fp16 held in 6 of 6 cells. Autocast inserts a
+cast at every operation, which amortises over large batched matmuls in training and is pure
+overhead for batch-1 autoregressive decoding.
+
+Between-run variance is a property of the machine, not the measurement: up to $1.96\times$ on
+a thermally limited laptop and $1.18\times$ on the T4 for the same configuration. Report
+ranges, not point estimates---a single run of this probe is not a measurement on a laptop GPU.
+
+\subsection{The dominant term is the analysis path}
+
+End-to-end worst case with the library engine is $6.5$~s: $5.5$~s of analysis plus one
+$1.0$~s crossfade. $84.6\%$ is analysis. Work aimed at faster generation optimises the
+smaller term.
+
+The analysis budget is structural, not implementation slop: a $4$~s window contributes
+$2.0$~s of centroid delay, a $1$~s hop contributes $0.5$~s of quantisation, and a
+$\tau = 3$~s smoother contributes $3.0$~s of group delay. Predicted $5.5$~s; measured
+$5.665$~s against labelled ground truth.
+
+\subsection{The deployed configuration is dominated}
+
+Latency alone would favour a wire and discriminability alone would favour smoothing
+everything to a constant, so we score estimators on $d \times \sqrt{\text{independent
+observations per minute}}$---the $t$-statistic per root-minute, which is what determines how
+precisely a fixed-duration session resolves a state difference.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+estimator & detect & $d$ & ind/min & info/min \\
+\midrule
+deployed ($4$~s window, $1$~s hop, $\tau = 3$) & $5.67$~s & $1.99$ & $1.2$ & $2.14$ \\
+$2$~s window, $0.5$~s hop, $\tau = 0.5$ & $1.68$~s & $1.14$ & $13.6$ & $4.20$ \\
+streaming, order 4, $\tau = 0.25$ & $0.17$~s & $0.70$ & $30.9$ & $3.91$ \\
+\bottomrule
+\end{tabular}
+\caption{The deployed setting is dominated by 8 of its 9 alternatives on both axes at once.}
+\end{table}
+
+It is not a latency/accuracy trade-off; it is off the efficient frontier.
+
+The mechanism links this section to Section~\ref{sec:stats}. At $\tau = 3$~s consecutive
+outputs are nearly identical ($\rho = 0.962$), yielding $1.2$ independent observations per
+minute---which is precisely the coefficient that produces an effective sample size of $25$
+from a $20$-minute session. The smoother is simultaneously the largest latency term and the
+dominant cause of the autocorrelation that collapses statistical power. Shortening it pays
+twice.
+
+\subsection{The floor, and what binds it}
+
+A streaming estimator has no window centroid and no hop quantisation; its only delays are
+filter group delay and the smoother. At second order with $\tau = 0.1$~s that is $0.189$~s.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+analysis path & crossfade & end-to-end & vs the $500$~ms result \\
+\midrule
+deployed, $5.500$~s & $1.00$~s & $6.500$~s & $13.0\times$ \\
+retuned, $1.750$~s & $1.00$~s & $2.750$~s & $5.5\times$ \\
+floor, $0.189$~s & $1.00$~s & $1.189$~s & $2.4\times$ \\
+floor, $0.189$~s & $0.25$~s & $0.439$~s & $0.9\times$ --- inside \\
+\bottomrule
+\end{tabular}
+\caption{The architecture's floor reaches the regime in which alpha neurofeedback still
+works.}
+\end{table}
+
+Two consequences. ``Analysis is $85\%$ of the budget'' is configuration-dependent, not
+architectural: fix the analysis path and the crossfade becomes the binding term, inverting
+the decomposition we report above. And the floor is not a trade-off: per-sample
+discriminability collapses there ($d = 1.99 \rightarrow 0.61$) but independence rises from
+$1.2$ to $41.4$ observations per minute, and information per minute at the floor is
+$1.83\times$ the deployed value. The fastest configuration this architecture can reach is
+also the more informative one.
+
+Three caveats. Measured \emph{detection} does not fall monotonically with the budget---below
+$\tau \approx 0.25$ the estimate is noisy enough that midpoint crossing becomes harder to
+time, so the budget is a floor on delay rather than a promise about detection. Every figure
+here is measured on an eyes-open/closed manipulation, which is gross compared to
+adaptive-versus-sham. And no session has been run at these settings: the frontier is located
+and priced on a proxy, not paid for.
+
+\subsection{A finer estimator needs controller work, not a flag}
+
+Adopting the faster estimator is not the two-parameter change it appears to be. Replayed
+against a pilot recording, $2$~s${}/{}0.5$~s${}/{}\tau = 0.5$ produces $591$ switches inside
+a crossfade---a continuous blend of two independent renders rather than music with
+transitions in it, and a larger fraction than the defect that made our first pilot's audio
+unusable. The cause is not the estimator: it is that the ladder quantises $z$ with no
+hysteresis, so a less-smoothed index crosses rung boundaries constantly.
+
+The fix is a minimum dwell, and its value is structural rather than tuned: a dwell of at
+least one crossfade is exactly the condition for no switch arriving before the previous
+crossfade completes, so sub-crossfade switches fall to $0$ by construction. The dwell is not
+free---the library engine acts within one crossfade, so worst case becomes dwell plus
+crossfade---which is why the honest figure for the retuned configuration is $1.8\times$
+rather than the $2.4\times$ the estimator alone suggests.
+
+\section{Four statistical properties of closed-loop EEG data}
+\label{sec:stats}
+
+\subsection{Autocorrelation inflates evidence by a factor of six}
+
+A $20$-minute session yields $1043$ valid windows at a $1$~s hop, and it is tempting to treat
+them as $1043$ observations. Lag-1 autocorrelation is $0.953$, giving an AR(1) effective
+sample size of $25.3$. Any test treating windows as independent overstates its evidence by
+$\sqrt{1043/25.3} = 6.4\times$---the difference between $p = 0.05$ and $p = 0.4$.
+
+\subsection{Continuous coupling loses power exactly when the intervention works}
+
+Cross-correlating the audio envelope against the neural index over a whole session has a
+perverse property: a participant who reaches target and stays there keeps the controller on
+one rung, so the audio stops varying in the way the controller drives it and there is almost
+nothing left to correlate. Our first pilot returned $r = -0.054$, $p = 0.795$ while sitting
+on one rung for $95.9\%$ of the session. The estimator was not failing---it recovers a known
+$+6$~s lag from synthetic data. There was simply no controller-driven variation in the window
+it was given. This is a bad property for a primary outcome and it is not fixable by improving
+the estimator.
+
+\subsection{Event-locked responses are confounded by their own trigger}
+
+Conditioning on rung changes restores power, because it looks only at moments that carry
+information. But a rung change happens \emph{because} $z$ moved, and $z$ keeps moving---so a
+positive effect is exactly what a closed loop with no therapeutic effect whatsoever would
+produce.
+
+We calibrate this rather than warn about it. Against synthetic sessions with known ground
+truth, the estimator recovers $+1.503$ on a responder, $-1.467$ on an anti-responder, and
+$+0.011$ ($p = 0.573$) on an unrelated session. A fourth session is constructed with no audio
+effect at all---$z$ wanders and rung changes fire on boundary crossings, as the real
+controller does---and it scores $+0.435$ at $p = 0.010$.
+
+Our pilot measures $+0.412$. The two are indistinguishable. The diagnostics separate them
+from a real response and the pilot sits on the wrong side: its pre-window slope is $+0.1292$
+z/s against $+0.0573$ for the pure confound and $+0.0012$ for a genuine response, and it is
+the only one of the three whose curve peaks at onset and decays---the shape a trailing
+excursion makes, and the opposite of a real response, which rises \emph{after} onset. A
+positive within-arm event-locked effect is not evidence of an effect. Only the yoked contrast
+is interpretable.
+
+\subsection{Dichotomising costs about three times the effect}
+
+Time-in-band is the interpretable clinical quantity and a costly primary outcome: it discards
+how far inside or outside the band a participant is and saturates, since someone well outside
+the band scores near zero in both arms. Simulated against the measured autocorrelation, it
+costs roughly $3\times$ in detectable effect. We register mean $z$ as primary and report
+time-in-band descriptively.
+
+\paragraph{Consequence for design.} At $n = 10$ with a crossover design, power to detect the
+literature-matched $0.15$~$z$ effect is $38.8\%$; reaching $80\%$ needs $25$ participants per
+arm. A study reporting $p > 0.05$ at $38\%$ power has learned nothing, so we register a
+feasibility study reporting an interval and two variance components, and no $p$-value for the
+primary contrast.
+
+\section{Does the index measure anything?}
+
+Two separable claims: that the electrodes record cortex, and that $\log(\beta/\alpha)$ tracks
+arousal.
+
+\paragraph{Cortex.} On an eyes-open/eyes-closed manipulation, alpha rose $2.13\times$ with eye
+closure on the temporal pair ($d = 1.55$, $p = 2.8 \times 10^{-23}$). That figure is
+threshold-dependent and we report the sensitivity rather than the single number: the recording
+used a $150~\mu$V rejection threshold, which removes eyes-open windows preferentially (blinks
+occur with the eyes open) and leaves a $1.97$ imbalance; at the pipeline's deployed
+$350~\mu$V threshold the conditions are near-balanced and the ratio is $1.90\times$. The
+effect is significant at every threshold tested including no rejection at all, so it is not
+manufactured by the rejection rule---only its magnitude is.
+
+\paragraph{The channels the study actually uses are weaker, and we report both recordings
+rather than substituting one.} The validation above is on TP9/TP10; the index runs on
+AF7/AF8. A second recording on AF7/AF8 with good contact ($6.8\%$ rejection) shows a
+significant alpha rise---$1.34\times$ geometric, $d = 0.61$, $p = 5 \times 10^{-7}$---but
+fails a stricter diagnostic: the eyes-closed rise in \emph{spectral peak prominence}, which
+the temporal channels pass clearly ($2.46\times$, $1.91\times$), is $1.09\times$ on AF7 and
+$1.13\times$ on AF8, below a $1.2\times$ threshold. Alpha power rises on the forehead; a
+distinct alpha peak barely does. We report frontal signal quality as a measured limitation.
+This is consistent with Monroy-D'Croz et al., whose frontal alpha asymmetry explained $0.40\%$
+of signal variance.
+
+\paragraph{Arousal.} Tested on DEAP, which pairs 32-channel EEG with self-reported affect.
+Computed with the same feature extractor the live system uses, the index correlates with
+reported arousal at $\rho = +0.303$ ($p = 0.058$) on AF3/AF4, against $+0.082$ with
+valence---the right discriminant profile, at a sample size where no single montage reaches
+significance. The direction holds across 7 of 7 independent montages (sign test $p = 0.016$),
+which is the result; no single correlation is.
+
+\section{Reproducibility as an engineering problem}
+
+A preprint's numbers are copied from a terminal into prose once, and then the code moves.
+Every headline number in this paper is regenerated from artefacts on disk by a single command,
+which checks it against the value asserted here: $44$ claims, all reproducing. The practice
+caught real drift, including one instance where our own motivating example (a manuscript
+saying $1.14\times$ while the repository said $1.05\times$) was live in the codebase.
+
+Three failure modes were worth the engineering, and we report them because they generalise to
+any pre-registered study with a live codebase.
+
+\emph{Recordings must be pinned by name, not selected as ``the newest''.} A second pilot
+silently re-based a dozen claims, five of seven figures and eight tests onto itself---including
+a claim that documented a \emph{historical} defect, which would have been overwritten with the
+post-fix number and the finding quietly deleted.
+
+\emph{Synthetic data must be unable to reach the manuscript.} A thirty-second demo run wrote a
+session that recomputed six claims from a signal generator. The marker distinguishing
+synthetic from real already existed; nothing read it.
+
+\emph{The freeze mechanism must not force its own violation.} Our pre-registration is
+hash-checked on every test run, but its deviations section is \emph{inside} the hashed file,
+so logging a deviation fails the check. The obvious repair---updating the stored hash---destroys
+the guarantee permanently. A guard that makes disabling itself the reasonable next step is
+worse than no guard; the log lives outside the hash.
+
+Two data-acquisition defects are also worth reporting, because both were invisible to every
+check we had. The streaming layer delivered each packet two to four times with timestamps
+stepping backwards between copies, which downstream code---counting samples rather than
+time---read as the signal jumping backwards every $12$ samples and reported as electrode
+failure on a headset that was fine. And raw timestamps were stored at a precision that
+depended on how long the laptop had been running: $8$~ms after a fresh boot, $0.25$~s after
+$27$ days up.
+
+\section{What this work does not establish}
+
+No efficacy claim of any kind is made or supported. The evidence base is two
+self-administered unblinded sessions, zero adaptive/sham pairs and zero participants.
+
+\paragraph{The measured latency is far outside the regime where the delay literature finds
+effects.} Our deployed budget is $13\times$ the delay at which sustained alpha change had
+already disappeared in Belinskaia et al., and the retuned configuration is still $5.5\times$.
+We do not think this invalidates the approach, but the argument must be made rather than
+assumed: operant neurofeedback asks the participant to perceive a contingency, which is where
+the delay constraint is derived, whereas the proposed mechanism here is the iso-principle,
+whose evidence comes from fixed sequences with no contingency at all---Starcke et
+al.~\cite{starcke} randomised $107$ participants to four pre-set sequences after a sadness
+induction and found the iso sequence produced higher positive affect and valence
+($\eta^2 = 0.08$, $0.09$) with purely passive listening. That argument has a sharp edge we
+state rather than hide: if matching-then-leading works with a fixed playlist, the burden on a
+closed-loop system is not to beat silence but to beat a fixed playlist---which is exactly what
+a yoked sham tests.
+
+\paragraph{A controller can be well-behaved and still produce no manipulation.} Our second
+pilot ran for twenty minutes with zero prompt changes: at $1.0$~SD per rung, a participant who
+sits at or below target maps to a single rung for the whole session. A yoked sham of such a
+session is acoustically identical to the adaptive arm, so the contrast has nothing to test. We
+widened the ladder to nine rungs at $0.5$~SD, which restores variation ($33$ changes across
+$5$ prompts on one pilot, $26$ across $3$ on the other)---but this was discovered only by
+running the system on a person and counting what it played. We suggest reporting
+prompt-change counts and distinct-prompt counts as standard for any adaptive audio
+intervention; they are cheap, and their absence hides a degenerate manipulation behind a
+functioning system.
+
+\section{Conclusion}
+
+We measured what a closed-loop EEG music system actually costs in time, and found the dominant
+term in the analysis path rather than the model---then found that this decomposition is a
+property of the configuration, not the architecture. The deployed estimator is dominated by 8
+of 9 alternatives on both latency and information rate; the architecture's floor is $0.189$~s
+of analysis and $0.439$~s end-to-end, inside the regime where alpha neurofeedback still works,
+and more informative than the configuration we shipped.
+
+Alongside, four statistical properties of closed-loop EEG data that shaped every design
+decision we made: autocorrelation inflating evidence $6.4\times$, continuous coupling failing
+when the intervention succeeds, event-locked effects indistinguishable from their own trigger
+confound, and dichotomisation costing $3\times$ in detectable effect.
+
+None of it says the intervention works. All of it is what we would have wanted to read before
+building the system.
+
+\paragraph{Reproducibility.} $44$ of the numbers in this paper are regenerated from artefacts
+on disk by \texttt{python scripts/verify\_claims.py}, which checks each against the value
+asserted here and fails if any has moved. The synthetic-ground-truth figures in
+Section~\ref{sec:stats} come from \texttt{validate\_event\_locked.py}, the coupling recovery
+from \texttt{validate\_coupling.py}, and the threshold sweep from
+\texttt{alpha\_sensitivity.py}. Effect sizes quoted from the cited literature are not ours to
+regenerate.
+
+\begin{thebibliography}{99}
+
+\bibitem{mindmelody} Y. Zhang, Y. Sun, H. Gu and Z. Jin.
+\emph{MindMelody: A Closed-Loop EEG-Driven System for Personalized Music Intervention.}
+arXiv:2605.01235, 2026.
+
+\bibitem{mindtomusic} Ran et al.
+\emph{Mind to Music: An EEG Signal-Driven Real-Time Emotional Music Generation System.}
+International Journal of Intelligent Systems, 9618884, 2024. doi:10.1155/int/9618884
+
+\bibitem{ehrlich} S. K. Ehrlich, K. R. Agres, C. Guan and G. Cheng.
+\emph{A closed-loop, music-based brain-computer interface for emotion mediation.}
+PLOS ONE, 2019. doi:10.1371/journal.pone.0213516
+
+\bibitem{dashagres} A. Dash and K. R. Agres.
+\emph{AI-Based Affective Music Generation Systems: A Review of Methods, and Challenges.}
+arXiv:2301.06890, 2023.
+
+\bibitem{neurophone} Velasquez-Pena et al.
+\emph{Neurophone: A Brain-Computer Music Interface for Emotional Neurofeedback.}
+IEEE International Symposium on the Internet of Sounds, 2025.
+
+\bibitem{minimalist} P. A. Monroy-D'Croz, R. Ramirez-Melendez and J. Cespedes-Guevara.
+\emph{A Minimalist Brain-Computer Musical Interface for Real-Time Emotion-Driven
+Sonification.} arXiv:2606.01473, 2026.
+
+\bibitem{belinskaia} A. Belinskaia, N. Smetanin, M. Lebedev and A. Ossadtchi.
+\emph{Short-delay neurofeedback facilitates training of the parietal alpha rhythm.}
+Journal of Neural Engineering, 2020. doi:10.1088/1741-2552/abc8d7
+
+\bibitem{asai} T. Asai, T. Hamamoto, S. Kashihara and H. Imamizu.
+\emph{Real-Time Detection and Feedback of Canonical Electroencephalogram Microstates.}
+Frontiers in Systems Neuroscience, 2022. doi:10.3389/fnsys.2022.786200
+
+\bibitem{gesture2music} R. Jeyaraj, B. Subramanian, K. Gangadharan and A. Paul.
+\emph{Gesture2Music: A Low-Latency Real-Time Framework for Continuous Gesture-Driven Music
+Generation.} arXiv:2511.00793.
+
+\bibitem{altshuler} I. M. Altshuler.
+\emph{The past, present and future of psychiatric music therapy.}
+American Journal of Psychiatry, 1948.
+
+\bibitem{starcke} K. Starcke, J. Mayr and R. von Georgi.
+\emph{Emotion Modulation through Music after Sadness Induction---The Iso Principle in a
+Controlled Experimental Study.} International Journal of Environmental Research and Public
+Health, 2021. PMC8656869.
+
+\end{thebibliography}
+
+\end{document}

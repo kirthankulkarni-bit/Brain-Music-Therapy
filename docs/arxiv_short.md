@@ -412,9 +412,6 @@ building the system.
 11. Katrin Starcke, Johanna Mayr & Richard von Georgi. *Emotion Modulation through Music
     after Sadness Induction — The Iso Principle in a Controlled Experimental Study.*
     International Journal of Environmental Research and Public Health (2021). PMC8656869.
-12. Huadai Liu et al. *AudioLCM: Text-to-Audio Generation with Latent Consistency Models.*
-    arXiv:2406.00356 (2024).
-
 ---
 
 *Reproducibility: 44 of the numbers in this paper are regenerated from artefacts on disk by
