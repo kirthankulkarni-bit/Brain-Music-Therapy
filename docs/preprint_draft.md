@@ -413,7 +413,7 @@ against synthetic data with known ground truth before being applied to real sess
 p = 2.8 × 10⁻²³, 151 closed / 76 open windows), within the 1.5–3× range expected for
 frontal channels, which lack the occipital dominance of classic alpha demonstrations.
 This is evidence the montage records cortical activity rather than amplifier noise
-(Figure 0).
+(Figure 0a).
 
 **That ratio is threshold-dependent, and the window counts above show why.** 151 closed
 against 76 open is a 2:1 imbalance, because artefact rejection removes eyes-open windows
@@ -440,6 +440,45 @@ That is the defensible figure to lead with, and it remains inside the expected r
 The two extremes bound the truth from opposite directions: strict rejection inflates by
 stripping blink power from the open condition, no rejection deflates by leaving broadband
 blink energy in it.
+
+**That recording is not on the channels the system uses, so we report a second one
+alongside it rather than in place of it (Figure 0b).** The August session was recorded
+with `frontal_channels = TP9/TP10`; the live index runs on AF7/AF8. A session on 2026-09-17
+repeated the protocol on AF7/AF8 with good contact:
+
+| | August, TP9/TP10 | 9/17, AF7/AF8 |
+|---|---|---|
+| alpha ratio, eyes closed | **2.13×** | **1.34×** |
+| Cohen's d | 1.55 | 0.53 |
+| p | 2.8 × 10⁻²³ | 2.3 × 10⁻⁶ |
+| windows (closed / open) | 151 / 76 | 164 / 166 |
+| windows rejected | 3% | **0%** |
+| alpha-peak prominence, eyes closed / open | passes | **AF7 1.09, AF8 1.13 (fails, ≥ 1.20 required)** |
+| deployed estimator d | 1.99 | 1.06 |
+
+**Neither recording is the right one to report alone, which is why both appear.** The
+August session is the stronger demonstration that the rig measures cortex, and it is the
+one every downstream claim and figure is pinned to; but it says nothing about the
+electrodes the arousal index actually reads. The 9/17 session says exactly that, and what
+it says is worse: the effect is real and survives on the study's own channels — it is not
+the 0.91× (d = −0.17, p = 0.26) that the same August raw data gives on AF7/AF8 under 48%
+artefact rejection — but it is **roughly half the effect size**, and it **fails the
+alpha-peak prominence check** at 1.09 and 1.13 against a 1.20 threshold. A 1.34× ratio
+with no visible alpha peak is consistent with broadband frontal power tracking the eye
+state rather than with alpha blocking proper.
+
+Substituting the 9/17 recording for the August one would delete the evidence that the
+instrument works; substituting the other way round would delete the evidence that it
+works where it is used. Reporting both preserves the finding that matters, which is the
+gap between them: **the effect the index depends on is present but about half as large,
+and less clearly alpha, on the channels it is computed from.** The pinned session for
+claims and figures therefore stays on August (`PINNED_ALPHA`), and the 9/17 numbers are
+asserted as their own claims in `verify_claims.py` rather than overwriting it.
+
+Two caveats on the 9/17 session itself. It lost 11.75 s and 20.25 s to stream dropouts —
+visible as the flat span near 300 s in Figure 0b — and BlueMuse delivered heavily
+duplicated packets that the recorder's de-duplicating inlet filtered before analysis. Both
+are documented in `docs/deviations.md`; neither is treated here as a reason to discount it.
 
 **Index construct validity.** Two separable claims underlie the measurement: that the
 electrodes record cortex, and that log(beta/alpha) measures *arousal*. The second was
@@ -717,7 +756,7 @@ accounted for 96% of the pilot, and the trend suffix cannot fire after calibrati
 system is a three-level ladder behaving as a two-level one.
 
 **The sensing path has not been validated on the channels the system uses.** This is the
-most serious limitation here. Figure 0 — the eyes-closed alpha increase — was recorded
+most serious limitation here. Figure 0a — the eyes-closed alpha increase — was recorded
 with `frontal_channels = TP9/TP10`, while the live index uses AF7/AF8. Recomputed from the
 same raw recording, the effect does not transfer: 1.85× (d = 1.23, p = 1.8 × 10⁻²⁵) on
 TP9/TP10 against 0.91× (d = −0.17, p = 0.26) on AF7/AF8, with **48% of frontal windows
@@ -725,10 +764,16 @@ rejected as artefact** against 3%.
 
 The rejection rate is the necessary context and stops this being "frontal channels fail":
 PILOT01 ran on AF7/AF8 and rejected only 13.1%, so frontal contact can be good — it was
-not good during the alpha test. The honest statement is narrower and worse: *the sensing
-path has never been validated on the channels the study uses, and the one session capable
-of testing it had frontal contact too poor to answer.* Repeating the validation on AF7/AF8
-gates participant data.
+not good during the alpha test.
+
+**That repeat was run on 2026-09-17 and is reported as Figure 0b (§5).** With good contact
+and 0% rejection, AF7/AF8 give 1.34× (d = 0.53, p = 2.3 × 10⁻⁶): the effect is there, but
+at roughly half the August effect size, and the alpha-peak prominence check fails on both
+channels (1.09 and 1.13 against 1.20). So the limitation is no longer that the channels are
+untested; it is that **on the channels the index uses, the validation is weaker and less
+specifically alpha than the headline figure suggests**, and a 1.34× ratio without a visible
+peak does not exclude broadband power tracking the eye state. This no longer gates
+participant data, but it does bound how much weight the index can carry.
 
 **Frontal channels only.** The Muse 2 has no occipital electrodes, and frontal alpha is
 weaker and more contaminated by ocular and muscle artefact than occipital alpha. The

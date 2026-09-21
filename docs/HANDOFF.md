@@ -114,9 +114,11 @@ gate working, not a regression.
 2. **Record a new yoke source** with the current controller. PILOT02 cannot serve as one
    (0 prompt changes), and neither can anything older. This is now the only thing blocking
    the sham arm.
-3. Decide whether Figure 0 is replaced (§7 q9) — **decided 2026-09-20: report both**, the
+3. ~~Decide whether Figure 0 is replaced (§7 q9).~~ **DONE 2026-09-20: report both**, the
    August TP9/TP10 validation and the 9/17 AF7/AF8 one, rather than substituting either.
-   Not yet written into §6 of the draft.
+   Written into **§5** of the draft (not §6 — §5 is where Figure 0 lives), the §8
+   limitation updated to match, and `make_figures.py` now renders both panels as
+   `fig0_alpha_validation.png` and `fig0b_alpha_validation_af78.png`.
 3. The link: duplicates were 47% during the alpha test and 0.7% during PILOT02 after a
    BlueMuse restart; two dropouts in the first recording, none in the second. Restart
    BlueMuse fully before every session and keep the laptop within a metre, in front.

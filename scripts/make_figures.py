@@ -90,7 +90,7 @@ def intervention_z(session: dict) -> tuple[np.ndarray, np.ndarray]:
 # ------------------------------------------------------------------- figures
 
 
-def fig_alpha_validation(out: str) -> str:
+def fig_alpha_validation(out: str, session_name: str = "", stem: str = "") -> str:
     """
     The eyes-closed alpha increase, redrawn in the shared figure style.
 
@@ -102,10 +102,12 @@ def fig_alpha_validation(out: str) -> str:
     """
     from scipy import stats as sps
 
-    # Pinned: Figure 0 describes the recording the manuscript describes. Replacing it
-    # with a newer one is a decision about the paper - see PINNED_ALPHA.
+    # Pinned, and reported TWICE rather than replaced (decision of 2026-09-20). The
+    # August recording validates the rig on TP9/TP10; the 9/17 one shows what the
+    # study's own channels do, including a failed eye-closure check. Substituting
+    # either for the other hides half of what we know - see draft section 5.
     from verify_claims import PINNED_ALPHA
-    pinned = os.path.join(_ROOT, "sessions", PINNED_ALPHA)
+    pinned = os.path.join(_ROOT, "sessions", session_name or PINNED_ALPHA)
     dirs = [pinned] if os.path.isdir(pinned) else []
     if not dirs:
         return ""
@@ -130,6 +132,13 @@ def fig_alpha_validation(out: str) -> str:
     pooled = np.sqrt((a[closed].var(ddof=1) + a[~closed].var(ddof=1)) / 2)
     d = float((a[closed].mean() - a[~closed].mean()) / pooled) if pooled > 0 else float("nan")
 
+    # The caveat depends on which pair was recorded, so derive it from the manifest
+    # rather than hardcoding the August session's one onto both panels.
+    live = {"AF7", "AF8"}
+    note = ("" if set(pair) == live else
+            "\nNOTE: the live arousal index uses AF7/AF8, "
+            "which this does NOT validate")
+
     fig, ax = plt.subplots(figsize=(9, 3.2))
     # Shade contiguous eyes-closed blocks rather than per-window, so the blocks read
     # as blocks and a single rejected window does not punch a hole in the band.
@@ -149,11 +158,10 @@ def fig_alpha_validation(out: str) -> str:
     ax.set_ylabel("log$_{10}$ alpha power\n(" + "/".join(pair) + " mean)")
     ax.set_title(f"Alpha rises {ratio:.2f}x with eyes closed on {'/'.join(pair)} "
                  f"(d = {d:.2f}, p = {p:.1e}, n = {closed.sum()}/{(~closed).sum()})\n"
-                 f"NOTE: the live arousal index uses AF7/AF8, which this does NOT validate",
-                 fontsize=8.5)
+                 + note, fontsize=8.5)
     ax.legend(frameon=False, fontsize=8, loc="upper left", ncol=2)
     ax.margins(x=0.01)
-    path = os.path.join(out, "fig0_alpha_validation.png")
+    path = os.path.join(out, (stem or "fig0_alpha_validation") + ".png")
     fig.savefig(path)
     plt.close(fig)
     return path
@@ -427,9 +435,13 @@ def main() -> int:
           + ("" if args.session else "   (pinned; --session overrides)"))
     print(f"output : {out}\n")
 
+    from verify_claims import SECOND_ALPHA
+
     made = []
     for name, fn in (
-        ("alpha validation", lambda: fig_alpha_validation(out)),
+        ("alpha validation (TP9/TP10, August)", lambda: fig_alpha_validation(out)),
+        ("alpha validation (AF7/AF8, 9/17)",
+         lambda: fig_alpha_validation(out, SECOND_ALPHA, "fig0b_alpha_validation_af78")),
         ("session trajectory", lambda: fig_trajectory(session, out)),
         ("autocorrelation", lambda: fig_autocorrelation(session, out)),
         ("switch intervals", lambda: fig_chatter(session, out)),
