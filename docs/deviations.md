@@ -32,6 +32,91 @@ property is traded for the other.
 |---|---|---|---|
 | 2026-09-05 | Removed the trend suffix from `build_prompt`. The controller now emits only the five ladder rungs, of which 1–3 are reachable. | The plan already describes the controller this way — §7 records "the trend suffix cannot fire" and "effectively a three-rung ladder" — so this removes a discrepancy between the code and the registered description rather than changing the protocol. Verified to be a no-op: 0 suffixed prompts across all 1212 logged windows on disk. See below. | *(this commit)* |
 
+| 2026-09-20 | Energy ladder widened from 5 rungs at 1.0 SD to **9 rungs at 0.5 SD**, and `--min-dwell` defaulted to **30 s**. | The controller could not produce a stimulus difference for a calm participant: PILOT02 played ONE prompt for twenty minutes, so a yoked sham would be acoustically identical to the adaptive arm and the registered contrast would have nothing to test. See below. | *(this commit)* |
+
+---
+
+## 2026-09-20 — nine rungs at 0.5 SD, and a 30 s dwell
+
+### What the pre-registration says, and what changed
+
+The plan does not fix the rung count or width. §7 records, before the fact, that "only
+rungs 1–3 are reachable" and that "PILOT01 used rung 1 for 96% of the session" — i.e. it
+registered the problem as a known limitation rather than registering the ladder's
+geometry. §3's outcomes and §4's power analysis do not reference it.
+
+So this is a change to the intervention, not to the analysis, and it is logged here
+because it changes what a participant hears. It does **not** change the primary outcome,
+the target, the deadband, the iso-principle (still match-then-lead by one rung), or the
+crossover design.
+
+### Why it was necessary
+
+PILOT02 (2026-09-17, 20 min at deployed settings) produced **0 prompt changes**. One
+prompt, 301 segments, 20 minutes.
+
+That was the controller working as designed. With the relaxation target the goal is the
+rung at z = −1; the output is always one rung toward it; at 1.0 SD spacing every z below
++0.5 mapped to the same rung. PILOT02 sat at z = **−1.46** (SD 0.67) — at or past target
+from the first window — and never came close to leaving that rung. PILOT01 was the same,
+less extremely: one rung for 95.9% of its session.
+
+**A yoked sham of a one-prompt session is acoustically identical to the adaptive arm.**
+The registered contrast (plan §3, adaptive − sham on mean z) therefore had no stimulus
+difference to test for the participant type the intervention is aimed at — someone who
+relaxes. That is not a tuning issue; it makes the study unable to answer its own question.
+
+### Why the width, and not the target
+
+Four candidates were replayed against both sessions' real logged z before choosing:
+
+| option | PILOT01 changes | PILOT02 changes |
+|---|---|---|
+| deployed (5 rungs at 1.0 SD) | 24 | **0** |
+| personalised target (baseline-relative) | 109 | **0** |
+| match the participant's own rung when in band | 24 | **0** |
+| **0.5 SD rungs** | 197 | **102** |
+
+Moving the target only slides the same degenerate mapping down: the participant's z spread
+(SD 0.67) still never crosses a 1.0 SD boundary. **The rung width is the binding
+constraint.** This matters because the personalised target was the intuitive fix and was
+recommended before the simulation was run; it does nothing.
+
+### Why 0.5 SD and a 30 s dwell
+
+A finer ladder alone changes the music every 2–3 s. The dwell added on 9/5 bounds the rate,
+and at 30 s the change rate pins at roughly one per 35 s at **any** width — so the width is
+purely a choice about variety:
+
+| width | rungs | PILOT01 changes / distinct | PILOT02 changes / distinct |
+|---|---|---|---|
+| 1.0 SD | 5 | 14 / 2 | **0 / 1** |
+| 0.75 SD | 7 | 32 / 4 | 33 / **2** |
+| **0.5 SD** | **9** | **33 / 5** | **33 / 3** |
+| 0.4 SD | 11 | 33 / 7 | 33 / 4 |
+
+0.75 SD leaves PILOT02 alternating between two prompts, which is thin for a contrast. 0.4
+SD buys variety the library would have to pay for. 0.5 SD is the smallest ladder that gives
+both recordings at least three distinct pieces of music.
+
+Through the deployed controller, PILOT01 now replays to 33 changes across 5 prompts and
+PILOT02 to 26 across 3, with zero switches inside a crossfade.
+
+### The library
+
+The original five prompts are the **even** rungs, unchanged, so the existing 220 segments
+still cover five of the nine. Only the four odd rungs are new. `verify_library` fails until
+`python scripts/build_library.py` has rendered them — that failure is expected and is the
+gate working.
+
+### What this does not establish
+
+That the added variation helps, or that a participant notices it. This is a replay of
+logged z through a new mapping: it predicts the **schedule**, not the response. In a real
+closed loop the music changes z, which changes the schedule. And variation is necessary for
+the adaptive-vs-sham contrast, not sufficient — the sham must still be yoked from a session
+recorded with this controller, so **a new yoke-source session is required**.
+
 ---
 
 ## 2026-09-05 — removing the trend suffix

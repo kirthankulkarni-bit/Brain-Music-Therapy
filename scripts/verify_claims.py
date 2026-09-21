@@ -186,16 +186,34 @@ def claim_chatter_before() -> tuple[float, str]:
 
 
 def claim_chatter_after() -> tuple[float, str]:
-    """Prompt changes when the same z is replayed through the fixed controller."""
-    from music_engine import build_prompt
+    """
+    Prompt changes when PILOT01's z is replayed through the controller AS DEPLOYED.
+
+    This asserted 24 until 2026-09-20, measured on the five-rung 1.0 SD ladder without a
+    dwell, and that is the number section 6.3 quotes for the trend-suffix fix. Both parts
+    of the controller changed: the ladder is now nine rungs at 0.5 SD, and a 30 s dwell is
+    on by default. The same replay through build_prompt alone now gives 197 - the finer
+    rungs change the music every few seconds - and through the deployed controller, dwell
+    included, it gives 33.
+
+    The claim tracks what a participant would hear TODAY, so it measures the governor. The
+    historical 24 is preserved where it belongs: in section 6.3 and results_pilot.md, each
+    now saying which ladder it was measured on.
+    """
+    from music_engine import PromptGovernor
+
+    import live_music
+
+    dwell = float(live_music.build_parser().parse_args([]).min_dwell)
     z = _pilot_z()
+    gov = PromptGovernor(target_z=-1.0, min_dwell_seconds=dwell)
     prev, changes = None, 0
-    for v in z:
-        p = build_prompt(float(v), -1.0, previous_prompt=prev)
+    for i, v in enumerate(z):
+        p = gov.update(float(v), now=float(i))
         if prev is not None and p != prev:
             changes += 1
         prev = p
-    return float(changes), f"replay of {z.size} windows"
+    return float(changes), f"replay of {z.size} windows, dwell {dwell:g} s"
 
 
 def claim_analysis_latency_floor() -> tuple[float, str]:
@@ -274,12 +292,20 @@ def claim_library_clipping_bound() -> tuple[float, str]:
 
 
 def claim_library_dominant_variants() -> tuple[float, str]:
-    """Renders available for the prompt that carries a relaxation session."""
-    from music_engine import _ENERGY_LADDER
+    """
+    Renders available for the prompt that carries a relaxation session.
+
+    The rung is DERIVED from the target rather than hardcoded. It was index 1, which was
+    the relaxation goal on the five-rung ladder and is a different piece of music on the
+    nine-rung one - the claim returned nan the moment the ladder changed, which is the
+    right failure but the wrong cause.
+    """
+    from music_engine import _ENERGY_LADDER, state_rung
     man = json.load(open(os.path.join(_ROOT, "library", "manifest.json"), encoding="utf-8"))
+    goal = _ENERGY_LADDER[state_rung(-1.0)]
     for e in man["prompts"]:
-        if e["prompt"] == _ENERGY_LADDER[1]:
-            return float(len(e["segments"])), "rung 1 base, 96% of PILOT01"
+        if e["prompt"] == goal:
+            return float(len(e["segments"])), f"the relaxation goal rung, {goal[:28]}..."
     return float("nan"), "not found"
 
 
@@ -832,7 +858,7 @@ CLAIMS = {
     "PILOT01 effective sample size":      (claim_pilot_effective_n,       25.3,   0.5),
     "PILOT01 intervention rejection":     (claim_pilot_rejection,         0.131,  0.005),
     "prompt changes before the fix":      (claim_chatter_before,          491,    1),
-    "prompt changes after the fix":       (claim_chatter_after,           24,     2),
+    "prompt changes, deployed ctrl":      (claim_chatter_after,           33,     3),
     "library clipping bound":             (claim_library_clipping_bound,  0.980,  0.005),
     "renders on the dominant prompt":     (claim_library_dominant_variants, 32,   0),
     "end-to-end budget, library":         (claim_latency_budget,          6.5,    0.05),
@@ -842,11 +868,11 @@ CLAIMS = {
     "DEAP arousal rho (AF3/AF4)":         (claim_deap_arousal_rho,        0.303,  0.02),
     "streaming estimator budget":         (claim_streaming_latency_budget, 0.413, 0.01),
     "replay fidelity vs the log":         (claim_replay_fidelity,         0.991,  0.005),
-    "retuned, no dwell: inside a xfade":  (claim_retuned_chatter_no_dwell, 136,   4),
+    "retuned, no dwell: inside a xfade":  (claim_retuned_chatter_no_dwell, 591,   8),
     "retuned, 1 s dwell: inside a xfade": (claim_retuned_chatter_with_dwell, 0,   0),
-    "ladder margin 0.25 still responds":  (claim_ladder_margin_responds,  8,      2),
+    "ladder margin 0.25 still responds":  (claim_ladder_margin_responds,  109,    4),
     "trend noise / genuine drift":        (claim_trend_noise_to_signal,   1.77,   0.05),
-    "distinct prompts build_prompt emits":(claim_reachable_prompt_space,  5,      0),
+    "distinct prompts build_prompt emits":(claim_reachable_prompt_space,  9,      0),
     "power at the registered n = 10":     (claim_power_at_registered_n,   0.389,  0.02),
     "participants per arm for 0.15 z":    (claim_required_n_for_target_effect, 25, 5),
     "deployed detection latency":         (claim_deployed_detection_latency, 5.67,  0.05),

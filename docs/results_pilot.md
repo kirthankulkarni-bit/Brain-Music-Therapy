@@ -85,6 +85,11 @@ own z:
 
 **The suffix was removed entirely on 2026-09-05, and this table is why the second fix
 was not the end of it.** Look at the `suffix-only` column: the fix took it from 453 to 0.
+(Both rows are on the five-rung, 1.0 SD ladder. The ladder was widened to nine rungs at
+0.5 SD on 2026-09-20 because it could not produce a stimulus difference for a calm
+participant; the same replay through the current controller, dwell included, gives 33
+changes. See deviations.md.)
+
 A control contributing nothing to 24 remaining changes is either perfectly calibrated or
 inoperative, and this table cannot tell the two apart. It turned out to be the second —
 the slope the suffix gated on is smaller than the noise of the estimator measuring it

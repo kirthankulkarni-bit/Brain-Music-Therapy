@@ -842,11 +842,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Schmitt trigger on the energy ladder, in z units. 0 = off. "
                         "Changes what the participant hears, so it is a therapeutic "
                         "decision - see docs/finding_ladder_hysteresis.md.")
-    p.add_argument("--min-dwell", type=float, default=0.0,
-                   help="minimum seconds a prompt is held once adopted. 0 = off. Set it "
-                        "to at least --crossfade whenever the estimator is retuned: "
-                        "that is the condition for no switch arriving before the "
-                        "previous crossfade completes.")
+    p.add_argument("--min-dwell", type=float, default=30.0,
+                   help="minimum seconds a prompt is held once adopted. Default 30 s, "
+                        "which is what makes the 0.5 SD ladder musical rather than "
+                        "twitchy: without it the finer rungs change the music every 2-3 s, "
+                        "with it the rate pins at about one change per 35 s on both pilot "
+                        "recordings. Never set it below --crossfade.")
     p.add_argument("--crossfade", type=float, default=1.0,
                    help="crossfade seconds; this is THE latency knob for --engine library, "
                         "exactly as queue depth is for streaming")

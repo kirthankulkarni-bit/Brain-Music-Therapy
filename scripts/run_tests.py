@@ -213,11 +213,14 @@ def test_chatter_regression(s: Suite, session_z: np.ndarray) -> None:
         s.skip("chatter regression", "no session with enough intervention windows")
         return
 
-    prompts, prev = [], None
-    for v in session_z:
-        p = build_prompt(float(v), -1.0, previous_prompt=prev)
-        prompts.append(p)
-        prev = p
+    # Through the GOVERNOR, with the deployed dwell. The dwell became part of the
+    # controller on 2026-09-20: at 0.5 SD rungs, build_prompt alone changes the music
+    # every 2-3 s (197 changes on this session), and the dwell is what pins it to ~33.
+    # Replaying without it tests a configuration nobody runs.
+    from music_engine import PromptGovernor
+
+    gov = PromptGovernor(target_z=-1.0, min_dwell_seconds=_deployed_dwell())
+    prompts = [gov.update(float(v), now=float(i)) for i, v in enumerate(session_z)]
 
     change_idx = [i for i in range(1, len(prompts)) if prompts[i] != prompts[i - 1]]
     changes = len(change_idx)
@@ -257,8 +260,14 @@ def test_ladder_hysteresis(s: Suite) -> None:
     s.check("ladder hysteresis is inert by default", identical,
             "byte-identical across z in [-4, 4]")
 
-    # z dithering either side of the 2/3 boundary, which is where round() flips.
-    dither = [0.45, 0.55, 0.44, 0.58, 0.47, 0.53, 0.46]
+    # z dithering either side of a rung boundary, which is where round() flips. The
+    # boundary moves with _RUNG_WIDTH_Z, so it is computed rather than written down - at
+    # 1.0 SD this sat at 0.5, at 0.5 SD it sits at 0.25, and hardcoding it made this test
+    # pass with zero flips (i.e. testing nothing) the moment the ladder got finer.
+    from music_engine import _RUNG_WIDTH_Z
+    edge = _RUNG_WIDTH_Z / 2.0
+    dither = [edge - 0.05, edge + 0.05, edge - 0.06, edge + 0.08,
+              edge - 0.03, edge + 0.03, edge - 0.04]
 
     def walk(margin):
         prev, out = None, []
@@ -382,8 +391,10 @@ def test_retuned_estimator_guard(s: Suite) -> None:
 
     tmp = tempfile.mkdtemp(prefix="guardtest_")
     try:
-        args = _session_args(tmp, window=2.0, hop=0.5, tau=0.5, baseline_seconds=8.0,
-                             duration=0.2)
+        # min_dwell=0 explicitly: the default is 30 s since 2026-09-20, so taking the
+        # parser default here would have tested nothing.
+        args = _session_args(tmp, window=2.0, hop=0.5, tau=0.5, min_dwell=0.0,
+                             baseline_seconds=8.0, duration=0.2)
         state = live_music.SessionState(args.target)
         logger = SessionLogger(args.participant, args.condition, root=tmp)
         refused = False
@@ -413,7 +424,7 @@ def test_retuned_estimator_guard(s: Suite) -> None:
 
 
 def test_ladder_reachability(s: Suite) -> None:
-    """Rungs 0 and 4 are unreachable under both arms - documented, not accidental."""
+    """The ladder ends are unreachable under both arms - documented, not accidental."""
     reached = set()
     for target in (-1.0, 1.0):
         for z in np.arange(-4.0, 4.05, 0.1):
@@ -421,15 +432,19 @@ def test_ladder_reachability(s: Suite) -> None:
     from music_engine import _ENERGY_LADDER
     idx = {base.split(",")[0]: i for i, base in enumerate(_ENERGY_LADDER)}
     rungs = sorted(idx[r] for r in reached if r in idx)
-    s.check("reachable rungs match the documented set", rungs == [1, 2, 3],
-            f"reachable: {rungs}; 0 and 4 unreachable by design (see enumerate_prompts.__doc__)")
+    from music_engine import _ENERGY_LADDER as _L
+    s.check("reachable rungs match the documented set",
+            rungs == list(range(1, len(_L) - 1)),
+            f"reachable: {rungs}; 0 and {len(_L) - 1} unreachable by design "
+            "(see enumerate_prompts.__doc__)")
 
 
 def test_state_rung_monotonic(s: Suite) -> None:
     zs = np.arange(-5.0, 5.01, 0.05)
     rungs = [state_rung(float(z)) for z in zs]
     s.check("state_rung is monotonic in z", all(b >= a for a, b in zip(rungs, rungs[1:])))
-    s.check("state_rung stays in range", min(rungs) == 0 and max(rungs) == 4,
+    from music_engine import _ENERGY_LADDER as _L9
+    s.check("state_rung stays in range", min(rungs) == 0 and max(rungs) == len(_L9) - 1,
             f"{min(rungs)}..{max(rungs)}")
 
 
@@ -1222,6 +1237,17 @@ def test_sham_path(s: Suite) -> None:
     # contingency would pass silently, and that is the measurement the sham arm rests on.
     import residual_contingency as rc
 
+    # Only meaningful on a session recorded with the CURRENT ladder. residual_contingency
+    # compares the rung DELIVERED (as logged) against the rung the current controller would
+    # have chosen, so a session from a different ladder scores near chance for a reason
+    # that has nothing to do with contingency. PILOT01 and PILOT02 both predate the 9/20
+    # widening, and after it the positive control read -1.5 sd - a false alarm that would
+    # have looked like a broken detector.
+    if _session_ladder_differs(src[-1]):
+        s.skip("residual contingency positive control",
+               "pilot predates the current ladder; rungs are not comparable")
+        return
+
     (z_t, z), (seg_t, seg_rung) = rc.load_session(src[-1])
     if z.size < 100 or seg_rung.size < 5:
         s.skip("residual contingency positive control", "pilot lacks z or a schedule")
@@ -1389,6 +1415,36 @@ def run_validator(s: Suite, name: str, script: str, args: list[str]) -> None:
     proc = subprocess.run(cmd, capture_output=True, text=True, cwd=_ROOT)
     tail = [ln for ln in proc.stdout.strip().splitlines() if ln.strip()][-1:] or [""]
     s.check(name, proc.returncode == 0, tail[0].strip()[:60])
+
+
+def _deployed_dwell() -> float:
+    """The dwell a real session runs with, from live_music's own parser."""
+    import live_music
+
+    return float(live_music.build_parser().parse_args([]).min_dwell)
+
+
+def _session_ladder_differs(session_dir: str) -> bool:
+    """
+    True if this session's logged rung numbering does not match the current ladder.
+
+    Sessions record both the prompt text and the rung index it had at the time. When the
+    ladder is rewidened those indices stop meaning what they meant, so anything comparing
+    logged rungs against freshly computed ones is comparing two different scales.
+    """
+    from music_engine import _ENERGY_LADDER
+    from session_logger import load_session
+
+    for seg in load_session(session_dir)["audio"]:
+        prompt, rung = seg.get("prompt"), seg.get("rung")
+        if prompt is None or rung is None:
+            continue
+        base = prompt.split(",")[0]
+        now = next((i for i, text in enumerate(_ENERGY_LADDER)
+                    if text.split(",")[0] == base), None)
+        if now is None or now != rung:
+            return True
+    return False
 
 
 def _pinned_pilot_dirs() -> list:

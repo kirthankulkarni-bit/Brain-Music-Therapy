@@ -104,10 +104,15 @@ def enumerate_prompts() -> list[dict]:
     Derived rather than constructed: if the ladder gains a rung or the deadband
     changes, this picks it up automatically.
 
-    A FINDING THIS SWEEP PRODUCED. Under the two default targets, only 3 of the 5
-    ladder rungs are reachable - rungs 0 and 4 are dead code. (Before the trend suffix
-    was removed this read 12 of 20 combinations; the suffix multiplied every rung by
-    four variants, and 15 of those 20 prompts could not be requested at all.)
+    A FINDING THIS SWEEP PRODUCED. Under the two default targets, 7 of the 9 ladder
+    rungs are reachable - rungs 0 and 8 are dead code, since the controller only ever
+    moves one rung toward a goal that is never the extreme. (This read 3 of 5 while the
+    ladder was 1.0 SD wide, and 12 of 20 before the trend suffix was removed; the suffix
+    multiplied every rung by four variants, 15 of which could not be requested at all.)
+
+    THE ODD RUNGS ARE NEW as of 2026-09-20. The original five prompts are the EVEN rungs,
+    unchanged, so a library built before that date still covers five of the nine and only
+    the odd ones need rendering.
     build_prompt always leads by exactly one rung toward `goal`, and `goal` is
     state_rung(target_z), which is rung 1 for target -1.0 and rung 3 for target +1.0.
     Reaching rung 0 requires goal == 0, i.e. a target near -2 SD, which neither arm

@@ -4,7 +4,10 @@
 > is present but weak; PILOT02 is clean but played one prompt for twenty minutes, so it
 > cannot serve as a yoke source; and three recording bugs were found and fixed. **Do not
 > rerun this document as-is** — another deployed-settings pilot would reproduce PILOT02.
-> The next session waits on HANDOFF §7 question 8.
+> §7 question 8 was resolved on 2026-09-20 (nine rungs at 0.5 SD, 30 s dwell). Before the
+> next session: render the four new library prompts with `build_library.py`, and note that
+> its purpose is now **a yoke source recorded with the current controller** — PILOT02
+> cannot serve as one.
 
 Written 2026-08-28. Supersedes the "run PILOT02" plan, because two findings changed what
 the session needs to accomplish.

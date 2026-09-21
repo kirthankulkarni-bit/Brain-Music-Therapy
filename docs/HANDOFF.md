@@ -11,7 +11,10 @@ Verify the state is still current before trusting anything below:
 python scripts/run_tests.py && python scripts/verify_claims.py
 ```
 
-Expected: **111 passed, 0 failed** and **44 claims reproduce**. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
+Expected: **110 passed, 0 failed, 1 skipped** and **44 claims reproduce**. The skip is
+the residual-contingency positive control, which needs a session recorded with the current
+ladder; none exists yet. `verify_library` fails until the four new prompts are rendered —
+see §0.5. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
 something changed after this was written and the numbers here are stale.
 
 ---
@@ -88,11 +91,32 @@ The estimator sweep also counted samples to keep time, which the two 9/17 dropou
 6 were quietly selecting "the newest" recording — the same bug as the manuscript claims,
 further in. All pinned; a test guards it.
 
+### 5. The one-prompt controller is fixed (2026-09-20)
+
+**Nine rungs at 0.5 SD, and `--min-dwell` now defaults to 30 s.** Replayed through the
+deployed controller, PILOT01 gives 33 prompt changes across 5 distinct prompts and PILOT02
+26 across 3, with zero switches inside a crossfade — against 24/3 and **0/1** before.
+
+The rung WIDTH was the binding constraint, not the target. A personalised target — the
+intuitive fix, and the one recommended here before the simulation was run — produces **0
+changes on PILOT02**, because sliding the target down leaves the same mapping. Full
+reasoning, the four options and the width/dwell sweep: `deviations.md`, 2026-09-20.
+
+The original five prompts are the **even** rungs, so the existing library still covers five
+of nine. **`build_library.py` must be run to render the four odd rungs** — it needs the GPU,
+takes roughly half an hour, and `verify_library` fails until it is done. That failure is the
+gate working, not a regression.
+
 ### What to do next
 
-1. **Decide what to do about the one-prompt controller** (§7 q8). Nothing downstream is
-   worth running until the adaptive arm can produce a stimulus difference.
-2. Decide whether Figure 0 is replaced (§7 q9).
+1. **Render the four new prompts:** `python scripts/build_library.py`. Then
+   `python scripts/verify_library.py` should pass.
+2. **Record a new yoke source** with the current controller. PILOT02 cannot serve as one
+   (0 prompt changes), and neither can anything older. This is now the only thing blocking
+   the sham arm.
+3. Decide whether Figure 0 is replaced (§7 q9) — **decided 2026-09-20: report both**, the
+   August TP9/TP10 validation and the 9/17 AF7/AF8 one, rather than substituting either.
+   Not yet written into §6 of the draft.
 3. The link: duplicates were 47% during the alpha test and 0.7% during PILOT02 after a
    BlueMuse restart; two dropouts in the first recording, none in the second. Restart
    BlueMuse fully before every session and keep the laptop within a metre, in front.
@@ -123,13 +147,13 @@ No claim about whether the intervention helps anyone can appear anywhere.
 
 | | |
 |---|---|
-| tests | 111 passing (`scripts/run_tests.py`) |
+| tests | 110 passing, 1 skipped (`scripts/run_tests.py`) |
 | verified claims | 44 (`scripts/verify_claims.py`) — 39 manuscript, pinned to PILOT01 and the August alpha test; 5 describing 9/17 |
 | figures | 7, at 300 dpi (`docs/figures/`) |
 | pre-registration | **FROZEN**, tag `preregistration-v1`, commit `e45bd32` |
 | plan sha256 (LF) | `538328a2dac75fc9bab76fecb7f7cfa11ef88db9b08f6cf7e187bd1fe4fe4ce5` |
 | preprint | §1–§8 drafted (`docs/preprint_draft.md`) |
-| library | 220 segments, 29.3 min audio, gitignored (manifest is committed) |
+| library | 220 segments, 29.3 min audio, gitignored (manifest is committed). **Covers 5 of the 9 rungs — 4 need rendering, see §0.5** |
 
 **The pre-registration is hash-checked by the test suite.** Editing
 `docs/analysis_plan.md` fails `run_tests.py`. That is deliberate. Post-freeze changes go
@@ -407,9 +431,11 @@ SRC approval ──────────────────────�
                                                          ▲
 AF7/AF8 alpha validation   DONE 9/17 — mixed ────────────┤  (usable with a stated limitation)
                                                          │
-controller produces a stimulus difference  ◄── NEW ──────┤  (PILOT02: one prompt, 20 min)
+controller produces a stimulus difference   DONE 9/20 ───┤  (9 rungs at 0.5 SD + 30 s dwell)
         │                                                │
-        └──► a yoke source with prompt changes ──────────┘  (sham arm impossible without it)
+        ├──► render 4 new library prompts ───────────────┤  (build_library.py, ~30 min GPU)
+        │                                                │
+        └──► a yoke source recorded with THIS controller ┘  (sham arm impossible without it)
 ```
 
 `docs/next_session.md` was run on 2026-09-17; its results are in §0. **The next hardware
@@ -454,18 +480,17 @@ deployed-settings pilot would reproduce PILOT02.
    condition, and their frontal alpha asymmetry explained **0.40%** of variance, which is
    published support for trap 2). **Still open:** *Mind to Music* is paywalled and unread,
    and its title advertises real-time operation.
-8. **NEW 9/17 — the controller cannot produce a stimulus difference for a calm
-   participant.** Under the relaxation target every z below +0.5 outputs rung 1; PILOT02
-   played one prompt for 20 minutes. Options, none free: set the target relative to where
-   the participant actually sits rather than at a fixed −1; make the ladder finer near the
-   target so small movements change the music; lead toward the target from the
-   participant's rung even when already in band; or accept it and reframe the contrast as
-   "contingent vs non-contingent music" when the music rarely varies. All change what a
-   participant hears; all are deviations from the frozen plan. **Blocks the sham arm.**
-9. **NEW 9/17 — replace Figure 0 with the AF7/AF8 recording?** It validates the channels
-   the index actually uses, which is the argument for; it is weaker and fails the
-   eye-closure check, which is the argument against. Adopting it = change `PINNED_ALPHA`
-   in `verify_claims.py` in its own commit and update the manuscript to match.
+8. ~~**The controller cannot produce a stimulus difference for a calm participant.**~~
+   **RESOLVED 9/20 — ladder widened to 9 rungs at 0.5 SD, dwell default 30 s.** The width
+   was the binding constraint: a personalised target and in-band matching both give **0
+   changes on PILOT02**, while 0.5 SD rungs give 102 (33 with the dwell). See
+   `deviations.md`. **Still outstanding:** render the four new prompts, and record a yoke
+   source with this controller — no existing session qualifies.
+9. ~~**Replace Figure 0 with the AF7/AF8 recording?**~~ **DECIDED 9/20: report both.**
+   The August TP9/TP10 validation and the 9/17 AF7/AF8 one, side by side — the first shows
+   the rig measures cortex, the second shows what the study's own channels do, including
+   the failed eye-closure check. `PINNED_ALPHA` stays on August; the 9/17 numbers are
+   already asserted as their own claims. **Not yet written into §6 of the draft.**
 
 ---
 

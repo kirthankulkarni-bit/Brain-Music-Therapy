@@ -108,7 +108,7 @@ import numpy as np
 
 # ------------------------------------------------------------------ prompting
 
-# Five graded energy levels replacing the old binary ambient/focus switch.
+# Nine graded energy levels replacing the old binary ambient/focus switch.
 #
 # This comment used to claim that graded levels need no hysteresis, because a small
 # change in z produces a small change in the prompt rather than a hard flip. The
@@ -121,27 +121,66 @@ import numpy as np
 # separate matter, and one that latched the controller when it was first wired up.
 # See build_prompt's note on previous_rung.
 #
-# ONLY RUNGS 1-3 ARE REACHABLE. level is either goal or here +/- 1, and goal is
-# state_rung(target_z), which is rung 1 for the relaxation arm and rung 3 for the
-# focus arm. Rung 0 needs goal == 0 and rung 4 needs goal == 4, which no supported
-# target produces. Measured on PILOT01: the music used rung 1 for 96% of the session
-# and rung 2 for 4%, so in practice this is closer to a two-level system than a
-# five-level one. Do not describe it as five graded levels in a methods section.
+# RUNGS 1-7 ARE REACHABLE, 0 and 8 are not. level is either goal or here +/- 1, and
+# goal is state_rung(target_z) - rung 2 for the relaxation arm, rung 6 for the focus arm -
+# so the ends are reachable only from outside the ladder, which clipping prevents.
+#
+# At 1.0 SD spacing this set was three rungs wide and, in practice, one: PILOT01 used a
+# single rung for 95.9% of its session and PILOT02 for 100% of its. At 0.5 SD the same
+# recordings use five and three distinct prompts respectively, with a 30 s dwell. Report
+# the MEASURED number of levels a session used, not the nine the ladder defines.
 # See enumerate_prompts.__doc__ in scripts/build_library.py.
 #
-# Index 0 is the sparsest, index 4 the most energetic. One rung corresponds to
-# roughly one SD of the participant's own baseline arousal, so rung 2 is where
-# they sit at rest.
+# Index 0 is the sparsest, index 8 the most energetic. One rung is _RUNG_WIDTH_Z SD of
+# the participant's own baseline arousal, so rung 4 is where they sit at rest.
+# NINE RUNGS AT 0.5 SD, from 2026-09-20. It was five rungs at 1.0 SD.
+#
+# WHY. PILOT02 played ONE prompt for twenty minutes. That was the controller working as
+# designed: with the relaxation target the goal is the rung at z = -1, the output is always
+# one rung toward it, and at 1.0 SD spacing every z below +0.5 mapped to the same rung.
+# PILOT02 sat at z = -1.46 (SD 0.67) and never came close. PILOT01 was the same, less
+# extremely - one rung for 95.9% of the session.
+#
+# A yoked sham of a one-prompt session is acoustically IDENTICAL to the adaptive arm, so
+# the study's contrast had no stimulus difference to test. This is the fix for that.
+#
+# WHY THE WIDTH AND NOT THE TARGET. Replaying both sessions' real z through the
+# alternatives (scratch simulation, 2026-09-20):
+#
+#     option                          PILOT01 changes   PILOT02 changes
+#     deployed, 1.0 SD rungs                       24                 0
+#     personalised target                         109                 0
+#     match own rung when in band                  24                 0
+#     0.5 SD rungs                                197               102
+#
+# Moving the target just slides the same degenerate mapping down; the participant's z
+# spread (SD 0.67) still never crosses a 1.0 SD boundary. The rung WIDTH is the binding
+# constraint. At 0.5 SD, z's own fluctuation crosses boundaries and the music varies.
+#
+# WIDTH SETS VARIETY, THE DWELL SETS THE RATE. With a 30 s dwell the change rate pins at
+# ~33 per twenty minutes (one per ~35 s) at any width; what width buys is how many distinct
+# prompts get used - at 0.75 SD PILOT02 alternates between just two, at 0.5 SD it uses
+# three and PILOT01 five. Hence 0.5 SD plus min_dwell 30 s, which is now the default.
+#
+# THE ORIGINAL FIVE PROMPTS ARE THE EVEN RUNGS, unchanged, so an existing library still
+# covers five of nine. Only the odd rungs are new and need rendering.
+#
+# Logged as a deviation: docs/deviations.md.
 _ENERGY_LADDER = [
     "sparse ambient drone, single sustained pad, very slow, no percussion, 50 bpm",
+    "slow ambient pad with faint movement, very spacious, no percussion, 55 bpm",
     "calm ambient piano with soft strings, gentle and spacious, no drums, 60 bpm",
+    "soft ambient piano with a faint pulse, unhurried, no drums, 65 bpm",
     "warm downtempo ambient with a soft pulse, light texture, 70 bpm",
+    "warm downtempo with a gentle beat, light rhythmic texture, 78 bpm",
     "flowing melodic electronica, steady gentle rhythm, 85 bpm",
+    "melodic electronica with a brighter rhythm, forward motion, 92 bpm",
     "bright rhythmic electronic music, clear driving pulse, 100 bpm",
 ]
 
-_LADDER_CENTRE = 2  # rung corresponding to z = 0, the participant's own baseline
-_DEADBAND_Z = 0.35  # within this much of target, stop steering
+_LADDER_CENTRE = 4      # rung corresponding to z = 0, the participant's own baseline
+_RUNG_WIDTH_Z = 0.5     # z units per rung. Was 1.0; see the note above.
+_DEADBAND_Z = 0.35      # within this much of target, stop steering
 
 
 def _rung_of(prompt: Optional[str]) -> Optional[int]:
@@ -185,13 +224,15 @@ def state_rung(z: float, previous_rung: Optional[int] = None, margin: float = 0.
     either way. It is off by default because it changes what a participant hears, which
     is a therapeutic decision rather than an engineering one.
     """
-    plain = int(np.clip(round(_LADDER_CENTRE + z), 0, len(_ENERGY_LADDER) - 1))
+    plain = int(np.clip(round(_LADDER_CENTRE + z / _RUNG_WIDTH_Z),
+                        0, len(_ENERGY_LADDER) - 1))
     if margin <= 0.0 or previous_rung is None:
         return plain
 
     top = len(_ENERGY_LADDER) - 1
-    lower = previous_rung - _LADDER_CENTRE - 0.5 - margin
-    upper = previous_rung - _LADDER_CENTRE + 0.5 + margin
+    # In z units, so the Schmitt margin keeps its meaning as the rung width changes.
+    lower = (previous_rung - _LADDER_CENTRE - 0.5) * _RUNG_WIDTH_Z - margin
+    upper = (previous_rung - _LADDER_CENTRE + 0.5) * _RUNG_WIDTH_Z + margin
     if z < lower:
         return int(np.clip(previous_rung - 1, 0, top))
     if z > upper:

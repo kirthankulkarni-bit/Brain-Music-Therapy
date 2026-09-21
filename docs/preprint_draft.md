@@ -536,7 +536,8 @@ in 1 s and therefore followed a signal that was mostly noise. The 8× improvemen
 create this defect; it removed what had been hiding it.
 
 Replacing the one-hop difference with a 20-hop least-squares slope and adding a
-dual-threshold hysteresis band reduced prompt changes from 477 to 24 on replay of the
+dual-threshold hysteresis band reduced prompt changes from 477 to 24 — measured on the
+five-rung, 1.0 SD ladder then deployed, and on replay of the
 same data, with no switch faster than a crossfade.
 
 **The fix has an honest limit.** Calibrated above the measured noise ceiling, the trend
