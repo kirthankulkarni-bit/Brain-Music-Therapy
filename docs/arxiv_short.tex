@@ -340,7 +340,9 @@ manufactured by the rejection rule---only its magnitude is.
 \paragraph{The channels the study actually uses are weaker, and we report both recordings
 rather than substituting one.} The validation above is on TP9/TP10; the index runs on
 AF7/AF8. A second recording on AF7/AF8 with good contact ($6.8\%$ rejection) shows a
-significant alpha rise---$1.34\times$ geometric, $d = 0.61$, $p = 5 \times 10^{-7}$---but
+significant alpha rise---$1.34\times$ geometric, $d = 0.53$,
+$p = 2.3 \times 10^{-6}$, and $1.41\times$/$d = 0.61$ if the declared $3$~s settle after each
+instruction is excluded---but
 fails a stricter diagnostic: the eyes-closed rise in \emph{spectral peak prominence}, which
 the temporal channels pass clearly ($2.46\times$, $1.91\times$), is $1.09\times$ on AF7 and
 $1.13\times$ on AF8, below a $1.2\times$ threshold. Alpha power rises on the forehead; a
@@ -375,7 +377,7 @@ which is the result; no single correlation is.
 
 A preprint's numbers are copied from a terminal into prose once, and then the code moves.
 Every headline number in this paper is regenerated from artefacts on disk by a single command,
-which checks it against the value asserted here: $44$ claims, all reproducing. The practice
+which checks it against the value asserted here: $46$ claims, all reproducing. The practice
 caught real drift, including one instance where our own motivating example (a manuscript
 saying $1.14\times$ while the repository said $1.05\times$) was live in the codebase.
 
@@ -411,7 +413,7 @@ All code, the pre-registered analysis plan, the deviation log and the session ar
 behind every number in this paper are at
 \url{https://github.com/kirthankulkarni-bit/Brain-Music-Therapy}.
 
-The $44$ claims quoted here are regenerated and checked against their asserted values by
+The $46$ claims quoted here are regenerated and checked against their asserted values by
 
 \begin{center}
 \texttt{python scripts/verify\_claims.py}
@@ -470,7 +472,7 @@ confound, and dichotomisation costing $3\times$ in detectable effect.
 None of it says the intervention works. All of it is what we would have wanted to read before
 building the system.
 
-\paragraph{Reproducibility.} $44$ of the numbers in this paper are regenerated from artefacts
+\paragraph{Reproducibility.} $46$ of the numbers in this paper are regenerated from artefacts
 on disk by \texttt{python scripts/verify\_claims.py}, which checks each against the value
 asserted here and fails if any has moved. The synthetic-ground-truth figures in
 Section~\ref{sec:stats} come from \texttt{validate\_event\_locked.py}, the coupling recovery

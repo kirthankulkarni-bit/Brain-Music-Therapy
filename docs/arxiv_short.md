@@ -305,7 +305,8 @@ its magnitude is.
 **The channels the study actually uses are weaker, and we report both recordings rather than
 substituting one.** The validation above is on TP9/TP10; the index runs on AF7/AF8. A second
 recording on AF7/AF8 with good contact (6.8% rejection) shows a significant alpha rise —
-**1.34×** geometric, d = 0.61, p = 5 × 10⁻⁷ — but fails a stricter diagnostic: the
+**1.34×** geometric, d = 0.53, p = 2.3 × 10⁻⁶ (1.41× and d = 0.61 if the protocol's
+declared 3 s settle after each instruction is excluded) — but fails a stricter diagnostic: the
 eyes-closed rise in *spectral peak prominence*, which the temporal channels pass clearly
 (2.46×, 1.91×), is **1.09× on AF7 and 1.13× on AF8**, below a 1.2× threshold. Alpha power
 rises on the forehead; a distinct alpha peak barely does. We report frontal signal quality
@@ -325,7 +326,7 @@ result; no single correlation is.
 
 A preprint's numbers are copied from a terminal into prose once, and then the code moves.
 Every headline number in this paper is regenerated from artefacts on disk by a single
-command, which checks it against the value asserted here: **44 claims**, all reproducing. The
+command, which checks it against the value asserted here: **46 claims**, all reproducing. The
 practice caught real drift, including one instance where our own motivating example (a
 manuscript saying 1.14× while the repository said 1.05×) was live in the codebase.
 
@@ -362,7 +363,7 @@ All code, the pre-registered analysis plan, the deviation log and the session ar
 behind every number in this paper are at
 <https://github.com/kirthankulkarni-bit/Brain-Music-Therapy>.
 
-The 44 claims quoted here are regenerated and checked against their asserted values by
+The 46 claims quoted here are regenerated and checked against their asserted values by
 
 ```
 python scripts/verify_claims.py
@@ -457,7 +458,7 @@ building the system.
     International Journal of Environmental Research and Public Health (2021). PMC8656869.
 ---
 
-*Reproducibility: 44 of the numbers in this paper are regenerated from artefacts on disk by
+*Reproducibility: 46 of the numbers in this paper are regenerated from artefacts on disk by
 `python scripts/verify_claims.py`, which checks each against the value asserted here and
 fails if any has moved. The synthetic-ground-truth figures in §4.3 come from
 `validate_event_locked.py`, the coupling recovery in §4.2 from `validate_coupling.py`, and

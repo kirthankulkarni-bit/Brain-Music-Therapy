@@ -327,6 +327,23 @@ def claim_coupling_recovers_lag() -> tuple[float, str]:
     return float(got), "synthetic session, true lag +6.0 s"
 
 
+def _alpha_effect_size(d: str) -> tuple[float, str]:
+    """Cohen's d on exactly the windows _logged_alpha_ratio uses, so the pair agrees."""
+    from session_logger import load_session
+    from scipy import stats as sps
+
+    session = load_session(d)
+    rows = [w for w in session["windows"]
+            if w.get("phase") in ("eyes_open", "eyes_closed")
+            and isinstance(w.get("alpha"), (int, float)) and np.isfinite(w["alpha"])]
+    a = np.log10(np.asarray([w["alpha"] for w in rows], dtype=float))
+    closed = np.asarray([w["phase"] == "eyes_closed" for w in rows], dtype=bool)
+    diff = float(a[closed].mean() - a[~closed].mean())
+    sd = float(np.sqrt((a[closed].var(ddof=1) + a[~closed].var(ddof=1)) / 2))
+    _, p = sps.ttest_ind(a[closed], a[~closed], equal_var=False)
+    return diff / sd, f"p = {p:.1e}, {closed.sum()} closed / {(~closed).sum()} open"
+
+
 def _logged_alpha_ratio(d: str) -> tuple[float, str]:
     from session_logger import load_session
     session = load_session(d)
@@ -611,6 +628,39 @@ def claim_second_alpha_ratio() -> tuple[float, str]:
     return _logged_alpha_ratio(_alpha_dir(SECOND_ALPHA))
 
 
+def claim_second_alpha_d() -> tuple[float, str]:
+    """
+    Cohen's d for the 9/17 AF7/AF8 eyes-closed rise, on the SAME windows as the ratio.
+
+    This exists because the manuscript quoted a ratio from one analysis and a d and p
+    from another, and read as a single result. The ratio (1.34x) came from every
+    labelled window with a finite alpha; the d (0.61) and p (5e-7) came from the
+    in-block subset, which drops the protocol's declared 3 s settle after each
+    instruction and so is a slightly stronger, slightly different measurement (1.41x,
+    d 0.61). Both analyses are defensible. Quoting half of each is not, and nothing
+    would have caught it, because no claim asserted the effect size at all.
+    """
+    return _alpha_effect_size(_alpha_dir(SECOND_ALPHA))
+
+
+def claim_second_rejection_rate() -> tuple[float, str]:
+    """
+    Fraction of 9/17 windows rejected, as recorded.
+
+    Rejection is recorded as a non-finite alpha, not as a boolean field. Looking for a
+    'rejected' key returns 0% on a session that actually rejected 6.8%, which is how a
+    wrong number reached a draft table.
+    """
+    from session_logger import load_session
+
+    session = load_session(_alpha_dir(SECOND_ALPHA))
+    windows = [w for w in session["windows"]
+               if w.get("phase") in ("eyes_open", "eyes_closed")]
+    bad = [w for w in windows
+           if not (isinstance(w.get("alpha"), (int, float)) and np.isfinite(w["alpha"]))]
+    return len(bad) / len(windows), f"{len(bad)} of {len(windows)} labelled windows"
+
+
 def claim_second_af7_eye_closure() -> tuple[float, str]:
     """AF7 prominence ratio, 2026-09-17. Below 1.2 = the eye-closure check fails."""
     return _eye_closure_ratio(_alpha_dir(SECOND_ALPHA), "AF7")
@@ -890,6 +940,8 @@ CLAIMS = {
     "analysis-path latency floor":        (claim_analysis_latency_floor,    0.189,  0.005),
     "info rate at the floor / deployed":  (claim_info_rate_at_the_floor,    1.83,   0.05),
     "9/17 AF7/AF8 alpha ratio (logged)":  (claim_second_alpha_ratio,        1.34,   0.02),
+    "9/17 AF7/AF8 alpha d":               (claim_second_alpha_d,            0.53,   0.02),
+    "9/17 rejection rate":                (claim_second_rejection_rate,     0.068,  0.005),
     "9/17 AF7 eye-closure ratio":         (claim_second_af7_eye_closure,    1.09,   0.03),
     "9/17 AF8 eye-closure ratio":         (claim_second_af8_eye_closure,    1.13,   0.03),
     "9/17 deployed d on AF7/AF8":         (claim_second_deployed_d,         1.06,   0.03),

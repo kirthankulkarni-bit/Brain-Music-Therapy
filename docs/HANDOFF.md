@@ -11,7 +11,7 @@ Verify the state is still current before trusting anything below:
 python scripts/run_tests.py && python scripts/verify_claims.py
 ```
 
-Expected: **110 passed, 0 failed, 1 skipped** and **44 claims reproduce**. The skip is
+Expected: **110 passed, 0 failed, 1 skipped** and **46 claims reproduce**. The skip is
 the residual-contingency positive control, which needs a session recorded with the current
 ladder; none exists yet. `verify_library` fails until the four new prompts are rendered —
 see §0.5. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
