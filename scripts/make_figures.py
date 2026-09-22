@@ -355,8 +355,14 @@ def fig_estimator(out: str) -> str:
     ax.set_xlabel("detection latency (s, log scale) - lower is better")
     ax.set_ylabel("information per minute\n"
                   r"$d \times \sqrt{ind/min}$" + " - higher is better")
+    # Counted, not written down. This title read "8 of 10" while the claim it restates
+    # verified at 8 of 9 - a hardcoded caption that drifted from its own data, which is
+    # the exact failure mode the reproducibility section of the paper is about.
+    n_dominating = sum(1 for _, lat, _, _, info in rows[1:]
+                       if lat < base[1] and info > base[4])
     ax.set_title("The analysis latency is a dominated configuration, not a floor\n"
-                 "8 of 10 alternatives beat the deployed setting on BOTH axes", fontsize=9)
+                 f"{n_dominating} of {len(rows) - 1} alternatives beat the deployed "
+                 "setting on BOTH axes", fontsize=9)
     ax.legend(frameon=False, fontsize=8, loc="lower left")
     path = os.path.join(out, "fig6_estimator_tradeoff.png")
     fig.savefig(path)

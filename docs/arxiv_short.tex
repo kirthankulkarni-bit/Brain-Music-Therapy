@@ -14,6 +14,8 @@
 \usepackage[utf8]{inputenc}
 \usepackage[margin=1in]{geometry}
 \usepackage{booktabs}
+\usepackage{graphicx}
+\graphicspath{{arxiv_figures/}{./}}
 \usepackage{amsmath}
 \usepackage{microtype}
 \usepackage[hidelinks]{hyperref}
@@ -182,7 +184,18 @@ streaming, order 4, $\tau = 0.25$ & $0.17$~s & $0.70$ & $30.9$ & $3.91$ \\
 \caption{The deployed setting is dominated by 8 of its 9 alternatives on both axes at once.}
 \end{table}
 
-It is not a latency/accuracy trade-off; it is off the efficient frontier.
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{fig6-estimator-tradeoff.png}
+\caption{Every estimator scored on detection latency (lower better) and information per
+minute (higher better). The deployed configuration sits at the bottom right: the shaded
+region is strictly better on both axes at once, and 8 of the 9 alternatives fall in it.
+A trade-off would put the deployed point on the upper-right frontier; it is not there.}
+\label{fig:frontier}
+\end{figure}
+
+It is not a latency/accuracy trade-off; it is off the efficient frontier
+(Figure~\ref{fig:frontier}).
 
 The mechanism links this section to Section~\ref{sec:stats}. At $\tau = 3$~s consecutive
 outputs are nearly identical ($\rho = 0.962$), yielding $1.2$ independent observations per
@@ -251,7 +264,18 @@ rather than the $2.4\times$ the estimator alone suggests.
 A $20$-minute session yields $1043$ valid windows at a $1$~s hop, and it is tempting to treat
 them as $1043$ observations. Lag-1 autocorrelation is $0.953$, giving an AR(1) effective
 sample size of $25.3$. Any test treating windows as independent overstates its evidence by
-$\sqrt{1043/25.3} = 6.4\times$---the difference between $p = 0.05$ and $p = 0.4$.
+$\sqrt{1043/25.3} = 6.4\times$---the difference between $p = 0.05$ and $p = 0.4$
+(Figure~\ref{fig:autocorr}).
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.82\linewidth]{fig2-autocorrelation.png}
+\caption{Autocorrelation of the arousal index against lag, from a $20$-minute session. The
+index decorrelates at about $9$~s, which is roughly the smoother's time constant times
+three---so the effective sample size is set by a design parameter we chose, not by the
+participant.}
+\label{fig:autocorr}
+\end{figure}
 
 \subsection{Continuous coupling loses power exactly when the intervention works}
 
@@ -324,6 +348,22 @@ distinct alpha peak barely does. We report frontal signal quality as a measured 
 This is consistent with Monroy-D'Croz et al., whose frontal alpha asymmetry explained $0.40\%$
 of signal variance.
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{fig0-alpha-validation.png}
+
+\vspace{0.6em}
+\includegraphics[width=\linewidth]{fig0b-alpha-validation-af78.png}
+\caption{Both validations, reported together rather than one substituted for the other.
+\emph{Top:} the temporal pair TP9/TP10, which establishes that the rig records cortex.
+\emph{Bottom:} AF7/AF8, the channels the arousal index is actually computed from, where the
+same manipulation gives roughly half the effect. Neither panel alone is the honest summary:
+the first says nothing about the electrodes in use, and the second would discard the
+evidence that the instrument works at all. The gap between them is the finding. The flat
+span near $300$~s in the lower panel is a stream dropout.}
+\label{fig:alpha}
+\end{figure}
+
 \paragraph{Arousal.} Tested on DEAP, which pairs 32-channel EEG with self-reported affect.
 Computed with the same feature extractor the live system uses, the index correlates with
 reported arousal at $\rho = +0.303$ ($p = 0.058$) on AF3/AF4, against $+0.082$ with
@@ -364,6 +404,24 @@ time---read as the signal jumping backwards every $12$ samples and reported as e
 failure on a headset that was fine. And raw timestamps were stored at a precision that
 depended on how long the laptop had been running: $8$~ms after a fresh boot, $0.25$~s after
 $27$ days up.
+
+\section*{Code and data availability}
+
+All code, the pre-registered analysis plan, the deviation log and the session artefacts
+behind every number in this paper are at
+\url{https://github.com/kirthankulkarni-bit/Brain-Music-Therapy}.
+
+The $44$ claims quoted here are regenerated and checked against their asserted values by
+
+\begin{center}
+\texttt{python scripts/verify\_claims.py}
+\end{center}
+
+\noindent which reads the recorded sessions and benchmark logs rather than any stored
+summary, and fails if a paper value and a recomputed value disagree. Figures are produced by
+\texttt{scripts/make\_figures.py} from the same artefacts. The audio library is excluded from
+the repository for size; its manifest is committed and \texttt{scripts/build\_library.py}
+regenerates it.
 
 \section{What this work does not establish}
 

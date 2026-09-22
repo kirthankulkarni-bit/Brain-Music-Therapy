@@ -159,6 +159,13 @@ fixed-duration session resolves a state difference.
 **The deployed setting is dominated by 8 of its 9 alternatives on both axes at once.** It is
 not a latency/accuracy trade-off; it is off the efficient frontier.
 
+![Estimator frontier](figures/fig6_estimator_tradeoff.png)
+
+*Every estimator scored on detection latency (lower better) against information per minute
+(higher better). The deployed configuration sits at the bottom right; the shaded region is
+strictly better on both axes at once, and 8 of the 9 alternatives fall inside it. A genuine
+trade-off would put the deployed point on the upper-right frontier. It is not there.*
+
 The mechanism links this section to §4. At τ = 3 s consecutive outputs are nearly identical
 (ρ = 0.962), yielding 1.2 independent observations per minute — which is precisely the
 coefficient that produces an effective sample size of 25 from a 20-minute session. **The
@@ -218,6 +225,12 @@ as 1043 observations. Lag-1 autocorrelation is **0.953**, giving an AR(1) effect
 size of **25.3**. Any test treating windows as independent overstates its evidence by
 **√(1043/25.3) = 6.4×** — the difference between p = 0.05 and p = 0.4.
 
+![Autocorrelation](figures/fig2_autocorrelation.png)
+
+*The index decorrelates at about 9 s, roughly three times the smoother's time constant, so
+the effective sample size is set by a design parameter we chose rather than by the
+participant.*
+
 ### 4.2 Continuous coupling loses power exactly when the intervention works
 
 Cross-correlating the audio envelope against the neural index over a whole session has a
@@ -266,6 +279,17 @@ contrast.
 ---
 
 ## 5. Does the index measure anything?
+
+![Alpha validation, both recordings](figures/fig0_alpha_validation.png)
+
+![Alpha validation on AF7/AF8](figures/fig0b_alpha_validation_af78.png)
+
+*Both validations, reported together rather than one substituted for the other. Top: the
+temporal pair TP9/TP10, establishing that the rig records cortex. Bottom: AF7/AF8, the
+channels the index is actually computed from, where the same manipulation gives roughly
+half the effect. Neither panel alone is the honest summary — the first says nothing about
+the electrodes in use, the second would discard the evidence that the instrument works at
+all. The gap between them is the finding. The flat span near 300 s is a stream dropout.*
 
 Two separable claims: that the electrodes record cortex, and that log(β/α) tracks arousal.
 
@@ -329,6 +353,25 @@ stepping backwards between copies, which downstream code — counting samples ra
 — read as the signal jumping backwards every 12 samples and reported as electrode failure on
 a headset that was fine. And raw timestamps were stored at a precision that depended on
 **how long the laptop had been running**: 8 ms after a fresh boot, 0.25 s after 27 days up.
+
+---
+
+## Code and data availability
+
+All code, the pre-registered analysis plan, the deviation log and the session artefacts
+behind every number in this paper are at
+<https://github.com/kirthankulkarni-bit/Brain-Music-Therapy>.
+
+The 44 claims quoted here are regenerated and checked against their asserted values by
+
+```
+python scripts/verify_claims.py
+```
+
+which reads the recorded sessions and benchmark logs rather than any stored summary, and
+fails if a paper value and a recomputed value disagree. Figures come from
+`scripts/make_figures.py` over the same artefacts. The audio library is excluded from the
+repository for size; its manifest is committed and `scripts/build_library.py` regenerates it.
 
 ---
 
