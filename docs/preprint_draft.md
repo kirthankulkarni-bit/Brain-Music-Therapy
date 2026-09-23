@@ -452,7 +452,8 @@ repeated the protocol on AF7/AF8 with good contact:
 | Cohen's d | 1.55 | 0.53 |
 | p | 2.8 × 10⁻²³ | 2.3 × 10⁻⁶ |
 | windows (closed / open) | 151 / 76 | 164 / 166 |
-| windows rejected, as recorded | 36% (at 150 µV) | **6.8%** |
+| windows rejected, as recorded | 36% (recorded at 150 µV) | 6.8% (recorded at 350 µV) |
+| windows rejected, recomputed at the deployed 350 µV | 3% | 7% |
 | alpha-peak prominence, eyes closed / open | passes | **AF7 1.09, AF8 1.13 (fails, ≥ 1.20 required)** |
 | deployed estimator d | 1.99 | 1.06 |
 

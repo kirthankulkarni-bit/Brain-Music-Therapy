@@ -362,6 +362,18 @@ def main() -> int:
     args = parser.parse_args()
 
     d = args.session
+    if d is None and args.report_channels:
+        # PINNED. The channel-comparison table in finding_channel_validation.md and in
+        # HANDOFF (3% / 48%, 1.85x / 0.91x) is the AUGUST recording - it is the one that
+        # has both pairs on the head at once with poor frontal contact, which is the
+        # whole point of the comparison. Defaulting to the newest session silently
+        # recomputed it on 9/17 and printed 0% / 7%, so the documented numbers stopped
+        # reproducing from the command the document tells you to run. That is the same
+        # newest-session rebasing that PINNED_PILOT and PINNED_ALPHA exist to stop.
+        from verify_claims import PINNED_ALPHA
+        d = os.path.join(_ROOT, "sessions", PINNED_ALPHA)
+        print(f"[sweep] --report-channels is pinned to {PINNED_ALPHA}; "
+              "pass --session to override.")
     if d is None:
         from session_logger import real_sessions
         cands = real_sessions(os.path.join(_ROOT, "sessions", "alphatest*"))

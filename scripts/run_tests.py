@@ -791,6 +791,24 @@ def test_synthetic_sessions_are_excluded(s: Suite) -> None:
             os.path.basename(vc._pilot()["dir"]) == vc.PINNED_PILOT,
             f"pinned to {getattr(vc, 'PINNED_PILOT', '(unset)')}")
 
+    # Same class of defect, found 2026-09-22 in a document rather than a figure.
+    # finding_channel_validation.md publishes 3% / 48% and says "reproduce with
+    # estimator_sweep.py --report-channels". That table is the AUGUST recording - the one
+    # with both pairs on the head and poor frontal contact - but the flag defaulted to the
+    # newest alphatest session, so by 9/17 the documented command printed 0% / 7% from a
+    # different recording and the published numbers no longer reproduced from the
+    # instruction given for reproducing them.
+    #
+    # Asserted by reading the source rather than by running the sweep, which needs the raw
+    # recording and about a minute. The string is specific enough to fail if the pin is
+    # deleted and loose enough to survive reformatting.
+    sweep_src = open(os.path.join(_ROOT, "scripts", "estimator_sweep.py"),
+                     encoding="utf-8").read()
+    pinned_block = sweep_src.split("if args.report_channels", 1)[0]
+    s.check("--report-channels is pinned, not newest-session",
+            "PINNED_ALPHA" in pinned_block and "report_channels" in pinned_block,
+            "channel comparison defaults to the session its published table came from")
+
     # THE WHOLE CLASS, not the three instances. Anything that regenerates a manuscript
     # artefact from "the newest pilot" breaks the same way: five of seven figures and the
     # power analysis had this too, and fig3_chatter is the sharpest case - it plots

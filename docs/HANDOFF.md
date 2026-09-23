@@ -11,7 +11,7 @@ Verify the state is still current before trusting anything below:
 python scripts/run_tests.py && python scripts/verify_claims.py
 ```
 
-Expected: **110 passed, 0 failed, 1 skipped** and **46 claims reproduce**. The skip is
+Expected: **111 passed, 0 failed, 1 skipped** and **46 claims reproduce**. The skip is
 the residual-contingency positive control, which needs a session recorded with the current
 ladder; none exists yet. `verify_library` fails until the four new prompts are rendered —
 see §0.5. Takes ~100 s; `--quick` cuts it to ~65 s by skipping everything that recomputes from raw data, and says so rather than looking clean. If either disagrees,
@@ -54,7 +54,8 @@ no sham, could be sound onset itself — descriptive only.)
 | logged-window ratio (geometric) | **1.34×** | — | 2.13× |
 | d (log alpha) | 0.61 | −0.17 | 1.23 |
 | p | 5 × 10⁻⁷ | 0.26 | 2 × 10⁻²⁵ |
-| rejected | 6.8% | 48% | 3% |
+| rejected (recomputed at deployed 350 µV) | 7% | 48% | 3% |
+| rejected as logged (recording threshold) | 6.8% (350 µV) | — | 36% (150 µV) |
 | **eye-closure prominence ratio** | **AF7 1.09, AF8 1.13 — FAIL (< 1.2)** | AF7 0.75 | TP9 2.46, TP10 1.91 (9/17) |
 
 Alpha *power* rises significantly on eye closure, with good contact and balanced windows
@@ -149,7 +150,7 @@ No claim about whether the intervention helps anyone can appear anywhere.
 
 | | |
 |---|---|
-| tests | 110 passing, 1 skipped (`scripts/run_tests.py`) |
+| tests | 111 passing, 1 skipped (`scripts/run_tests.py`) |
 | verified claims | 44 (`scripts/verify_claims.py`) — 39 manuscript, pinned to PILOT01 and the August alpha test; 5 describing 9/17 |
 | figures | 7, at 300 dpi (`docs/figures/`) |
 | pre-registration | **FROZEN**, tag `preregistration-v1`, commit `e45bd32` |
@@ -283,6 +284,9 @@ Figure 0 was recorded with `frontal_channels: TP9/TP10`. The live index uses **A
 | pair | ratio | d | p | rejected |
 |---|---|---|---|---|
 | TP9/TP10 (validated) | 1.85× | 1.23 | 1.8e−25 | 3% |
+<!-- Rejection here is RECOMPUTED at 350 uV, not the rate this session logged: it ran at
+     150 uV and rejected 36% at the time. Both are real; they answer different questions.
+     Reproduce with --report-channels, which is pinned to the August session. -->
 | **AF7/AF8 (the index)** | **0.91×** | −0.17 | **0.26** | **48%** |
 
 AF7 alone shows a **significant reversal** (p = 0.009) — it tracked blinks. **This gates

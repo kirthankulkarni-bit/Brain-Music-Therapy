@@ -28,7 +28,16 @@ On the channels the study actually uses, in the one session that could test it, 
 canonical eyes-closed alpha response **was not detectable**, and nearly half the windows
 were rejected as artefact.
 
-Reproduce with `scripts/estimator_sweep.py --report-channels`.
+Reproduce with `scripts/estimator_sweep.py --report-channels`, which is pinned to the
+August recording. **The rejection rates in this table are recomputed from raw at the
+deployed 350 µV threshold**, which is not the rate the session logged: that recording ran
+at 150 µV and rejected 36% of its own windows at the time. Both numbers are real and they
+answer different questions — 36% is what the operator saw, 3% is what the pipeline would
+reject today.
+
+Running it without the pin recomputes the table on the newest alphatest session and prints
+0% / 7% from the 9/17 recording, which is a different comparison: that session had good
+frontal contact, so it cannot show the contrast this table is about.
 
 ## What this does and does not mean
 
