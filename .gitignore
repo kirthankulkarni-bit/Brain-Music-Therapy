@@ -22,3 +22,7 @@ sessions/DEMO_*
 # only group-level results are published. Participant IDs are P01, P02, ... - this
 # pattern matches those and not PILOT01/PILOT02, which are the researcher's own sessions.
 sessions/P[0-9]*/
+
+# Science fair paperwork. Signed forms carry names, signatures and contact details, and
+# this repository is public.
+fair_forms/
