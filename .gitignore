@@ -16,3 +16,9 @@ sessions/*/raw_eeg.f32
 # claims by sorting after the real one; session_logger.real_sessions() filters them out of
 # analysis, and this keeps them out of the repository as well.
 sessions/DEMO_*
+
+# PARTICIPANT SESSIONS NEVER GO TO GITHUB. This repository is public, and the consent
+# form promises participants that their recordings stay on the researcher's computer and
+# only group-level results are published. Participant IDs are P01, P02, ... - this
+# pattern matches those and not PILOT01/PILOT02, which are the researcher's own sessions.
+sessions/P[0-9]*/
