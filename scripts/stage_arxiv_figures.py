@@ -1,5 +1,5 @@
 """
-stage_arxiv_figures.py - copy the figures arxiv_short.tex includes into docs/arxiv_figures.
+stage_arxiv_figures.py - copy the figures arxiv_short.tex includes into docs/arxiv-figures.
 
 WHY THIS EXISTS
 
@@ -36,7 +36,7 @@ FIGURES = (
 
 def main() -> int:
     src = os.path.join(_ROOT, "docs", "figures")
-    dst = os.path.join(_ROOT, "docs", "arxiv_figures")
+    dst = os.path.join(_ROOT, "docs", "arxiv-figures")
     tex = os.path.join(_ROOT, "docs", "arxiv_short.tex")
     os.makedirs(dst, exist_ok=True)
 
@@ -50,7 +50,7 @@ def main() -> int:
             missing.append(name)
             continue
         shutil.copy2(origin, os.path.join(dst, staged))
-        print(f"  {name} -> arxiv_figures/{staged}")
+        print(f"  {name} -> arxiv-figures/{staged}")
         if source and staged not in source:
             print(f"  NOTE: {staged} is staged but arxiv_short.tex does not include it.")
 
@@ -68,7 +68,7 @@ def main() -> int:
         print(f"\n{len(missing)} problem(s). Run scripts/make_figures.py first.")
         return 1
 
-    print(f"\n{len(FIGURES)} figures staged in docs/arxiv_figures.")
+    print(f"\n{len(FIGURES)} figures staged in docs/arxiv-figures.")
     return 0
 
 
