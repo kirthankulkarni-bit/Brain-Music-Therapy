@@ -156,7 +156,7 @@ on this. (Until 2026-09-05 it also appended one of three trend suffixes, giving 
 reachable prompts; the suffix was removed because the slope it gated on is smaller than
 the noise of the estimator measuring it.)
 
-The design applies the **iso-principle** (Altshuler, 1948): the prompt is not set to the
+The design applies the **iso-principle** (Altshuler, 1944): the prompt is not set to the
 target state but to one rung from the participant's current state in the direction of the
 target — match first, then lead. Dropping an aroused listener straight into a sparse
 drone is the failure mode the principle exists to avoid.
@@ -857,9 +857,12 @@ remains unread behind a paywall. URLs accessed 2026-08-28, re-checked 2026-09-06
    **The sharpest and most directly relevant version of the delay threat**, because it
    is the same rhythm this system measures rather than a different EEG feature. §8.
 
-8. **The past, present and future of psychiatric music therapy.** I. M. Altshuler,
-   *American Journal of Psychiatry* (1948). The origin of the iso-principle: match the
-   patient's present state first, then lead it. Cited in §2.2.
+8. **Four years' experience with music as a therapeutic agent at Eloise Hospital.**
+   I. M. Altshuler, *American Journal of Psychiatry* 100(7):792–794 (1944).
+   doi:10.1176/ajp.100.7.792. The source Starcke et al. (2021) cite for the iso-principle:
+   match the patient's present state first, then lead it. Cited in §2.2.
+   **Corrected 2026-10-22:** this entry previously gave a 1948 paper titled "The past,
+   present and future of psychiatric music therapy", which does not exist.
 
 9. **Emotion Modulation through Music after Sadness Induction — The Iso Principle in a
    Controlled Experimental Study.** Katrin Starcke, Johanna Mayr & Richard von Georgi,

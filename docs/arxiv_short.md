@@ -45,8 +45,9 @@ These systems are typically described as real-time, but the time they take to re
 rarely measured. This omission is consequential. In neurofeedback, delay is itself an
 experimental variable: Belinskaia et al. [7] trained parietal alpha with feedback delayed by
 0, 250 and 500 ms and found that sustained post-training change was negatively correlated
-with latency and absent at 500 ms, and Asai et al. [8] observed an effect on EEG microstates
-only at zero delay, with a one-second delay sufficient to abolish it. A closed-loop music
+with latency and absent at 500 ms, and Asai et al. [8], comparing feedback delays of 0, 1
+and 20 s, found that the trained EEG microstate increased significantly over baseline only
+when feedback was undelayed. A closed-loop music
 system whose response time is unknown cannot be placed relative to these findings.
 
 In this work, we build a closed-loop EEG-driven music system on consumer hardware and
@@ -90,17 +91,20 @@ Lab Streaming Layer [6]. All of these decode affect with more sophistication tha
 hand-built index used here, and we make no claim of superior decoding capability.
 
 None of these systems reports a measured, decomposed signal-to-audio latency. MindMelody
-gives no latency, inference time or hardware specification, and Monroy-D'Croz et al. report
-no latency and no control condition. Ehrlich et al. are a partial exception: they report a
-4 s analysis window at 87.5% overlap (a 0.5 s update rate), select zero-phase filtering to
-avoid delay, and tune a feedback parameter against perceived latency, but do not convert
+gives no latency, inference time or hardware specification. Two systems report processing
+parameters without a latency figure. Monroy-D'Croz et al. state a 4 s sliding window with
+0.5 s updates, but no end-to-end latency and no control condition. Ehrlich et al. report a
+4 s analysis window at 87.5% overlap (a 0.5 s update rate), apply zero-phase filtering to
+each windowed segment to avoid filter delay, and tune a feedback parameter against perceived
+latency, but do not convert
 these into an end-to-end figure.
 
 ### 2.2 Feedback Latency
 
 Delay is treated as a primary variable in neurofeedback [7, 8] and as a design requirement in
-interactive music generation; Gesture2Music, for example, reports 30 ms inference against a
-stated 100 ms interaction threshold [9]. The present work applies the same standard of
+interactive music generation; Gesture2Music, for example, reports 25–30 ms inference
+latency against the 100 ms threshold commonly regarded as acceptable for real-time
+interaction [9]. The present work applies the same standard of
 measurement to EEG-driven music.
 
 ### 2.3 The Iso-Principle
@@ -108,8 +112,10 @@ measurement to EEG-driven music.
 The iso-principle holds that music should first match a listener's present state and then
 lead it gradually toward a target [10]. Its supporting evidence comes largely from fixed,
 non-adaptive sequences: Starcke et al. randomised 107 participants to four pre-set sequences
-after a sadness induction and found that the iso sequence produced higher positive affect
-and valence (η² = 0.08 and 0.09) under passive listening [11]. We return to the implications
+after a sadness induction. Group differences after listening were significant for positive
+affect and valence (η² = 0.08 and 0.09), with the iso sequence scoring highest, although
+not significantly above a sequence of two happy pieces [11]. The sequences were fixed in
+advance and did not respond to the listener. We return to the implications
 of this in Section 8.
 
 ---
@@ -395,7 +401,8 @@ protocol's 3 s settling period after each instruction is excluded. However, the 
 increase in spectral peak prominence, which the temporal channels pass clearly, was 1.09× on
 AF7 and 1.13× on AF8, below a 1.2× criterion. Alpha power therefore rises on the frontal
 channels, but a distinct alpha peak barely emerges. This is consistent with Monroy-D'Croz et
-al., whose frontal alpha asymmetry explained 0.40% of signal variance [6].
+al., in whose prefrontal system the emotion-induction manipulation accounted for only 0.40%
+of total signal variance [6].
 
 ![Figure 3a](figures/fig0_alpha_validation.png)
 
@@ -501,32 +508,39 @@ were regenerated from recorded data by the verification script described above.
 
 1. Y. Zhang, Y. Sun, H. Gu, and Z. Jin, "MindMelody: A closed-loop EEG-driven system for
    personalized music intervention," arXiv:2605.01235, 2026.
-2. Ran et al., "Mind to Music: An EEG signal-driven real-time emotional music generation
-   system," *International Journal of Intelligent Systems*, art. 9618884, 2024.
+2. S. Ran, W. Zhong, L. Ma, D. Duan, L. Ye, and Q. Zhang, "Mind to Music: An EEG
+   signal-driven real-time emotional music generation system," *International Journal of
+   Intelligent Systems*, vol. 2024, art. 9618884, 2024.
    doi:10.1155/int/9618884.
 3. S. K. Ehrlich, K. R. Agres, C. Guan, and G. Cheng, "A closed-loop, music-based
-   brain-computer interface for emotion mediation," *PLOS ONE*, 2019.
+   brain-computer interface for emotion mediation," *PLOS ONE*, vol. 14, no. 3, e0213516, 2019.
    doi:10.1371/journal.pone.0213516.
 4. A. Dash and K. R. Agres, "AI-based affective music generation systems: A review of methods
    and challenges," arXiv:2301.06890, 2023.
-5. Velasquez-Peña et al., "Neurophone: A brain-computer music interface for emotional
-   neurofeedback," in *Proc. IEEE Int. Symposium on the Internet of Sounds*, 2025.
+5. Velasquez-Peña, Ramirez-Espinosa, Garcia-Orjuela, and Alvarado-Rojas, "Neurophone: A
+   brain-computer music interface for emotional neurofeedback," in *Proc. 6th IEEE Int.
+   Symposium on the Internet of Sounds (IS2)*, 2025. doi:10.1109/IS264627.2025.11284624.
 6. P. A. Monroy-D'Croz, R. Ramirez-Melendez, and J. Cespedes-Guevara, "A minimalist
-   brain-computer musical interface for real-time emotion-driven sonification,"
-   arXiv:2606.01473, 2026.
+   brain-computer musical interface for real-time emotion-driven sonification: System design
+   and preliminary evaluation," arXiv:2606.01473, 2026.
 7. A. Belinskaia, N. Smetanin, M. Lebedev, and A. Ossadtchi, "Short-delay neurofeedback
-   facilitates training of the parietal alpha rhythm," *Journal of Neural Engineering*, 2020.
+   facilitates training of the parietal alpha rhythm," *Journal of Neural Engineering*,
+   vol. 17, no. 6, 066012, 2020.
    doi:10.1088/1741-2552/abc8d7.
 8. T. Asai, T. Hamamoto, S. Kashihara, and H. Imamizu, "Real-time detection and feedback of
-   canonical electroencephalogram microstates," *Frontiers in Systems Neuroscience*, 2022.
+   canonical electroencephalogram microstates: Validating a neurofeedback system as a function
+   of delay," *Frontiers in Systems Neuroscience*, vol. 16, 2022.
    doi:10.3389/fnsys.2022.786200.
 9. R. Jeyaraj, B. Subramanian, K. Gangadharan, and A. Paul, "Gesture2Music: A low-latency
-   real-time framework for continuous gesture-driven music generation," arXiv:2511.00793.
-10. I. M. Altshuler, "The past, present and future of psychiatric music therapy," *American
-    Journal of Psychiatry*, 1948.
+   real-time framework for continuous gesture-driven music generation," arXiv:2511.00793,
+   2025.
+10. I. M. Altshuler, "Four years' experience with music as a therapeutic agent at Eloise
+    Hospital," *American Journal of Psychiatry*, vol. 100, no. 7, pp. 792–794, 1944.
+    doi:10.1176/ajp.100.7.792.
 11. K. Starcke, J. Mayr, and R. von Georgi, "Emotion modulation through music after sadness
     induction: The iso principle in a controlled experimental study," *International Journal
-    of Environmental Research and Public Health*, 2021. PMC8656869.
+    of Environmental Research and Public Health*, vol. 18, no. 23, 12486, 2021.
+    doi:10.3390/ijerph182312486.
 12. P. D. Welch, "The use of fast Fourier transform for the estimation of power spectra: A
     method based on time averaging over short, modified periodograms," *IEEE Transactions on
     Audio and Electroacoustics*, vol. 15, no. 2, pp. 70–73, 1967.
