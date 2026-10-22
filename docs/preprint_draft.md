@@ -68,9 +68,11 @@ And delay is not a cosmetic concern. Training **parietal alpha** — the same rh
 system measures — with visual neurofeedback delivered immediately, at +250 ms, or at
 +500 ms, sustained post-training change was negatively correlated with latency and
 **absent at 500 ms** (Belinskaia, Smetanin, Lebedev & Ossadtchi, 2020). On EEG
-microstates the shape repeats: the effect appeared only at zero delay, one second was
-enough to abolish it, and participants could not consciously detect the delay that did
-so (Asai, Hamamoto, Kashihara & Imamizu, 2022). The mechanism offered — feedback arriving
+microstates the shape is similar: comparing 0, 1 and 20 s delays, the trained microstate
+rose significantly over baseline only when feedback was undelayed, although another
+microstate class rose under the delayed conditions too, and controllability ratings did
+not differ across delays, which the authors read as participants being naive to the delay
+(Asai, Hamamoto, Kashihara & Imamizu, 2022). The mechanism offered — feedback arriving
 while the oscillation is still ongoing, and the forward model linking intention to
 outcome — is not specific to operant protocols, and §8 takes the threat seriously.
 
@@ -680,9 +682,11 @@ Belinskaia, Smetanin, Lebedev & Ossadtchi (2020) trained **parietal alpha** with
 neurofeedback delivered immediately, at +250 ms, or at +500 ms. Sustained post-training
 change in alpha magnitude was negatively correlated with latency, maximal at the shortest,
 and **absent at 500 ms**. Their proposed mechanism is that feedback must arrive while the
-alpha spindle is still ongoing. Asai et al. (2022) report the same shape on EEG
-microstates: the effect appeared only at zero delay, with one second enough to abolish it,
-and participants unable to consciously detect the delay that did so.
+alpha spindle is still ongoing. Asai et al. (2022) report a similar shape on EEG
+microstates: across 0, 1 and 20 s delays, the trained microstate rose significantly over
+baseline only without delay, though not every microstate effect disappeared with delay,
+and the authors infer from unchanged controllability ratings that participants were naive
+to the delay rather than testing it directly.
 
 Our budget is **13× the delay at which sustained alpha change had already disappeared**,
 and the retuned configuration of §3 still sits at 5.5×. The 8× audio improvement does not
@@ -733,17 +737,26 @@ al. observed.
 This intervention asks nothing of the participant. The proposed mechanism is the
 iso-principle, and the evidence for it comes from studies with **no contingency at all**.
 Starcke, Mayr & von Georgi (2021) randomised 107 participants to four fixed music
-sequences after a sadness induction; the iso sequence (sad then happy) produced higher
-positive affect and valence and lower negative affect than the alternatives (η² = 0.08
-and 0.09), with participants listening **passively to a pre-set sequence**. Starcke & von
-Georgi (2024) replicate the direction against compensatory listening at d = 0.52. Whatever
-carries that effect, it is not a perceived contingency, because there was none to
-perceive.
+sequences after a sadness induction. Group differences were significant for positive
+affect and valence (η² = 0.08 and 0.09) and the iso sequence (sad then happy) scored
+highest on both, though not significantly above two happy pieces, and its lower negative
+affect was descriptive only (group effect p = 0.77). The sequences were **fixed in
+advance**. Starcke & von Georgi (2023) found significantly lower negative affect for iso
+than compensatory listening in 59 participants. Whatever carries those effects, it is not
+a perceived contingency, because there was none to perceive.
+
+**The largest and only pre-registered test did not replicate this.** Lowe-Brown, Glasser,
+Wadley & Koval (2026) randomised 193 participants after an anxiety induction to iso,
+compensatory or unguided playlists and found **no significant difference** between iso and
+compensatory listening; only an exploratory analysis favoured guided over unguided
+listening for calmness. The evidence that the iso principle works at all is therefore
+mixed, and weakest in the best-designed study.
 
 **That argument has a sharp edge, and we state it rather than leave it for a reviewer.**
-If matching-then-leading works at these effect sizes with a fixed playlist and no feedback
-whatsoever, then the burden on a closed-loop system is not to beat silence — it is to beat
-a fixed playlist. The yoked sham is exactly that comparison: identical music, identical
+If matching-then-leading works with a fixed playlist and no feedback whatsoever, then
+the burden on a closed-loop system is not to beat silence — it is to beat a fixed
+playlist. And if, as the pre-registered result suggests, it may not work reliably even
+then, an adaptive system cannot borrow its plausibility from the iso literature. The yoked sham is exactly that comparison: identical music, identical
 sequence, contingency broken. So the design already asks the right question, and a null
 contrast would be informative rather than merely disappointing.
 
@@ -845,8 +858,10 @@ remains unread behind a paywall. URLs accessed 2026-08-28, re-checked 2026-09-06
    (2022). doi:10.3389/fnsys.2022.786200
    **Previously cited here as "Sato et al." — that attribution was wrong** and was
    inferred from search metadata rather than the paper (corrected 2026-09-06).
-   Tests 0 s / 1 s / 20 s feedback delay and finds the effect **only** at 0 s; one second
-   abolished it, and participants were unaware of the delay. This is the strongest
+   Tests 0 s / 1 s / 20 s feedback delay. The trained microstate (msC) rose significantly
+   over baseline only at 0 s; msD rose under the 1 s and 20 s delays as well, so "abolished
+   at 1 s" overstates it. Participant naivety to the delay is inferred from unchanged
+   controllability ratings, not tested. **Corrected 2026-10-22.** This is the strongest
    single threat to the present approach and §8 states it as such.
 
 7. **Short-delay neurofeedback facilitates training of the parietal alpha rhythm.**
@@ -868,23 +883,31 @@ remains unread behind a paywall. URLs accessed 2026-08-28, re-checked 2026-09-06
    Controlled Experimental Study.** Katrin Starcke, Johanna Mayr & Richard von Georgi,
    *International Journal of Environmental Research and Public Health* (2021).
    PMC8656869 (open access).
-   n = 107, randomised to four fixed sequences after a film-clip sadness induction. The
-   iso sequence gave higher positive affect and valence and lower negative affect,
-   η² = 0.08 and 0.09. **Passive listening, no feedback and no contingency** — which is
-   what makes it the right evidence for §8. Note the effect appeared in female
+   n = 107, randomised to four fixed sequences after a film-clip sadness induction.
+   Significant group effects on positive affect and valence (η² = 0.08 and 0.09), iso
+   highest on both but not significantly above happy-happy; the negative-affect group
+   effect was not significant (p = 0.77). **Fixed sequences, no feedback and no
+   contingency** — which is what makes it the right evidence for §8. The paper does not
+   describe the listening as passive. **Corrected 2026-10-22.** Note the effect appeared in female
    participants and not male, a moderator this study is not powered to address.
 
 10. **Music listening according to the iso principle modulates affective state.** Katrin
-   Starcke & Richard von Georgi, *Musicae Scientiae* (2024).
-   doi:10.1177/10298649231175029
-   n = 59, iso versus compensatory listening, d = 0.52 on negative affect. Also passive.
+   Starcke & Richard von Georgi, *Musicae Scientiae* 28(1):131–142 (online 2023, issue
+   2024). doi:10.1177/10298649231175029
+   n = 59, iso versus compensatory listening after a sadness induction; the iso group
+   reported significantly lower negative affect. A "d = 0.52" previously given here could
+   not be confirmed from the abstract and has been removed until checked against the full
+   text. **Corrected 2026-10-22.**
 
 11. **Personalised affect-regulation playlists: a pre-registered experimental test of the
     iso principle in the general population.** Xanthe Lowe-Brown, Solange Glasser, Greg
     Wadley & Peter Koval, *Musicae Scientiae* (2026). doi:10.1177/10298649261421187
-    A pre-registered test in a non-clinical sample. **Not yet read in full** — obtain
-    before submission, since a pre-registered null in the general population would bear
-    directly on §8's mechanism argument.
+    Musicae Scientiae 30(3):428–446. N = 193, anxiety induction, iso vs compensatory vs
+    unguided Spotify playlists built from participants' own songs. **Pre-registered
+    analyses found no significant difference between iso and compensatory listening**;
+    exploratory analyses favoured guided over unguided listening for calmness. This is the
+    pre-registered null §8 anticipated, and §8 now states it. Read from the abstract;
+    obtain the full text before submission. **Updated 2026-10-22.**
 
 ### Outstanding literature work
 
@@ -905,8 +928,9 @@ configurations §3 measures.
 Two further changes fall out of the same check. A 2026 near-neighbour
 (Monroy-D'Croz et al., arXiv:2606.01473 — prefrontal EEG over Lab Streaming Layer into
 Ableton) was missing from §1 and belongs there; it reports no latency and ran no control
-condition, and its frontal alpha asymmetry explained 0.40% of variance, which is
-independent published support for the frontal-SNR limitation this paper reports in §8.
+condition, and its emotion-induction manipulation accounted for only 0.40% of total
+signal variance, which is independent published support for the frontal-SNR limitation
+this paper reports in §8.
 And Neurophone runs on a Muse S, the same consumer headband family used here, so it is the
 nearest hardware neighbour in the table.
 
