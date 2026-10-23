@@ -20,8 +20,8 @@
 \usepackage{microtype}
 \usepackage[hidelinks]{hyperref}
 
-\title{Measuring and Decomposing End-to-End Latency\\
-       in a Closed-Loop EEG-Driven Music System}
+\title{Measuring and Decomposing Latency\\
+       in a Closed-Loop EEG Music System}
 \author{Kirthan Kulkarni}
 \date{}
 
@@ -29,25 +29,25 @@
 \maketitle
 
 \begin{abstract}
-Closed-loop systems that adapt music to a listener's electroencephalogram (EEG) have been
-demonstrated repeatedly, yet none of the systems we could examine reports a measured
-end-to-end latency, even though neurofeedback studies find that feedback effects weaken or
-disappear at delays of 0.5--1~s. We present a closed-loop EEG-driven music system built on
-consumer hardware and characterise its latency component by component. The system
-estimates arousal from a frontal $\log(\beta/\alpha)$ index, maps it onto a nine-level
+Several closed-loop systems that continuously adapt music to a user's electroencephalogram
+(EEG) have been implemented in the past, yet none of the systems that we could examine
+reports a measured end-to-end latency, even though neurofeedback studies find that feedback
+effects weaken at a 0.5--1 second latency. We present a closed-loop EEG music system which
+utilizes consumer hardware, and measure its latency component by component. The system
+estimates arousal using a frontal $\log(\beta/\alpha)$ index, maps it onto a nine-level
 prompt ladder following the iso-principle, and plays audio from a library of pre-rendered
-MusicGen segments. Generation runs $1.05$--$6.27\times$ slower than realtime in every
-configuration tested, which motivates the precomputed library; the library reduces
-worst-case audio latency from $8.0$~s to $1.0$~s. The deployed end-to-end latency is
-$6.5$~s, of which $84.6\%$ is attributable to the analysis path rather than the generative
-model. Evaluated against labelled eyes-open/eyes-closed ground truth, the deployed estimator
-is dominated by 8 of 9 alternative configurations on both detection latency and information
-rate. The architecture admits an analysis-path floor of $0.189$~s and an end-to-end latency
-of $0.439$~s, at which the information rate is $1.83\times$ that of the deployed
-configuration. We further report four statistical properties of closed-loop EEG data that
-bear on study design, including a $6.4\times$ inflation of apparent evidence due to
-autocorrelation. All 46 quantitative claims are regenerated from recorded data by a single
-script. No claim of therapeutic efficacy is made.
+MusicGen segments. Music generation runs $1.05$--$6.27\times$ slower than real time in
+every configuration that was tested, which motivates the precomputed library setup.
+Employing a precomputed library reduces worst-case audio latency from $8.0$~s to $1.0$~s.
+The deployed end-to-end latency is $6.5$~s, of which $84.6\%$ is attributable to the
+analysis path rather than the generative model. Evaluated against labelled
+eyes-open/eyes-closed ground truth, the deployed estimator is worse than 8 of 9 alternative
+configurations on both detection latency and information rate. The architecture shows an
+analysis-path floor of $0.189$~s and end-to-end latency of $0.439$~s, at which information
+rate is $1.83\times$ that of the deployed configuration. Additionally, four statistical
+properties of closed-loop EEG data that are relevant to study design are reported. All 46
+quantitative claims are regenerated from recorded data by a single Python script. No claim
+of therapeutic efficacy is made.
 \end{abstract}
 
 \noindent\textbf{Keywords:} closed-loop systems $\cdot$ EEG $\cdot$ latency $\cdot$
@@ -57,72 +57,73 @@ neurofeedback $\cdot$ music generation $\cdot$ reproducibility
 \section{Introduction}
 \label{sec:intro}
 
-Music listening is a low-cost, non-invasive means of influencing affective state, and a
-growing body of work seeks to make it adaptive by closing the loop through the listener's
-brain activity. In such systems, EEG is recorded continuously, an affective or arousal
-state is estimated, and the music is adjusted in response. Several systems of this kind
-have been built and described~\cite{mindmelody,mindtomusic,ehrlich,neurophone,minimalist},
-and the area has been surveyed~\cite{dashagres}.
+Music listening is an inexpensive and non-invasive method of influencing a user's affective
+state, and lots of research seeks to make it adaptive by closing the loop through the user's
+brain activity. In these systems, EEG is recorded continuously, an affective or arousal
+state is estimated, and the music is adjusted in response. Several of these systems have
+been built and described~\cite{mindmelody,mindtomusic,ehrlich,neurophone,minimalist}, and
+this area has already been reviewed~\cite{dashagres}.
 
 These systems are typically described as real-time, but the time they take to respond is
-rarely measured. This omission is consequential. In neurofeedback, delay is itself an
-experimental variable: Belinskaia et al.~\cite{belinskaia} trained parietal alpha with
-feedback delayed by 0, 250 and 500~ms and found that sustained post-training change was
-negatively correlated with latency and absent at 500~ms, and Asai et
-al.~\cite{asai}, comparing feedback delays of 0, 1 and 20~s, found that the trained EEG
-microstate increased significantly over baseline only when feedback was undelayed. A closed-loop music system whose response time is unknown
-cannot be placed relative to these findings.
+rarely measured. In neurofeedback, delay is itself an experimental variable: Belinskaia et
+al.~\cite{belinskaia} trained parietal alpha with feedback delayed by 0, 250 and 500~ms and
+found that sustained post-training change was negatively correlated with latency and absent
+at 500~ms, and Asai et al.~\cite{asai}, comparing feedback delays of 0, 1 and 20~s, found
+that the trained EEG microstate increased significantly only when feedback was not delayed.
+A closed-loop music system whose response time is unknown cannot be placed relative to
+these findings.
 
-In this work, we build a closed-loop EEG-driven music system on consumer hardware and
-measure where its latency arises. The system comprises a four-channel Muse headband, a
-frontal arousal index normalised to each listener's baseline, a controller that applies
-the iso-principle over a nine-level prompt ladder, and an audio engine that selects from a
+In this work, we build a closed-loop EEG-based music system on consumer hardware (Muse~2)
+and measure its latency. The system consists of a four-channel Muse headband, a frontal
+arousal index normalised to each listener's baseline, a controller that applies the
+iso-principle over a nine-level prompt ladder, and an audio engine that selects from a
 library of pre-rendered segments rather than generating music online. We decompose the
 end-to-end delay into its analysis and audio components, evaluate alternative estimator
 configurations against labelled ground truth, and identify the lowest latency the
 architecture can reach.
 
 Our contributions are summarised as follows:
-\begin{itemize}
-  \item We report a measured, component-wise latency budget for a closed-loop EEG-driven
-        music system, and show that the dominant term ($84.6\%$ of $6.5$~s) lies in the
-        analysis path rather than in music generation.
-  \item We show that the deployed estimator is dominated by 8 of 9 alternatives on both
-        detection latency and information rate, and that the architecture's latency floor
-        ($0.439$~s end-to-end) is also its most informative operating point.
+\begin{enumerate}
+  \item We report a measured, component-wise latency budget for a closed-loop EEG music
+        system, and show that most of the delay ($84.6\%$ of $6.5$~s) comes from
+        processing the EEG signal rather than generating the music.
+  \item We show that the deployed estimator is worse than 8 of 9 alternatives on both
+        detection latency and information rate, and that the system's latency floor
+        ($0.439$~s end-to-end) is also its most informative configuration.
   \item We demonstrate that, for a controller with a finite prompt space, a precomputed
-        audio library is preferable to online generation independently of generator speed,
-        and reduces worst-case audio latency eightfold.
+        audio library is preferable to online generation independently of generator
+        speed, and reduces worst-case audio latency by a factor of 8.
   \item We identify four statistical properties of closed-loop EEG data that affect the
         design and analysis of studies using such systems, and calibrate one of them
         against synthetic ground truth.
-\end{itemize}
+\end{enumerate}
 
 % =============================================================================
-\section{Related Work}
+\section{Related Works}
 \label{sec:related}
 
-\subsection{Closed-Loop EEG-Driven Music Systems}
+\subsection{Closed-Loop EEG Music Systems}
 
-Recent systems differ widely in how they decode affect and produce music. MindMelody
-decodes valence and arousal with a Transformer-GNN encoder, plans interventions with a
-retrieval-augmented language model, and conditions MusicGen-medium on the
-result~\cite{mindmelody}; it reports $76.8\%$ valence and $72.4\%$ arousal accuracy
-cross-subject on DEAP. Ran et al.\ generate emotional music in real time from
-EEG~\cite{mindtomusic}. Ehrlich et al.\ close the loop with synthesised affective
-music~\cite{ehrlich}. Velasquez-Pe\~na et al.\ drive Ableton Live from a consumer Muse~S
-headband~\cite{neurophone}, and Monroy-D'Croz et al.\ build a minimalist interface on
-prefrontal EEG over Lab Streaming Layer~\cite{minimalist}. All of these decode affect with
-more sophistication than the single hand-built index used here, and we make no claim of
-superior decoding capability.
+Recent systems show significant variation in decoding, influencing and generating music.
+MindMelody decodes valence and arousal using a Transformer-GNN encoder, plans interventions
+using a retrieval-augmented language model and conditions MusicGen-medium on the
+result~\cite{mindmelody}, reporting $76.8\%$ accuracy for valence and $72.4\%$ for arousal,
+across subjects on DEAP. Ran et al.\ generate emotional music in real-time from
+EEG~\cite{mindtomusic}. Ehrlich et al.\ demonstrate a closed-loop system with synthesised,
+affective music~\cite{ehrlich}. Velasquez-Pe\~na et al.\ control Ableton Live via a
+consumer-grade Muse~S headband~\cite{neurophone}, while Monroy-D'Croz et al.\ design a
+minimal interface driven by prefrontal EEG, using the Lab Streaming
+Layer~\cite{minimalist}. In each case, EEG is used to shape the music, and most of these
+systems decode affect with more sophistication than the single hand-crafted index used
+here; we make no claims to better decoding performance than these methods.
 
-None of these systems reports a measured, decomposed signal-to-audio latency. MindMelody
-gives no latency, inference time or hardware specification. Two systems report processing
-parameters without a latency figure. Monroy-D'Croz et al.\ state a 4~s sliding window with
-0.5~s updates, but no end-to-end latency and no control condition. Ehrlich et al.\ report a
-4~s analysis window at $87.5\%$ overlap (a 0.5~s update rate), apply zero-phase filtering
-to each windowed segment to avoid filter delay, and tune a feedback parameter against
-perceived latency, but do not convert these into an end-to-end figure.
+None of these works report a measured latency from signal acquisition to audio output.
+MindMelody does not report latency, inference time or hardware, and Monroy-D'Croz et al.\
+report neither latency nor a control condition, although they state a 4~s sliding window
+with 0.5~s updates. Ehrlich et al.\ come closest: they state a 4~s analysis window at
+$87.5\%$ overlap (0.5~s step) for their feedback loop, note that they chose zero-phase
+filtering to avoid delaying the signal, and tuned their feedback parameter to match the
+subjective impression of latency, but do not report an end-to-end value.
 
 \subsection{Feedback Latency}
 
