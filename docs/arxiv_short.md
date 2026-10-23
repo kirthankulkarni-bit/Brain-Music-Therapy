@@ -460,6 +460,8 @@ must perceive a contingency, whereas the mechanism proposed here is the iso-prin
 evidence comes from fixed sequences without any contingency [11]. This argument has a
 consequence: if a fixed iso sequence is effective, an adaptive system must outperform a fixed
 playlist rather than silence, which is the comparison a yoked sham condition provides.
+The pre-registered evidence that a fixed iso sequence is effective at all remains mixed
+[15], so an adaptive system cannot rely on the iso literature for its plausibility either.
 
 **Controller degeneracy.** A controller can operate correctly yet produce no manipulation. In
 our second pilot, a ladder of 1.0 standard deviation per rung mapped the listener to a single
