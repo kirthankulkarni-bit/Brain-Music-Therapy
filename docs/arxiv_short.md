@@ -115,8 +115,13 @@ non-adaptive sequences: Starcke et al. randomised 107 participants to four pre-s
 after a sadness induction. Group differences after listening were significant for positive
 affect and valence (η² = 0.08 and 0.09), with the iso sequence scoring highest, although
 not significantly above a sequence of two happy pieces [11]. The sequences were fixed in
-advance and did not respond to the listener. We return to the implications
-of this in Section 8.
+advance and did not respond to the listener. However, a larger, pre-registered study did
+not replicate this advantage: Lowe-Brown et al. randomised 193 participants after an
+anxiety induction to iso, compensatory or unguided playlists built from their own songs,
+and found no significant difference between iso and compensatory listening, although
+exploratory analyses showed greater increases in calmness after either guided playlist than
+after unguided listening [15]. The evidence for the iso-principle is therefore mixed. We
+return to the implications of this in Section 8.
 
 ---
 
@@ -549,3 +554,7 @@ were regenerated from recorded data by the verification script described above.
     Processing Systems*, vol. 36, 2023.
 14. S. Koelstra et al., "DEAP: A database for emotion analysis using physiological signals,"
     *IEEE Transactions on Affective Computing*, vol. 3, no. 1, pp. 18–31, 2012.
+15. X. Lowe-Brown, S. Glasser, G. Wadley, and P. Koval, "Personalised affect-regulation
+    playlists: A pre-registered experimental test of the iso principle in the general
+    population," *Musicae Scientiae*, vol. 30, no. 3, pp. 428–446, 2026.
+    doi:10.1177/10298649261421187.
