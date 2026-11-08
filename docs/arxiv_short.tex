@@ -44,7 +44,8 @@ analysis path rather than the generative model. Evaluated against labelled
 eyes-open/eyes-closed ground truth, the deployed estimator is worse than 8 of 9 alternative
 configurations on both detection latency and information rate. The architecture shows an
 analysis-path floor of $0.189$~s and end-to-end latency of $0.439$~s, at which information
-rate is $1.83\times$ that of the deployed configuration. We also report four statistical properties of closed-loop EEG data that are relevant to study design. All 46
+rate is $1.83\times$ that of the deployed configuration. We also report four statistical
+properties of closed-loop EEG data that are relevant to study design. All 46
 quantitative claims are regenerated from recorded data by a single Python script. No claim
 of therapeutic efficacy is made.
 \end{abstract}
@@ -56,26 +57,33 @@ neurofeedback $\cdot$ music generation $\cdot$ reproducibility
 \section{Introduction}
 \label{sec:intro}
 
-Music listening is an inexpensive, non-invasive way to influence a user's affective state, and a growing body of research seeks to make it adaptive by closing the loop through the user's brain activity. Such systems record EEG continuously and estimate an affective or arousal state from it. The music changes in response. Several of these systems have
+Music listening is a non-invasive way to influence a user's affective state, and recent
+research seeks to make it adaptive by closing the loop through the user's brain activity.
+Such systems record EEG continuously and estimate an affective state from it. The music
+changes in response. Several of these systems have
 been built and described~\cite{mindmelody,mindtomusic,ehrlich,neurophone,minimalist}, and
 this area has already been reviewed~\cite{dashagres}.
 
-These systems are typically described as real-time, but the time they take to respond is
-rarely measured. In neurofeedback, delay is itself an experimental variable: Belinskaia et
+These systems are typically described as real-time, but the time they take to respond has
+not been studied much. In neurofeedback, delay is itself an experimental variable:
+Belinskaia et
 al.~\cite{belinskaia} trained parietal alpha with feedback delayed by 0, 250 and 500~ms and
-found that sustained post-training change was negatively correlated with latency and absent at 500~ms. Asai et al.~\cite{asai} compared feedback delays of 0, 1 and 20~s and found that the trained EEG microstate increased significantly only when feedback was not delayed.
-A closed-loop music system whose response time is unknown cannot be placed relative to
-these findings.
+found that sustained post-training change was negatively correlated with latency and absent
+at 500~ms. Asai et al.~\cite{asai} compared feedback delays of 0, 1 and 20~s and found that
+the trained EEG microstate increased significantly only when feedback was not delayed.
 
 In this work, we build a closed-loop EEG-based music system on consumer hardware (Muse~2)
-and measure its latency. The system consists of a four-channel Muse headband, a frontal
+and analyze its latency. The system consists of a four-channel Muse headband, a frontal
 arousal index normalised to each listener's baseline, a controller that applies the
 iso-principle over a nine-level prompt ladder, and an audio engine that selects from a
-library of pre-rendered segments rather than generating music online. We decompose the end-to-end delay into its analysis and audio components. Alternative estimator configurations are then evaluated against labelled ground truth to find the lowest latency the architecture can reach.
+library of pre-rendered segments rather than generating music online. We decompose the
+end-to-end delay into its analysis and audio components. Alternative estimator
+configurations are then evaluated against labelled ground truth to find the lowest latency
+the architecture can reach.
 
 Our contributions are summarised as follows:
 \begin{enumerate}
-  \item We report a measured, component-wise latency budget for a closed-loop EEG music
+  \item We report a measured latency budget for a closed-loop EEG music
         system, and show that most of the delay ($84.6\%$ of $6.5$~s) comes from
         processing the EEG signal rather than generating the music.
   \item We show that the deployed estimator is worse than 8 of 9 alternatives on both
@@ -95,16 +103,26 @@ Our contributions are summarised as follows:
 
 \subsection{Closed-Loop EEG Music Systems}
 
-Recent systems differ widely in how they decode affect and how they produce music. MindMelody decodes valence and arousal with a Transformer-GNN encoder and plans interventions with a retrieval-augmented language model, then conditions MusicGen-medium on the result~\cite{mindmelody}. It reports $76.8\%$ accuracy for valence and $72.4\%$ for arousal across subjects on DEAP. Ran et al.\ generate emotional music in real-time from
+Recent systems differ widely in how they decode affect and how they produce music.
+MindMelody decodes valence and arousal with a Transformer-GNN encoder and plans
+interventions with a retrieval-augmented language model, then conditions MusicGen-medium on
+the result~\cite{mindmelody}. It reports $76.8\%$ accuracy for valence and $72.4\%$ for
+arousal across subjects on DEAP. Ran et al.\ generate emotional music in real-time from
 EEG~\cite{mindtomusic}. Ehrlich et al.\ demonstrate a closed-loop system with synthesised,
 affective music~\cite{ehrlich}. Velasquez-Pe\~na et al.\ control Ableton Live via a
 consumer-grade Muse~S headband~\cite{neurophone}, while Monroy-D'Croz et al.\ design a
 minimal interface driven by prefrontal EEG, using the Lab Streaming
 Layer~\cite{minimalist}. In each case, EEG is used to shape the music, and most of these
-systems decode affect with more sophistication than the single hand-crafted index used here. We make no claims to better decoding performance than these methods.
+systems decode affect with more sophistication than the single index used here. We make no
+claims to better decoding performance than these methods.
 
-None of these works report a measured latency from signal acquisition to audio output.
-MindMelody reports neither latency nor inference time, and does not specify its hardware. Monroy-D'Croz et al.\ state a 4~s sliding window with 0.5~s updates but report no latency and no control condition. Ehrlich et al.\ come closest. Their feedback loop uses a 4~s analysis window at $87.5\%$ overlap (0.5~s step), with zero-phase filtering chosen to avoid delaying the signal, and they tuned their feedback parameter to match the subjective impression of latency. They do not report an end-to-end value.
+None of these works report a measured latency from when the signal is obtained to audio output.
+MindMelody reports neither latency nor inference time, and does not specify its hardware.
+Monroy-D'Croz et al.\ state a 4~s sliding window with 0.5~s updates but report no latency
+and no control condition. Ehrlich et al.\ come closest. Their feedback loop uses a 4~s
+analysis window at $87.5\%$ overlap (0.5~s step), with zero-phase filtering chosen to avoid
+delaying the signal, and they tuned their feedback parameter to match the subjective
+impression of latency. They do not report an end-to-end value.
 
 \subsection{Feedback Latency}
 
@@ -124,7 +142,8 @@ sequence scoring highest, although not significantly above a sequence of two hap
 pieces~\cite{starcke}. The sequences were fixed in advance and did not respond to the
 listener. However, a larger, pre-registered study did not replicate this advantage:
 Lowe-Brown et al.\ randomised 193 participants after an anxiety induction to iso,
-compensatory or unguided playlists built from their own songs. They found no significant difference between iso and compensatory listening, although exploratory analyses showed
+compensatory or unguided playlists built from their own songs. They found no significant
+difference between iso and compensatory listening, although exploratory analyses showed
 greater increases in calmness after either guided playlist than after unguided
 listening~\cite{lowebrown}. The evidence for the iso-principle is therefore mixed. We
 return to the implications of this in Section~\ref{sec:limitations}.
@@ -193,7 +212,11 @@ MusicGen~\cite{musicgen}, for a total of 288 segments (38.4 minutes). When the p
 changes, the current segment is abandoned and the engine performs an equal-power crossfade
 of duration $T_{\mathrm{xf}}$ into a segment from the new rung.
 
-Two properties motivate this design. The controller emits only nine distinct prompts, so a library covers its entire output space exactly, and re-synthesising one of nine prompts online would be redundant even with an arbitrarily fast generator. Latency is the other reason. A streaming generator must play each queued segment to completion, so its audio latency is bounded by the queue rather than by generation speed:
+Two properties motivate this design. The controller emits only nine distinct prompts, so a
+library covers its entire output space exactly, and re-synthesising one of nine prompts
+online would be redundant even with an arbitrarily fast generator. Latency is the other
+reason. A streaming generator must play each queued segment to completion, so its audio
+latency is bounded by the queue rather than by generation speed:
 \begin{equation}
   L_{\mathrm{audio}}^{\mathrm{stream}} \le Q\,S, \qquad
   L_{\mathrm{audio}}^{\mathrm{library}} \le T_{\mathrm{xf}},
@@ -348,19 +371,27 @@ floor, 0.189 & 0.25 & 0.439 & 0.9 \\
 \end{tabular}
 \end{table}
 
-At the floor, the crossfade becomes the largest term, so the dominance of the analysis path is a property of the configuration rather than of the architecture. Moving to the floor does not lower the information rate. Per-window discriminability falls from $d = 1.99$ to $0.61$, but the number of independent observations rises from 1.2 to 41.4 per minute, and the resulting information rate is $1.83\times$ that of the deployed configuration.
+At the floor, the crossfade becomes the largest term, so the dominance of the analysis path
+is a property of the configuration rather than of the architecture. Moving to the floor does
+not lower the information rate. Per-window discriminability falls from $d = 1.99$ to $0.61$,
+but the number of independent observations rises from 1.2 to 41.4 per minute, and the
+resulting information rate is $1.83\times$ that of the deployed configuration.
 
 These results have limits. Detection latency does not decrease monotonically with the budget:
 below $\tau \approx 0.25$~s the estimate becomes noisy enough that threshold crossings are
-harder to localise. The eyes-open/eyes-closed contrast is also considerably larger than the contrast expected between adaptive and non-adaptive music. No session has yet been run at these settings, so the floor is characterised offline rather than in deployment.
+harder to localise. The eyes-open/eyes-closed contrast is also considerably larger than the
+contrast expected between adaptive and non-adaptive music. No session has yet been run at
+these settings, so the floor is characterised offline rather than in deployment.
 
 \subsection{Controller Stability at Low Latency}
 
 Adopting a faster estimator also requires changes to the controller. Replaying a recorded
 session through the $W = 2$~s, $H = 0.5$~s, $\tau = 0.5$~s configuration produces 591
-prompt changes that arrive before the preceding crossfade has completed. A less smoothed index crosses rung boundaries frequently. Imposing a minimum dwell $D \ge
+prompt changes that arrive before the preceding crossfade has completed. A less smoothed
+index crosses rung boundaries frequently. Imposing a minimum dwell $D \ge
 T_{\mathrm{xf}}$ guarantees that no change begins before the previous crossfade ends, and
-reduces this count to 0. The dwell adds to worst-case latency, which becomes $L_{\mathrm{analysis}} + D + T_{\mathrm{xf}}$.
+reduces this count to 0. The dwell adds to worst-case latency, which becomes
+$L_{\mathrm{analysis}} + D + T_{\mathrm{xf}}$.
 
 % =============================================================================
 \section{Statistical Properties of Closed-Loop EEG Data}
@@ -397,7 +428,8 @@ data. The limitation therefore lies in the outcome measure, not in the estimator
 
 \subsection{Event-Locked Responses}
 
-Restricting analysis to moments when the rung changes restores power. It also introduces a confound: a rung change occurs because $z$ has moved, and $z$ continues to move afterward,
+Restricting analysis to moments when the rung changes restores power. It also introduces a
+confound: a rung change occurs because $z$ has moved, and $z$ continues to move afterward,
 so a positive event-locked effect arises even when the music has no influence. We
 calibrated this confound using synthetic sessions with known ground truth. The estimator
 returned $+1.503$ for a simulated responder, $-1.467$ for an anti-responder and $+0.011$
@@ -468,18 +500,27 @@ positive across 7 of 7 independent montages (sign test $p = 0.016$).
 
 Every quantitative claim in this paper is regenerated from recorded data by a single
 script, which compares each recomputed value with the value stated here and fails on any
-disagreement; all 46 claims currently reproduce. This practice caught several defects before they reached the manuscript, and three of them apply to any pre-registered study with an evolving codebase. Recordings must be referenced by name rather than selected as the most recent; a second pilot session once silently replaced the data underlying a dozen claims, five figures and eight tests. Synthetic data must be structurally excluded from analysis, since a brief demonstration run recomputed six claims from a signal generator. An integrity check on a pre-registration must also not force its own violation. Storing the deviation log inside the hashed file made recording any deviation fail the check, so the log was moved outside it.
+disagreement; all 46 claims currently reproduce. This practice caught several defects before
+they reached the manuscript, and three of them apply to any pre-registered study with an
+evolving codebase. Recordings must be referenced by name rather than selected as the most
+recent; a second pilot session once silently replaced the data underlying a dozen claims,
+five figures and eight tests. Synthetic data must be structurally excluded from analysis,
+since a brief demonstration run recomputed six claims from a signal generator. An integrity
+check on a pre-registration must also not force its own violation. Storing the deviation log
+inside the hashed file made recording any deviation fail the check, so the log was moved
+outside it.
 
 Two data-acquisition defects were also invisible to existing checks. The streaming layer
 delivered each packet two to four times, with timestamps stepping backwards between copies,
-which downstream code interpreted as electrode failure. Raw timestamps were also stored at a precision that degraded with system uptime, from 8~ms after a fresh boot to
+which downstream code interpreted as electrode failure. Raw timestamps were also stored at a
+precision that degraded with system uptime, from 8~ms after a fresh boot to
 0.25~s after 27 days.
 
 % =============================================================================
 \section{Limitations}
 \label{sec:limitations}
 
-\paragraph{Efficacy.} This work makes no claim that the intervention benefits listeners.
+This work makes no claim that the intervention benefits listeners.
 The evidence consists of two self-administered, unblinded sessions; no adaptive/sham pairs
 have been collected and no participants have been enrolled.
 
@@ -488,7 +529,9 @@ $13\times$ the delay at which Belinskaia et al.\ no longer observed an effect, a
 retuned configuration remains $5.5\times$ that delay. These findings concern operant
 neurofeedback, in which the listener must perceive a contingency, whereas the mechanism
 proposed here is the iso-principle, whose evidence comes from fixed sequences without any
-contingency~\cite{starcke}. If a fixed iso sequence is effective, then an adaptive system must outperform a fixed playlist, not silence. A yoked sham condition provides that comparison. The pre-registered evidence that a
+contingency~\cite{starcke}. If a fixed iso sequence is effective, then an adaptive system
+must outperform a fixed playlist, not silence. A yoked sham condition provides that
+comparison. The pre-registered evidence that a
 fixed iso sequence is effective at all remains mixed~\cite{lowebrown}, so an adaptive
 system cannot rely on the iso literature for its plausibility either.
 
@@ -502,18 +545,22 @@ report the number of prompt changes and distinct prompts per session.
 
 \paragraph{Signal quality and scope.} The frontal channels used by the index produce a
 weaker alpha response than the temporal channels and fail the peak-prominence criterion.
-All latency results come from an eyes-open/eyes-closed contrast recorded with one headset, by one operator who was also the only participant.
+All latency results come from an eyes-open/eyes-closed contrast recorded with one headset,
+by one operator who was also the only participant.
 
 % =============================================================================
 \section{Conclusion}
 \label{sec:conclusion}
 
 We presented a closed-loop EEG-driven music system and a measured decomposition of its
-end-to-end latency. Contrary to the common emphasis on faster generative models, the dominant source of delay was the analysis path. That dominance is a property of the configuration rather than the architecture. The deployed estimator was dominated by
+end-to-end latency. Contrary to the common emphasis on faster generative models, the
+dominant source of delay was the analysis path. That dominance is a property of the
+configuration rather than the architecture. The deployed estimator was dominated by
 8 of 9 alternatives on both latency and information rate, and the architecture's floor of
 0.439~s end-to-end was also its most informative configuration. We also described
 four statistical properties of closed-loop EEG data that should inform the design of
-studies using such systems. These results characterise the system's engineering behaviour. Establishing whether adaptive music confers any benefit over a fixed playlist
+studies using such systems. These results characterise the system's engineering behaviour.
+Establishing whether adaptive music confers any benefit over a fixed playlist
 requires a controlled study with participants, which remains future work.
 
 % =============================================================================
@@ -528,8 +575,9 @@ included and \texttt{scripts/build\_library.py} regenerates it.
 
 \section*{Acknowledgements}
 
-The author used Claude (Anthropic), an AI assistant, for help with software development,
-data analysis and drafting this manuscript. The author designed the study and conducted all recording sessions. The author takes full responsibility for the content. All quantitative results
+The author used Claude (Anthropic), an AI assistant, for help with writing tasks, data
+analysis and some ideation. The author designed the study and conducted all recording
+sessions. The author takes full responsibility for the content. All quantitative results
 were regenerated from recorded data by the verification script described above.
 
 % =============================================================================
@@ -589,7 +637,8 @@ doi:10.1176/ajp.100.7.792.
 \bibitem{starcke}
 K.~Starcke, J.~Mayr, and R.~von Georgi, ``Emotion modulation through music after sadness
 induction: The iso principle in a controlled experimental study,'' \emph{International
-Journal of Environmental Research and Public Health}, vol.~18, no.~23, 12486, 2021. doi:10.3390/ijerph182312486.
+Journal of Environmental Research and Public Health}, vol.~18, no.~23, 12486, 2021.
+doi:10.3390/ijerph182312486.
 
 \bibitem{welch}
 P.~D. Welch, ``The use of fast Fourier transform for the estimation of power spectra: A
