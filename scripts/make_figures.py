@@ -70,7 +70,7 @@ ACCENT = "#c1440e"
 MUTED = "#8a8a8a"
 BAND = "#4a7fb5"
 plt.rcParams.update({
-    "figure.dpi": 150, "savefig.dpi": 300, "savefig.bbox": "tight",
+    "figure.dpi": 150, "savefig.dpi": 600, "savefig.bbox": "tight",
     "font.size": 9, "axes.labelsize": 9, "axes.titlesize": 10,
     "axes.spines.top": False, "axes.spines.right": False,
     "axes.edgecolor": INK, "text.color": INK, "axes.labelcolor": INK,
@@ -340,11 +340,9 @@ def fig_estimator(out: str) -> str:
 
     ax.axhline(base[4], color=ACCENT, lw=0.9, ls=":", zorder=1)
     ax.axvline(base[1], color=ACCENT, lw=0.9, ls=":", zorder=1)
-    ax.axhspan(base[4], ax.get_ylim()[1], xmin=0, xmax=(base[1] - ax.get_xlim()[0]) /
-               (ax.get_xlim()[1] - ax.get_xlim()[0]), color=BAND, alpha=0.08, zorder=0)
-    ax.annotate("faster AND more informative\nthan the deployed setting",
-                xy=(0.3, base[4] * 1.55), fontsize=8, color=MUTED)
-    ax.annotate("deployed", xy=(base[1], base[4]), xytext=(base[1] * 0.42, base[4] * 0.80),
+    ax.text(0.015, 0.97, "shaded: faster and more\ninformative than deployed",
+            transform=ax.transAxes, ha="left", va="top", fontsize=8, color=MUTED)
+    ax.annotate("deployed", xy=(base[1], base[4]), xytext=(base[1] * 0.62, base[4] * 1.07),
                 fontsize=8.5, color=ACCENT,
                 arrowprops=dict(arrowstyle="->", color=ACCENT, lw=0.9))
 
@@ -352,6 +350,10 @@ def fig_estimator(out: str) -> str:
     ax.plot([], [], "o", color=BAND, label="windowed, retuned")
     ax.plot([], [], "^", color=INK, label="streaming (causal, per-sample)")
     ax.set_xscale("log")
+    xl, yl = ax.get_xlim(), ax.get_ylim()
+    ax.fill_between([xl[0], base[1]], base[4], yl[1], color=BAND, alpha=0.08, zorder=0)
+    ax.set_xlim(xl)
+    ax.set_ylim(yl)
     ax.set_xlabel("detection latency (s, log scale) - lower is better")
     ax.set_ylabel("information per minute\n"
                   r"$d \times \sqrt{ind/min}$" + " - higher is better")
@@ -363,7 +365,7 @@ def fig_estimator(out: str) -> str:
     ax.set_title("The analysis latency is a dominated configuration, not a floor\n"
                  f"{n_dominating} of {len(rows) - 1} alternatives beat the deployed "
                  "setting on BOTH axes", fontsize=9)
-    ax.legend(frameon=False, fontsize=8, loc="lower left")
+    ax.legend(frameon=False, fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=3)
     path = os.path.join(out, "fig6_estimator_tradeoff.png")
     fig.savefig(path)
     plt.close(fig)
