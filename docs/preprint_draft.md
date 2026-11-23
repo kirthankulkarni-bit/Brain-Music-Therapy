@@ -8,7 +8,14 @@ system.*
 **DRAFT — sections 1–8.** §9 (planned study) is specified in
 [analysis_plan.md](analysis_plan.md), frozen at tag `preregistration-v1`.
 
-Numbers in this draft are checked by `python scripts/verify_claims.py` (14/14 reproduce).
+Numbers in this draft are checked by `python scripts/verify_claims.py` (56/56 reproduce).
+**Since 2026-11-22 every EEG result here comes from public data (PhysioNet EEGBCI, DEAP) or
+synthetic signals.** Recordings made during development, the author's pilot session
+included, are not used for any claim; the self-recorded claims still run with
+`verify_claims.py --self-data` but are not cited. The submitted version is
+[arxiv_short.md](arxiv_short.md); this draft keeps the longer argument and must agree
+with it on every number.
+
 All `[CITE: …]` placeholders were resolved on 2026-09-05/07 and all author lists verified
 against the papers; one was wrong (reference 6 was attributed to "Sato et al." and is Asai
 et al.). Two items remain outstanding and are marked in the reference list: *Mind to
@@ -25,8 +32,10 @@ been selected — they are not claims awaiting support, they are known gaps.
 *(Write last. Should state: latency floor measured across two GPU tiers and three
 precision modes; nothing reaches realtime; the bound is the autoregressive decode loop,
 not arithmetic; a precomputed library covers the controller's finite prompt space exactly
-and cuts worst-case response 8×; and four statistical cautions for closed-loop EEG. State
-explicitly that no efficacy data are reported.)*
+and cuts worst-case response 8×; on 109 public subjects the deployed estimator loses to
+all 9 alternatives on both latency and information rate, and the 0.439 s floor is 1.50× as
+informative; and four statistical cautions for closed-loop EEG. State explicitly that no
+efficacy data are reported and that all EEG results use public or synthetic data.)*
 
 ---
 
@@ -86,9 +95,11 @@ degrades. The dominant term is not the model. We then give the architecture this
 and four statistical properties of closed-loop EEG data that we expect to affect any
 study of this shape.
 
-**We report no efficacy data.** The system has run one closed-loop session, on the author,
-unblinded. Every session-level number in §6 describes the instrument, not an intervention.
-The planned feasibility study is pre-registered (§9) and has not been run.
+**We report no efficacy data.** No participants were enrolled and no EEG was recorded
+for this paper. Every EEG number below comes from the PhysioNet EEG Motor
+Movement/Imagery Dataset (109 subjects), from DEAP, or from synthetic sessions with known
+ground truth, so it describes the instrument and not an intervention. The planned
+feasibility study is pre-registered (§9) and has not been run.
 
 ### Contributions
 
@@ -100,9 +111,12 @@ The planned feasibility study is pre-registered (§9) and has not been run.
    *slower*.
 2. **The decomposition**, which is the actionable part: after removing the audio-side
    bottleneck, **85% of the remaining budget is the analysis path**. Work aimed at
-   faster generation is optimising the smaller term.
+   faster generation is optimising the smaller term. On labelled eye-closure transitions
+   from 109 public subjects, the deployed estimator is beaten on both detection latency
+   and information rate by **all 9** alternatives, and the architecture's 0.439 s floor is
+   1.50× as informative as the deployed setting.
 3. **Four statistical cautions** for closed-loop EEG, each with a worked example:
-   window autocorrelation (effective n of 25 from 1043 windows), the structural failure
+   window autocorrelation (effective n of 51 from 1200 windows), the structural failure
    of continuous coupling indices, the trigger confound in event-locked measures, and
    the cost of dichotomised outcomes. We have not found these addressed in this
    literature, which reports subjective and audio-quality metrics rather than neural
@@ -118,7 +132,7 @@ We are not proposing a better EEG-to-music system, and make no comparison of aud
 quality or decoding accuracy against MindMelody, Mind to Music, or others. Those systems
 are the motivation: they are the reason a latency budget is worth having, and the reason
 its absence is worth pointing out. Our system is deliberately simpler than any of them —
-a two-channel frontal index and a five-rung prompt ladder — because a simple controller
+a two-channel frontal index and a nine-rung prompt ladder — because a simple controller
 makes the latency terms separable and the prompt space finite. A more capable decoder
 would add latency to the analysis path, not remove it.
 
@@ -152,24 +166,25 @@ it is invisible in systems that report only model inference time.
 
 ### 2.2 The controller emits a finite set of prompts
 
-`build_prompt(z, target_z, trend)` is a pure function. It selects one of five energy
-rungs, so its range is exactly five strings and it cannot emit anything else. §4 depends
-on this. (Until 2026-09-05 it also appended one of three trend suffixes, giving twenty
-reachable prompts; the suffix was removed because the slope it gated on is smaller than
-the noise of the estimator measuring it.)
+`build_prompt` is a pure function. It quantises z onto nine rungs, each 0.5 SD wide and
+centred on rung 4, so its range is exactly nine strings and it cannot emit anything else.
+§4 depends on this. (Earlier versions used five rungs at 1.0 SD plus one of three trend
+suffixes, giving twenty reachable prompts. The suffix was removed because the slope it
+gated on is smaller than the noise of the estimator measuring it, and the ladder was
+narrowed so that ordinary drift moves the music at all.)
 
 The design applies the **iso-principle** (Altshuler, 1944): the prompt is not set to the
 target state but to one rung from the participant's current state in the direction of the
 target — match first, then lead. Dropping an aroused listener straight into a sparse
-drone is the failure mode the principle exists to avoid.
+drone is the failure mode the principle exists to avoid. Inside a 0.35 SD deadband around
+the target the controller plays the target rung itself, and a minimum dwell (§6) stops a
+new prompt change until the previous crossfade has finished.
 
-**The reachable set is smaller than the designed set, and we report the measured figure
-rather than the intended one.** Because the controller always moves exactly one rung
-toward a goal that is itself a rung of the target, only rungs 1–3 are reachable under
-the two therapeutic targets used here; the sparsest and most energetic prompts cannot be
-selected. In the one session run, rung 1 accounted for 96% of the intervention. The
-controller is therefore better described as a three-level ladder that behaves like a
-two-level one, not the five-level design it was drawn as.
+**A controller can run correctly and still manipulate nothing.** If its rungs are wide
+relative to the spread of z, a listener sits on one rung for a whole session, and a yoked
+sham is then acoustically identical to the adaptive condition. Studies of adaptive audio
+should report prompt changes and distinct prompts per session; ours have to wait for a
+session to report.
 
 ---
 
@@ -251,71 +266,76 @@ is counterproductive there.
 With the audio-side bottleneck removed (§4), **85% of the end-to-end budget is the
 analysis path**. Work aimed at faster generation therefore optimises the smaller term.
 
-We measured whether that 5.5 s is reducible, using the alpha-validation session's five
-labelled eyes-open/closed transitions as ground truth for timing. Detection latency is
-the median time from a real state change until the estimator crosses the midpoint between
-block levels — end-to-end, and unlike group delay it includes window centroid and hop
-quantisation.
+We measured whether that 5.5 s is reducible against labelled ground truth that anyone can
+download. The PhysioNet EEG Motor Movement/Imagery Dataset (Schalk et al., 2004; Goldberger
+et al., 2000), loaded with MNE-Python, gives each of its 109 subjects a one-minute
+eyes-open and a one-minute eyes-closed resting run at 160 Hz. It includes AF7 and AF8, the
+index channels. It has no TP9/TP10, so T9/T10 stand in. For each subject we spliced
+eyes-open 0–30 s, eyes-closed 0–60 s and eyes-open 30–60 s into a 120 s session with one
+rising and one falling transition, mean-centring each segment and crossfading the joins
+over 50 ms so the splice adds no step. Fifty synthetic sessions at the Muse's 256 Hz,
+alternating 60 s blocks whose alpha power steps by 1.34×, repeat everything on the target
+sampling rate. Every estimator runs through the deployed feature extractor.
 
-**The budget is confirmed:** the deployed configuration measures **5.67 s** against a
-5.5 s theoretical prediction.
+Detection latency is the time from a transition until the estimator crosses the midpoint
+between the two state means **and stays across it for 0.5 s**. A crossing undone sooner
+counts as noise. Without the hold, the noisiest streaming estimators get credited with
+chance crossings at 0.10–0.16 s; for windowed estimators, whose outputs arrive every 0.5
+or 1 s, the rule changes nothing. The rule was fixed before the public results were
+computed, and first-crossing is reported beside it.
+
+**The budget is confirmed, and the gap to it is explained.** The deployed configuration
+detects in a median **4.50 s**. A midpoint crossing needs the smoother to cover half a
+step, which takes τ ln 2 = 2.08 s rather than τ, so the expected crossing time is
+W/2 + H/2 + τ ln 2 = **4.58 s**. The 5.5 s budget is the full group delay; detection is the
+part of it a midpoint rule sees.
+
+Medians across 109 subjects, AF7/AF8:
 
 | estimator | detect | d | rho | ind/min | info/min |
 |---|---|---|---|---|---|
-| **deployed: 4 s win, 1 s hop, tau=3.0** | **5.67 s** | 1.99 | 0.962 | 1.2 | 2.14 |
-| 2 s win, 0.5 s hop, tau=0.5 | 1.68 s | 1.14 | 0.629 | 13.6 | **4.20** |
-| streaming, order 4, tau=0.25 | **0.17 s** | 0.70 | 0.320 | 30.9 | 3.91 |
+| **deployed: 4 s win, 1 s hop, tau=3.0** | **4.50 s** | 2.07 | 0.972 | 0.9 | 1.89 |
+| 2 s win, 0.5 s hop, tau=0.5 | 1.50 s | 1.35 | 0.691 | 10.9 | **4.68** |
+| streaming, order 4, tau=0.25 | **0.63 s** | 0.41 | 0.118 | 47.3 | 3.11 |
 
 Per-sample discriminability falls as latency falls, as expected. But `d` alone does not
-determine how well a session resolves a state difference — the number of *independent*
+determine how well a session resolves a state difference. The number of *independent*
 observations matters equally, and heavy smoothing destroys independence. Scoring on
 `d × sqrt(ind/min)`, the t-statistic per root-minute, **the deployed configuration is
-dominated by 8 of the 9 alternatives** (Figure 6). It is not on the efficient frontier.
+dominated by all 9 of the alternatives** (Figure 1). It is not on the efficient frontier.
+
+That holds wherever we looked. It is 9 of 9 under the first-crossing rule, 9 of 9 on
+T9/T10 and 9 of 9 on the synthetic sessions. Medians can hide subjects, so we counted
+them: the retuned windowed configuration beats the deployed one on both axes in **78.5%**
+of subjects individually.
 
 The mechanism connects this section to §7. At tau = 3 s consecutive outputs are nearly
-identical (rho = 0.962), yielding **1.2 independent observations per minute** — which is
-precisely the coefficient that produces an effective sample size of 25 from a 20-minute
-session (§7.1). **The smoother is simultaneously the largest latency term and the dominant
-cause of the autocorrelation that collapses statistical power.** Shortening it pays twice.
+identical (rho = 0.972), yielding **0.9 independent observations per minute**. That is the
+same smoothing that gives a 20-minute session an effective sample size of 51 (§7.1).
+**The smoother is simultaneously the largest latency term and the dominant cause of the
+autocorrelation that collapses statistical power.** Shortening it pays twice.
 
 Adopting a faster estimator is available, but it is **not** the two-parameter change it
-first appears to be, and the gain is smaller than the estimator benchmark alone suggests.
-
-Changing only the estimator reproduces the chatter of §6.3 in a new form: replayed against
-the pilot, `2 s / 0.5 s / tau 0.5` produces 382 prompt changes with 136 arriving inside a
-crossfade — a larger fraction than the defect that made the pilot's own audio unusable.
-The cause is not the trend thresholds, which is where we first looked; recalibrating them
-changes the count not at all. It is the energy ladder, which quantises z with no
-hysteresis, so a less-smoothed z crosses its boundaries constantly. The deployed
-configuration survives this only because the prompt mapping happens to absorb most rung
-flips — a property of the mapping rather than a designed guarantee, and one that a lower
-noise level spends.
-
-The controller change that makes it safe is a **minimum dwell**, and its value is
-structural rather than tuned: a dwell of at least one crossfade is exactly the condition
-for no switch arriving before the previous crossfade completes, so sub-crossfade switches
-fall to zero by construction. Measured: 299 changes, 1.5 s median gap, zero inside a
-crossfade.
-
-The dwell is not free. The library engine (§4) acts on a prompt change within one
-crossfade rather than one segment, so a dwell raises worst-case audio latency from one
-crossfade to `dwell + crossfade`. The honest end-to-end comparison is therefore:
+first appears to be. §6 shows that the controller chatters through a less-smoothed index
+unless a minimum dwell is added, and the dwell is not free: the library engine (§4) acts on
+a prompt change within one crossfade, so a dwell raises worst-case audio latency from one
+crossfade to `dwell + crossfade`. On detection latency, the honest comparison is:
 
 | configuration | detection | dwell | crossfade | end-to-end |
 |---|---|---|---|---|
-| deployed | 5.67 s | — | 1.0 s | **6.67 s** |
-| retuned, 1 s dwell | 1.68 s | 1.0 s | 1.0 s | **3.68 s** |
+| deployed | 4.50 s | — | 1.0 s | **5.50 s** |
+| retuned, 1 s dwell | 1.50 s | 1.0 s | 1.0 s | **3.50 s** |
 
-**1.8×, not the 2.4× available from the estimator in isolation.** The distinction matters
-beyond bookkeeping: a dwell materially larger than one crossfade consumes the entire gain,
-and an 8 s dwell would leave the system slower than the configuration it replaces. This is
-the general shape of the result — the estimator is not the whole loop, and a latency
-argument that stops at the estimator overstates what is collectable.
+**1.6×, not the 3× available from the estimator in isolation.** A dwell much larger than
+one crossfade consumes the gain entirely, and a 4 s dwell would leave the system no faster
+than the configuration it replaces. That is the general shape of the result. The
+estimator is not the whole loop, and a latency argument that stops at the estimator
+overstates what is collectable.
 
-Two caveats remain. The benchmark ran on TP9/TP10, the only channels with labelled ground
-truth (§8). And the retuned controller has not been listened to: zero sub-crossfade
-switches establishes that transitions are resolvable, not that 299 changes in twenty
-minutes is musically acceptable.
+Two caveats remain. The ground truth is an eyes-open/closed splice on a gel cap, not the
+Muse (§8). And the retuned controller has not been listened to: zero sub-crossfade
+switches establishes that transitions are resolvable, not that the resulting rate of
+change is musically acceptable.
 
 ---
 
@@ -390,7 +410,7 @@ within a 6.5 s budget of which 85% is analysis (§3.4). Instant generation remov
 1.0 s.
 
 **Generation is unnecessary, not merely slow.** `build_prompt` is a pure function with a
-finite range. Given even an infinitely fast generator, re-synthesising one of twenty
+finite range. Given even an infinitely fast generator, re-synthesising one of nine
 possible prompts on demand is strictly worse than selecting a pre-rendered variant: the
 same audio, no compute, and no variance in response time. **The finite prompt space, not
 the latency, is what justifies the library**, and that argument is unaffected by how fast
@@ -408,85 +428,36 @@ rather than a measurable one.
 
 ## 5. Instrument validation
 
-Two claims in §6 and §7 depend on estimators being correct, so both were validated
-against synthetic data with known ground truth before being applied to real sessions.
+Claims in §3, §6 and §7 depend on estimators being correct and on the index channels
+carrying cortical signal. Each was checked against public data or synthetic ground truth.
+None uses a recording made for this project.
 
-**Sensing path.** Frontal alpha rose **2.13×** with eyes closed (Cohen's d = 1.55,
-p = 2.8 × 10⁻²³, 151 closed / 76 open windows), within the 1.5–3× range expected for
-frontal channels, which lack the occipital dominance of classic alpha demonstrations.
-This is evidence the montage records cortical activity rather than amplifier noise
-(Figure 0a).
+**Sensing path.** On the PhysioNet resting runs, through the deployed extractor and the
+350 µV rejection threshold, alpha power on AF7/AF8 rose by a median **1.80×** from eyes
+open to eyes closed (Figure 3). It rose in 86.8% of the 91 subjects with enough clean
+windows (Wilcoxon p = 3.2 × 10⁻¹², d_z = 0.96), with a median 19.8% of windows rejected.
+On T9/T10 the rise was smaller, 1.46×, but it appeared in 89.0% of all 109 subjects
+(p = 1.2 × 10⁻¹⁷).
 
-**That ratio is threshold-dependent, and the window counts above show why.** 151 closed
-against 76 open is a 2:1 imbalance, because artefact rejection removes eyes-open windows
-preferentially — blinks occur with the eyes open — and removing blink power from one
-condition only inflates the contrast. This session was recorded at a 150 µV
-peak-to-peak threshold; the pipeline now rejects at **350 µV**, a value changed in
-response to this very analysis and fixed in the pre-registration.
+A rise in band power is not by itself an alpha rhythm. Broadband power tracking the eye
+state would also raise it. So we measured the eyes-closed increase in spectral peak
+prominence as well: a median **1.35× on AF7 and 1.41× on AF8**, both above the 1.20
+criterion. T9/T10 reach only 1.15 and are not cited as alpha. **On this dataset the
+frontal channels show a real alpha peak on eye closure.**
 
-Swept across thresholds on the same recording (`scripts/alpha_sensitivity.py`):
+That reverses what the development recordings suggested, where AF7/AF8 failed the same
+check, and the reversal should not be over-read. PhysioNet used a gel cap. Dry consumer
+electrodes at the same sites are noisier and more prone to ocular artefact, and whether
+the Muse reproduces the peak is untested here (§8).
 
-| reject p2p > | n open | n closed | imbalance | ratio | p |
-|---|---|---|---|---|---|
-| 150 µV (as recorded) | 72 | 142 | 1.97 | **2.49×** | 1.4 × 10⁻³⁰ |
-| 300 µV | 142 | 158 | 1.11 | 1.94× | 1.0 × 10⁻²⁷ |
-| **350 µV (deployed)** | 151 | 158 | **1.05** | **1.90×** | 3.9 × 10⁻²⁷ |
-| 600 µV | 153 | 158 | 1.03 | 1.88× | 1.3 × 10⁻²⁶ |
-| none | 157 | 158 | 1.01 | 1.38× | 6.0 × 10⁻¹⁷ |
-
-**The effect survives every threshold, including no rejection at all**, so it is not
-manufactured by the rejection rule — only its magnitude is. At the deployed threshold,
-where the two conditions retain almost equal numbers of windows, the ratio is **1.90×**.
-That is the defensible figure to lead with, and it remains inside the expected range.
-
-The two extremes bound the truth from opposite directions: strict rejection inflates by
-stripping blink power from the open condition, no rejection deflates by leaving broadband
-blink energy in it.
-
-**That recording is not on the channels the system uses, so we report a second one
-alongside it rather than in place of it (Figure 0b).** The August session was recorded
-with `frontal_channels = TP9/TP10`; the live index runs on AF7/AF8. A session on 2026-09-17
-repeated the protocol on AF7/AF8 with good contact:
-
-| | August, TP9/TP10 | 9/17, AF7/AF8 |
-|---|---|---|
-| alpha ratio, eyes closed | **2.13×** | **1.34×** |
-| Cohen's d | 1.55 | 0.53 |
-| p | 2.8 × 10⁻²³ | 2.3 × 10⁻⁶ |
-| windows (closed / open) | 151 / 76 | 164 / 166 |
-| windows rejected, as recorded | 36% (recorded at 150 µV) | 6.8% (recorded at 350 µV) |
-| windows rejected, recomputed at the deployed 350 µV | 3% | 7% |
-| alpha-peak prominence, eyes closed / open | passes | **AF7 1.09, AF8 1.13 (fails, ≥ 1.20 required)** |
-| deployed estimator d | 1.99 | 1.06 |
-
-**Neither recording is the right one to report alone, which is why both appear.** The
-August session is the stronger demonstration that the rig measures cortex, and it is the
-one every downstream claim and figure is pinned to; but it says nothing about the
-electrodes the arousal index actually reads. The 9/17 session says exactly that, and what
-it says is worse: the effect is real and survives on the study's own channels — it is not
-the 0.91× (d = −0.17, p = 0.26) that the same August raw data gives on AF7/AF8 under 48%
-artefact rejection — but it is **roughly half the effect size**, and it **fails the
-alpha-peak prominence check** at 1.09 and 1.13 against a 1.20 threshold. A 1.34× ratio
-with no visible alpha peak is consistent with broadband frontal power tracking the eye
-state rather than with alpha blocking proper.
-
-Substituting the 9/17 recording for the August one would delete the evidence that the
-instrument works; substituting the other way round would delete the evidence that it
-works where it is used. Reporting both preserves the finding that matters, which is the
-gap between them: **the effect the index depends on is present but about half as large,
-and less clearly alpha, on the channels it is computed from.** The pinned session for
-claims and figures therefore stays on August (`PINNED_ALPHA`), and the 9/17 numbers are
-asserted as their own claims in `verify_claims.py` rather than overwriting it.
-
-Two caveats on the 9/17 session itself. It lost 11.75 s and 20.25 s to stream dropouts —
-visible as the flat span near 300 s in Figure 0b — and BlueMuse delivered heavily
-duplicated packets that the recorder's de-duplicating inlet filtered before analysis. Both
-are documented in `docs/deviations.md`; neither is treated here as a reason to discount it.
+The rejection threshold was moved from 150 µV to 350 µV during development, because a
+strict threshold removes eyes-open windows preferentially (blinks happen with the eyes
+open) and inflates the contrast. 350 µV is what every number above uses.
 
 **Index construct validity.** Two separable claims underlie the measurement: that the
 electrodes record cortex, and that log(beta/alpha) measures *arousal*. The second was
-inherited from the literature and untested here, so we tested it on DEAP, which pairs
-32-channel EEG with self-reported arousal.
+inherited from the literature, so we tested it on DEAP, which pairs 32-channel EEG with
+self-reported arousal.
 
 Computed with the same `FeatureExtractor` the live system uses, the index correlates with
 reported arousal at rho = +0.303 (p = 0.058) on AF3/AF4, against rho = +0.082 (p = 0.615)
@@ -526,79 +497,34 @@ returned **−2.0 s**. It did not degrade the estimate; it **inverted its sign**
 
 ---
 
-## 6. Pilot session
+## 6. Controller stability at low latency
 
-One 20-minute closed-loop session, self-administered and unblinded, run as an instrument
-shakedown rather than as data. Outcome values are reported only insofar as they describe
-how the instrument behaved.
+§3.4 makes a faster estimator look nearly free. The controller says otherwise.
 
-### 6.1 The sensing path is adequate
+We drove the real `PromptGovernor` with z series reconstructed from the PhysioNet
+sessions, keeping the 66 that had enough clean eyes-open windows to form a baseline —
+132 minutes in all — with target z = −1 and a 1.0 s crossfade. At the deployed settings,
+no prompt change arrived before the previous crossfade had finished. Through the
+2 s / 0.5 s / tau 0.5 estimator with no dwell, **4176 of 6986 changes did**, or 31.7 per
+minute. The output would be a near-continuous blend of two renders rather than music with
+transitions in it.
 
-| | result |
-|---|---|
-| baseline rejection | 3.5% |
-| intervention rejection | 13.1% |
-| buffer underruns | 0 |
-| library prompts missing | 0 |
+The cause is the ladder, not the estimator. It quantises z with no hysteresis, so a
+less-smoothed z crosses rung boundaries constantly. The deployed configuration survives
+only because its smoother keeps z away from the boundaries — a property of the smoothing
+rather than a designed guarantee, and one that a lower noise level spends.
 
-At 13.1% rejection a 20-minute session yields over 1000 valid windows, so signal quality
-is not the limiting factor for the analyses in §7.
+The fix is a **minimum dwell**, and its value is structural rather than tuned. A dwell of
+at least one crossfade is exactly the condition for no switch to start before the
+previous crossfade completes, so sub-crossfade switches fall to zero by construction.
+Measured with a 1 s dwell: **0**, on the PhysioNet sessions and on the synthetic ones.
+The price is the extra second of worst-case latency costed in §3.4.
 
-### 6.2 A crash that recorded itself as success
-
-A `NameError` in the control loop terminated the worker thread on its first intervention
-window while the cleanup path still wrote a "session complete" record. The baseline
-logged normally, the manifest was written, and the session directory was
-indistinguishable from a successful run while containing no intervention data.
-
-With a participant present this is the worst available failure mode, because it is
-discovered at analysis when the session can no longer be repeated. The loop now records
-an explicit failure with its phase and re-raises; the distinction is asserted by a test
-that injects a fault at the same position.
-
-### 6.3 A controller thresholding noise
-
-The session produced 629 audio events in 1200 s, of which 491 were prompt changes rather
-than segment exhaustion. The median gap between switches was 1.35 s and **30% of
-switches arrived faster than the 1.0 s crossfade could complete**, so the output was a
-near-continuous blend of two renders rather than music with transitions in it.
-
-The ladder was not at fault — the energy rung was stable for 95.9% of the session,
-exactly as the graded design intends. The trend suffix was: it cycled through all four
-variants of that one rung.
-
-The cause was a signal-to-noise failure. `trend` was computed as a single-hop difference
-of z, whose standard deviation was 0.275 against a decision threshold of 0.05: **the
-threshold was five times smaller than the noise it was thresholding**. The sign flipped
-on 29% of hops.
-
-It had not been visible before because the streaming engine sampled the prompt once per
-8 s segment, absorbing the chatter at the segment boundary. The library engine responds
-in 1 s and therefore followed a signal that was mostly noise. The 8× improvement did not
-create this defect; it removed what had been hiding it.
-
-Replacing the one-hop difference with a 20-hop least-squares slope and adding a
-dual-threshold hysteresis band reduced prompt changes from 477 to 24 — measured on the
-five-rung, 1.0 SD ladder then deployed, and on replay of the
-same data, with no switch faster than a crossfade.
-
-**The fix has an honest limit.** Calibrated above the measured noise ceiling, the trend
-suffix can no longer fire during ordinary drift: no plausible excursion reaches the
-required slope. The controller is effectively the energy ladder alone.
-
-### 6.4 A fix that traded chatter for repetition
-
-Because the suffix became inert, the controller now reaches only the suffix-free
-prompts. The library had been built with four renders of each of twenty prompts on the
-assumption all twenty were live. Replaying the session through the corrected controller,
-a 17-minute session reached **12 of 80 segments** — 32 seconds of unique audio, looping.
-
-For a relaxation intervention that is arguably worse than the chatter it replaced. The
-library was rebuilt with renders allocated by measured use (32 per reachable base prompt,
-220 total), taking the dominant prompt from 32 s to 256 s of unique audio.
-
-We report this sequence because it illustrates a general hazard: a fix validated against
-the metric it targets can degrade a property nobody was measuring.
+A general hazard sits under this. The library engine responds within one crossfade where
+the streaming engine sampled the prompt once per 8 s segment, and the segment boundary had
+been absorbing controller noise. Making the audio path 8× faster did not create the
+instability; it removed what had been hiding it. Any latency improvement downstream of a
+quantising controller should be checked for this.
 
 ---
 
@@ -608,46 +534,49 @@ the metric it targets can degrade a property nobody was measuring.
 
 | quantity | value |
 |---|---|
-| valid intervention windows | 1043 |
-| lag-1 autocorrelation | 0.953 |
-| decorrelation time (1/e) | 9 s |
-| **AR(1) effective sample size** | **25.3** |
+| unspliced PhysioNet resting runs, no rejected windows | 99 |
+| lag-1 autocorrelation, deployed index, AF7/AF8 (median) | 0.918 |
+| same, DEAP participant 1, AF3/AF4 | 0.918 |
+| decorrelation time (1/e) | within 4 s |
+| **AR(1) effective sample size, 20 min at 1 s hop** | **51.0 of 1200** |
 
-A 20-minute session at a 1 s hop *looks like* 1200 observations and *behaves like* 25.
+A 20-minute session at a 1 s hop *looks like* 1200 observations and *behaves like* 51.
 Any analysis treating windows as independent — a t-test across windows, a parametric
-correlation p-value, a binomial interval on time-in-band — overstates its evidence by
-approximately √(1043/25.3) ≈ **6.4×**, the difference between p = 0.05 and p = 0.4
-(Figure 2).
+correlation p-value, a binomial interval on time-in-band — overstates its test statistic
+by √(1200/51.0) ≈ **4.85×** (Figure 2).
 
-This follows directly from the smoother that produces the index, so it is a property of
-the design rather than of this participant. Every inferential quantity in this project
-either uses the effective sample size or a permutation null preserving the
-autocorrelation.
+The time scale is set mostly by the smoother, so this is a property of the design rather
+than of any listener. One-minute resting runs also contain none of the slow drift of a
+longer session, which makes 0.918 a lower bound on what a closed-loop session would show.
+Every inferential quantity in this project either uses the effective sample size or a
+permutation null that preserves the autocorrelation.
 
 ### 7.2 A continuous coupling index fails when the intervention works
 
-The lagged coupling index returned r = −0.054, p = 0.795 — a clean null on a session
-where the estimator is validated to recover known lags at r ≈ 0.85 (§5).
-
-The reason is structural. The index cross-correlates the whole session, so it requires
-the audio to vary. A participant who reaches the target and stays keeps the controller
-on one rung — 95.9% here — leaving no controller-driven variation to correlate against.
+The lagged coupling index cross-correlates the audio envelope with the neural index over
+the whole session, so it requires the audio to vary. A listener who reaches the target and
+stays there holds the controller on one rung, leaving no controller-driven variation to
+correlate against. The estimator is not the problem — it recovers known lags at r ≈ 0.85
+(§5).
 
 **The measure is weakest precisely when the intervention is most successful.** This is
 not fixable by improving the estimator, and it is a poor property for a primary outcome.
 
 ### 7.3 Event-locked measures are confounded by their own trigger
 
-Conditioning on rung changes instead recovers signal where the continuous index finds
-none: +0.412 z, p = 0.104, from 10 events.
+Conditioning on rung changes restores power, and introduces a confound. A rung change
+happens *because* z moved, and z keeps moving because it is autocorrelated. Time-locking
+to the change therefore produces a positive effect with no therapeutic effect at all —
+the music follows the brain, the brain continues, and the follow looks like a lead.
 
-That number is not causal, and the shape of the response shows why. z rises from −0.45
-to +1.0 in the ten seconds **before** the change, peaks at onset, and decays to +0.18
-after (Figure 4). A rung change happens *because* z moved; z then continues because it
-is autocorrelated. A positive effect is exactly what a closed loop with no therapeutic
-effect produces — the music follows the brain, the brain continues, and time-locking to
-the follow makes it look like a lead. Baseline-correcting does not remove it, because
-the pre-window movement is the trigger.
+We calibrated this on synthetic sessions with known ground truth. The event-locked
+estimator returned +1.503 for a simulated responder, −1.467 for an anti-responder and
++0.011 for an unrelated session. A fourth session had **no audio effect at all**, but its
+rung changes were triggered by boundary crossings as in the real controller. It returned
+**+0.435**. Its pre-onset slope gives it away — +0.0573 z/s against +0.0012 for a genuine
+response — but a within-arm analysis that does not look at the slope would report it as
+an effect. Baseline-correcting does not remove it, because the pre-window movement is the
+trigger.
 
 **In any closed loop, the stimulus is a function of the signal, so event-locked
 contrasts within a single arm are uninterpretable.** A yoked control that reproduces the
@@ -656,22 +585,26 @@ between arms is the only interpretable quantity.
 
 ### 7.4 Dichotomised outcomes are expensive
 
-Time-in-band is the clinically interpretable quantity, and powering on it costs roughly
-a factor of three in detectable effect relative to mean z. It discards how far inside or
+Time-in-band is the clinically interpretable quantity. It also discards how far inside or
 outside the band a participant sits, and it saturates: someone well outside scores near
-zero in both arms, contributing nothing to the contrast. Saturation also removes most of
-a crossover design's advantage, because participant offsets cancel exactly in a
+zero in both arms and contributes nothing to the contrast. Saturation removes most of a
+crossover design's advantage too, because participant offsets cancel exactly in a
 difference of means and do not cancel through a nonlinear function.
 
-Report it descriptively; power on the continuous measure.
+Simulating 10-participant crossover studies with the PhysioNet autocorrelation and
+within-session spread, mean z reached 80% power at an effect of 0.13 SD. Time in band
+needed 1.06 SD, **roughly eight times larger**. We do not turn these simulations into a
+sample size, because one-minute runs understate the variance of a 20-minute session.
+
+Report time-in-band descriptively; power on the continuous measure.
 
 ---
 
 ## 8. Limitations
 
-**No efficacy data.** One session, on the author, unblinded, single arm. Nothing here
-speaks to whether the intervention benefits anyone. The planned study (§9) is a
-feasibility study and is likewise not powered to establish efficacy.
+**No efficacy data.** No participants, no EEG recorded for this paper, no adaptive/sham
+comparison. Nothing here speaks to whether the intervention benefits anyone. The planned
+study (§9) is a feasibility study and is likewise not powered to establish efficacy.
 
 **The end-to-end latency is far outside the neurofeedback regime.** With the library
 engine the worst case is 6.5 s — 5.5 s analysis plus one crossfade. The relevant evidence
@@ -708,20 +641,22 @@ Two things follow. **The claim that analysis is the dominant term is configurati
 dependent, not architectural**: fix the analysis path and the crossfade becomes the
 binding constraint, inverting the decomposition this paper reports. And **reaching the
 neurofeedback regime is a measurement away rather than a redesign away** — it requires a
-streaming estimator, a crossfade near 0.25 s, and the dwell machinery of §2.3 to stop a
+streaming estimator, a crossfade near 0.25 s, and the dwell machinery of §6 to stop a
 lightly-smoothed index from chattering through it.
 
-**And the floor is not a trade-off.** Measured on the same labelled recording, a
-second-order streaming estimator at τ = 0.1 gives d = 0.61 against the deployed 1.99 — a
-threefold loss in per-sample discriminability — while independence rises from 1.2 to 41.4
-observations per minute. Precision goes with the product, and **information per minute at
-the floor is 1.83× the deployed value**. The fastest configuration this architecture can
-reach is also the more informative one.
+**The floor does not cost information.** On the PhysioNet transitions, a second-order
+streaming estimator at τ = 0.1 gives d = 0.39 against the deployed 2.07, a fivefold loss in
+per-sample discriminability, while independence rises from 0.9 to 49.7 observations per
+minute. Precision goes with the product, and **information per minute at the floor is
+1.50× the deployed value**. It is not the *most* informative setting, though. The retuned
+windowed configuration is, at 4.68 against the floor's 2.84 — so the choice between them is
+a second of latency against about a third of the information rate, and the deployed
+setting loses to both.
 
 One caveat the budget hides: measured detection latency does not fall monotonically with
-it. Below τ ≈ 0.25 the estimate is noisy enough that midpoint crossing becomes harder to
-time, so detection rises again even as the theoretical budget keeps dropping. The budget
-is a floor on delay, not a promise about detection.
+it. At the floor the median is 0.63 s, and below τ ≈ 0.1 it rises again, because the output
+becomes noisy enough that crossings no longer hold for 0.5 s. The budget is a floor on
+delay, not a promise about detection.
 
 What remains unshown is that any of this survives contact with the real contrast. Every
 figure here is measured on an eyes-open/closed manipulation, which is gross compared to
@@ -756,49 +691,35 @@ mixed, and weakest in the best-designed study.
 If matching-then-leading works with a fixed playlist and no feedback whatsoever, then
 the burden on a closed-loop system is not to beat silence — it is to beat a fixed
 playlist. And if, as the pre-registered result suggests, it may not work reliably even
-then, an adaptive system cannot borrow its plausibility from the iso literature. The yoked sham is exactly that comparison: identical music, identical
-sequence, contingency broken. So the design already asks the right question, and a null
-contrast would be informative rather than merely disappointing.
+then, an adaptive system cannot borrow its plausibility from the iso literature. The yoked
+sham is exactly that comparison: identical music, identical sequence, contingency broken.
+So the design already asks the right question, and a null contrast would be informative
+rather than merely disappointing.
 
 **Whether a therapeutic effect survives a 6.5 s delay is an open empirical question, and
 it is not one this work answers.** It is the most important threat to the approach and
 should be tested directly — for example by manipulating delay experimentally, which the
 architecture in §4 makes cheap.
 
-**The controller is narrower than designed.** Only rungs 1–3 are reachable, one rung
-accounted for 96% of the pilot, and the trend suffix cannot fire after calibration. The
-system is a three-level ladder behaving as a two-level one.
-
-**The sensing path has not been validated on the channels the system uses.** This is the
-most serious limitation here. Figure 0a — the eyes-closed alpha increase — was recorded
-with `frontal_channels = TP9/TP10`, while the live index uses AF7/AF8. Recomputed from the
-same raw recording, the effect does not transfer: 1.85× (d = 1.23, p = 1.8 × 10⁻²⁵) on
-TP9/TP10 against 0.91× (d = −0.17, p = 0.26) on AF7/AF8, with **48% of frontal windows
-rejected as artefact** against 3%.
-
-The rejection rate is the necessary context and stops this being "frontal channels fail":
-PILOT01 ran on AF7/AF8 and rejected only 13.1%, so frontal contact can be good — it was
-not good during the alpha test.
-
-**That repeat was run on 2026-09-17 and is reported as Figure 0b (§5).** With good contact
-and 0% rejection, AF7/AF8 give 1.34× (d = 0.53, p = 2.3 × 10⁻⁶): the effect is there, but
-at roughly half the August effect size, and the alpha-peak prominence check fails on both
-channels (1.09 and 1.13 against 1.20). So the limitation is no longer that the channels are
-untested; it is that **on the channels the index uses, the validation is weaker and less
-specifically alpha than the headline figure suggests**, and a 1.34× ratio without a visible
-peak does not exclude broadband power tracking the eye state. This no longer gates
-participant data, but it does bound how much weight the index can carry.
+**The data are not from the target hardware.** Every analysis-path result comes from a
+64-channel gel cap sampled at 160 Hz, or from synthetic signals. The Muse's dry electrodes
+are noisier and more prone to artefact, so absolute values of d and R will differ, and the
+9-of-9 dominance result needs confirming on a Muse before it is relied on. The transitions
+are spliced and therefore instantaneous, where a real eye closure takes time to raise
+alpha, so the detection latencies are upper bounds on the estimator alone. T9/T10 stand in
+for TP9/TP10. The resting runs last one minute, which limits §7.1 and §7.4.
 
 **Frontal channels only.** The Muse 2 has no occipital electrodes, and frontal alpha is
 weaker and more contaminated by ocular and muscle artefact than occipital alpha. The
-index inherits that, and the 48% figure above is a concrete instance.
+PhysioNet frontal channels pass the alpha-peak check (§5); whether dry frontal contacts
+do is the open question.
 
 **Single site, single headset, single operator.** The operator cannot be blinded, since
 running the sham arm requires supplying the yoked source explicitly.
 
-**Between-participant variance is unmeasured.** With one participant it cannot be
-estimated, which is why the sample-size analysis sweeps a range rather than naming a
-number. Estimating it is the primary objective of the planned study.
+**Between-participant variance is unmeasured.** It cannot be estimated without
+participants, which is why no sample size is derived here. Estimating it is the primary
+objective of the planned study.
 
 **Benchmark scope.** One model (`musicgen-small`), two GPUs, two backends. The decode-loop
 argument should generalise to other autoregressive audio models, but that is an inference
@@ -908,6 +829,20 @@ remains unread behind a paywall. URLs accessed 2026-08-28, re-checked 2026-09-06
     exploratory analyses favoured guided over unguided listening for calmness. This is the
     pre-registered null §8 anticipated, and §8 now states it. Read from the abstract;
     obtain the full text before submission. **Updated 2026-10-22.**
+
+12. **BCI2000: A general-purpose brain-computer interface (BCI) system.** G. Schalk,
+    D. J. McFarland, T. Hinterberger, N. Birbaumer & J. R. Wolpaw, *IEEE Transactions on
+    Biomedical Engineering* 51(6):1034–1043 (2004). doi:10.1109/TBME.2004.827072.
+    The source of the PhysioNet EEG Motor Movement/Imagery Dataset used in §3.4, §5–§7.
+    **Added 2026-11-22; metadata not yet checked against Crossref.**
+
+13. **PhysioBank, PhysioToolkit, and PhysioNet.** A. L. Goldberger et al., *Circulation*
+    101(23):e215–e220 (2000). doi:10.1161/01.CIR.101.23.e215. The required citation for
+    PhysioNet data. **Added 2026-11-22; metadata not yet checked against Crossref.**
+
+14. **MEG and EEG data analysis with MNE-Python.** A. Gramfort et al., *Frontiers in
+    Neuroscience* 7:267 (2013). doi:10.3389/fnins.2013.00267. Loader for the PhysioNet
+    data. **Added 2026-11-22; metadata not yet checked against Crossref.**
 
 ### Outstanding literature work
 
