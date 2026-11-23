@@ -899,7 +899,283 @@ def claim_ladder_margin_responds() -> tuple[float, str]:
     return float(m["changes"]), f"median gap {m['median_gap']:.1f} s over {z.size} windows"
 
 
-CLAIMS = {
+# =========================================================== PUBLIC-DATA CLAIMS
+#
+# Since 2026-11-21 the paper uses no recording of the author. Every EEG result is
+# computed on PhysioNet EEGBCI (109 subjects), DEAP participant 1, or synthetic sessions
+# with known ground truth. The claims below read the JSON that
+# estimator_sweep_public.py and public_analyses.py write to results/public/, and
+# --recompute regenerates that JSON first (several minutes; downloads EEGBCI on first
+# use). The recording-based claims are kept, not deleted, as SELF_DATA_CLAIMS: they
+# document the project's history and run with --self-data, but the paper cites none.
+
+RECOMPUTE = False
+_PUB: dict = {}
+
+
+def _pub(name: str) -> dict:
+    if name in _PUB:
+        return _PUB[name]
+    path = os.path.join(_ROOT, "results", "public", name + ".json")
+    if RECOMPUTE or not os.path.exists(path):
+        if name == "analyses":
+            import subprocess
+            subprocess.run([sys.executable, os.path.join(_ROOT, "scripts", "public_analyses.py"),
+                            "--out", path], check=True)
+        else:
+            import estimator_sweep_public as esp
+            source, pair, kw = {
+                "eegbci_af": ("eegbci", ["AF7", "AF8"], {}),
+                "eegbci_tp": ("eegbci", ["TP9", "TP10"], {}),
+                "synth_134": ("synthetic", ["AF7", "AF8"], {}),
+            }[name]
+            res = esp.run(source, pair, seeds=50, ratio=1.34, hold=esp.HOLD_S, **kw)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            json.dump(res, open(path, "w", encoding="utf-8"), indent=1)
+    _PUB[name] = json.load(open(path, encoding="utf-8"))
+    return _PUB[name]
+
+
+def _med(res: dict, config: str, key: str) -> float:
+    if key == "detect":
+        key = f"detect_h{res['hold_s']:g}"
+    return float(res["summary"][config][key]["median"])
+
+
+def claim_pub_deployed_detect() -> tuple[float, str]:
+    """Median detection latency of the deployed estimator, EEGBCI AF7/AF8."""
+    r = _pub("eegbci_af")
+    return _med(r, "deployed", "detect"), f"{r['n_sessions']} subjects, hold {r['hold_s']:g} s"
+
+
+def claim_pub_deployed_R() -> tuple[float, str]:
+    r = _pub("eegbci_af")
+    return _med(r, "deployed", "R"), (f"d {_med(r, 'deployed', 'd'):.2f}, "
+                                      f"ind/min {_med(r, 'deployed', 'ind_min'):.1f}")
+
+
+def claim_pub_deployed_d() -> tuple[float, str]:
+    r = _pub("eegbci_af")
+    return _med(r, "deployed", "d"), "median across subjects"
+
+
+def claim_pub_deployed_ind() -> tuple[float, str]:
+    r = _pub("eegbci_af")
+    return _med(r, "deployed", "ind_min"), f"rho {_med(r, 'deployed', 'rho'):.3f}"
+
+
+def claim_pub_deployed_rho() -> tuple[float, str]:
+    r = _pub("eegbci_af")
+    return _med(r, "deployed", "rho"), "lag-1 on a 1 s grid, spliced sessions"
+
+
+def _row(config):
+    r = _pub("eegbci_af")
+    return {k: _med(r, config, k) for k in ("detect", "d", "ind_min", "R")}
+
+
+def claim_pub_retuned_detect() -> tuple[float, str]:
+    return _row("windowed 2/0.5/0.5")["detect"], "W 2 s, H 0.5 s, tau 0.5 s"
+
+
+def claim_pub_retuned_R() -> tuple[float, str]:
+    x = _row("windowed 2/0.5/0.5")
+    return x["R"], f"d {x['d']:.2f}, ind/min {x['ind_min']:.1f}"
+
+
+def claim_pub_stream_detect() -> tuple[float, str]:
+    return _row("streaming o4 t=0.25")["detect"], "order 4, tau 0.25 s"
+
+
+def claim_pub_stream_R() -> tuple[float, str]:
+    x = _row("streaming o4 t=0.25")
+    return x["R"], f"d {x['d']:.2f}, ind/min {x['ind_min']:.1f}"
+
+
+def claim_pub_dominating() -> tuple[float, str]:
+    r = _pub("eegbci_af")
+    return float(len(r["dominating_medians"])), f"of {len(r['alternatives'])}, medians"
+
+
+def claim_pub_dominating_tp() -> tuple[float, str]:
+    r = _pub("eegbci_tp")
+    return float(len(r["dominating_medians"])), "T9/T10 stand-in for TP9/TP10"
+
+
+def claim_pub_dominating_synth() -> tuple[float, str]:
+    r = _pub("synth_134")
+    return float(len(r["dominating_medians"])), f"{r['n_sessions']} synthetic sessions"
+
+
+def claim_pub_dominating_first_crossing() -> tuple[float, str]:
+    """The same count under the first-crossing rule, as a sensitivity check."""
+    r = _pub("eegbci_af")
+    s = r["summary"]
+    b = s["deployed"]
+    n = sum(1 for a in r["alternatives"]
+            if s[a]["detect_h0"]["median"] < b["detect_h0"]["median"]
+            and s[a]["R"]["median"] > b["R"]["median"])
+    return float(n), "hold 0 s"
+
+
+def claim_pub_retuned_subject_dominance() -> tuple[float, str]:
+    """Fraction of subjects in which the retuned windowed setting beats deployed on both."""
+    d = _pub("eegbci_af")["per_session_dominance"]["windowed 2/0.5/0.5"]
+    return float(d["fraction_of_sessions"]), f"{d['n']} subjects with finite scores"
+
+
+def claim_pub_floor_info_ratio() -> tuple[float, str]:
+    r = _pub("eegbci_af")
+    f = _row("streaming o2 t=0.1")
+    return f["R"] / _med(r, "deployed", "R"), f"floor d {f['d']:.2f}, ind/min {f['ind_min']:.1f}"
+
+
+def claim_pub_floor_d() -> tuple[float, str]:
+    return _row("streaming o2 t=0.1")["d"], "order 2, tau 0.1 s"
+
+
+def claim_pub_floor_ind() -> tuple[float, str]:
+    return _row("streaming o2 t=0.1")["ind_min"], "order 2, tau 0.1 s"
+
+
+def claim_pub_floor_detect() -> tuple[float, str]:
+    return _row("streaming o2 t=0.1")["detect"], "order 2, tau 0.1 s"
+
+
+def claim_pub_autocorr_rho() -> tuple[float, str]:
+    a = _pub("analyses")["autocorrelation"]
+    return a["rho_median"], f"{a['n_runs']} unspliced runs"
+
+
+def claim_pub_overstatement() -> tuple[float, str]:
+    a = _pub("analyses")["autocorrelation"]
+    return a["overstatement"], (f"20-min session: {a['session_windows']} windows, "
+                                f"n_eff {a['session_n_eff']:.1f}")
+
+
+def claim_pub_session_neff() -> tuple[float, str]:
+    a = _pub("analyses")["autocorrelation"]
+    return a["session_n_eff"], f"of {a['session_windows']} windows"
+
+
+def claim_pub_decorrelation() -> tuple[float, str]:
+    a = _pub("analyses")["autocorrelation"]
+    return float(a["decorrelation_s"]), "first lag of the mean ACF below 1/e"
+
+
+def claim_pub_deap_rho() -> tuple[float, str]:
+    a = _pub("analyses")["autocorrelation_deap"]
+    return a["rho_median"], f"{a['n_trials']} DEAP trials, AF3/AF4"
+
+
+def claim_pub_dichotomisation() -> tuple[float, str]:
+    p = _pub("analyses")["power"]
+    return float(p["dichotomisation_factor"]), (f"80% at n=10: mean z {p['z_mean_effect_80']}, "
+                                                f"time in band {p['time_in_band_effect_80']}")
+
+
+def _replay(key):
+    return _pub("analyses")["replay"][key]
+
+
+def claim_pub_replay_no_dwell() -> tuple[float, str]:
+    x = _replay("eegbci|retuned|dwell0")
+    return float(x["under_crossfade"]), (f"{x['changes']} changes, {x['sessions']} sessions, "
+                                         f"{x['minutes']:.0f} min")
+
+
+def claim_pub_replay_no_dwell_rate() -> tuple[float, str]:
+    x = _replay("eegbci|retuned|dwell0")
+    return float(x["under_crossfade_per_min"]), "per minute of EEG"
+
+
+def claim_pub_replay_with_dwell() -> tuple[float, str]:
+    a = _replay("eegbci|retuned|dwell1")
+    b = _replay("synthetic|retuned|dwell1")
+    return float(a["under_crossfade"] + b["under_crossfade"]), "EEGBCI and synthetic"
+
+
+def claim_pub_replay_deployed() -> tuple[float, str]:
+    x = _replay("eegbci|deployed|dwell0")
+    return float(x["under_crossfade"]), f"{x['changes']} changes at the deployed settings"
+
+
+def _alpha(pair):
+    return _pub("analyses")["alpha"][pair]
+
+
+def claim_pub_alpha_af_ratio() -> tuple[float, str]:
+    a = _alpha("AF7/AF8")
+    return a["ratio_median"], f"{a['n_subjects']} subjects"
+
+
+def claim_pub_alpha_af_fraction() -> tuple[float, str]:
+    a = _alpha("AF7/AF8")
+    return a["fraction_increase"], f"Wilcoxon p = {a['wilcoxon_p']:.1e}"
+
+
+def claim_pub_alpha_af_dz() -> tuple[float, str]:
+    return _alpha("AF7/AF8")["dz"], "mean / sd of per-subject log ratio"
+
+
+def claim_pub_alpha_af_rejection() -> tuple[float, str]:
+    return _alpha("AF7/AF8")["rejection_median"], "median per subject, 350 uV"
+
+
+def claim_pub_alpha_t_ratio() -> tuple[float, str]:
+    a = _alpha("T9/T10")
+    return a["ratio_median"], f"{a['n_subjects']} subjects"
+
+
+def claim_pub_alpha_t_fraction() -> tuple[float, str]:
+    a = _alpha("T9/T10")
+    return a["fraction_increase"], f"Wilcoxon p = {a['wilcoxon_p']:.1e}"
+
+
+def claim_pub_prominence_af7() -> tuple[float, str]:
+    return _alpha("AF7/AF8")["prominence_ratio_median"]["AF7"], "median per subject"
+
+
+def claim_pub_prominence_af8() -> tuple[float, str]:
+    return _alpha("AF7/AF8")["prominence_ratio_median"]["AF8"], "median per subject"
+
+
+_ELR: dict = {}
+
+
+def _elr(kind):
+    if kind not in _ELR:
+        from analyze_session import event_locked_response
+        from validate_event_locked import build
+        _ELR[kind] = event_locked_response(build(kind), n_permutations=300)
+    return _ELR[kind]
+
+
+def claim_elr_responder() -> tuple[float, str]:
+    return float(_elr("responder")["elr_effect_z"]), "synthetic responder"
+
+
+def claim_elr_anti() -> tuple[float, str]:
+    return float(_elr("anti-responder")["elr_effect_z"]), "synthetic anti-responder"
+
+
+def claim_elr_independent() -> tuple[float, str]:
+    return float(_elr("independent")["elr_effect_z"]), "synthetic, unrelated"
+
+
+def claim_elr_triggered() -> tuple[float, str]:
+    return float(_elr("triggered")["elr_effect_z"]), "no audio effect, boundary-triggered"
+
+
+def claim_elr_triggered_slope() -> tuple[float, str]:
+    return float(_elr("triggered")["elr_pre_slope_z_per_s"]), "pre-onset slope, z/s"
+
+
+def claim_elr_responder_slope() -> tuple[float, str]:
+    return float(_elr("responder")["elr_pre_slope_z_per_s"]), "pre-onset slope, z/s"
+
+
+SELF_DATA_CLAIMS = {
     "T4 best realtime factor":            (claim_t4_best_realtime,        1.05,   0.01),
     "T4 fp32<fp16-half<fp16 consistency": (claim_t4_precision_ordering,   1.00,   0.001),
     "T4 fp16-half vs fp32 at 8 s":        (claim_t4_fp16half_vs_fp32,     0.952,  0.01),
@@ -948,6 +1224,75 @@ CLAIMS = {
     "9/17 floor info / deployed":         (claim_second_floor_info,         1.94,   0.05),
 }
 
+# The paper's claims: no human data, synthetic ground truth, DEAP, then (below) the
+# public-data claims.
+CLAIMS = {
+    # ---- no human data: benchmarks, library, controller, budget
+    "T4 best realtime factor":            (claim_t4_best_realtime,        1.05,   0.01),
+    "T4 fp32<fp16-half<fp16 consistency": (claim_t4_precision_ordering,   1.00,   0.001),
+    "T4 fp16-half vs fp32 at 8 s":        (claim_t4_fp16half_vs_fp32,     0.952,  0.01),
+    "T4 between-run max/min":             (claim_t4_between_run_variance, 1.18,   0.02),
+    "laptop between-run max/min":         (claim_laptop_between_run_variance, 1.96, 0.02),
+    "slowest realtime factor measured":   (claim_slowest_realtime_factor,   6.27,   0.02),
+    "renders on the dominant prompt":     (claim_library_dominant_variants, 32,   0),
+    "distinct prompts build_prompt emits":(claim_reachable_prompt_space,  9,      0),
+    "end-to-end budget, library":         (claim_latency_budget,          6.5,    0.05),
+    "analysis share of the budget":       (claim_analysis_share_of_budget,   0.846, 0.005),
+    "analysis-path latency floor":        (claim_analysis_latency_floor,    0.189,  0.005),
+    # ---- synthetic ground truth
+    "coupling recovers a +6 s lag":       (claim_coupling_recovers_lag,   6.0,    1.0),
+    "event-locked: responder":            (claim_elr_responder,           1.503,  0.005),
+    "event-locked: anti-responder":       (claim_elr_anti,               -1.467,  0.005),
+    "event-locked: unrelated":            (claim_elr_independent,         0.011,  0.005),
+    "event-locked: triggered, no effect": (claim_elr_triggered,           0.435,  0.005),
+    "event-locked: triggered pre-slope":  (claim_elr_triggered_slope,     0.0573, 0.0005),
+    "event-locked: responder pre-slope":  (claim_elr_responder_slope,     0.0012, 0.0005),
+    # ---- DEAP participant 1 (public)
+    "DEAP arousal rho (AF3/AF4)":         (claim_deap_arousal_rho,        0.303,  0.02),
+    "DEAP montages positive (of 7)":      (claim_deap_montages_positive,     7,     0),
+}
+
+# Public-data claims, measured 2026-11-21 (PhysioNet EEGBCI, DEAP s01, synthetic).
+PUBLIC_CLAIMS = {
+    "PUB deployed detection latency":     (claim_pub_deployed_detect,     4.50, 0.05),
+    "PUB deployed d":                     (claim_pub_deployed_d,          2.07, 0.02),
+    "PUB deployed rho (spliced)":         (claim_pub_deployed_rho,        0.972, 0.005),
+    "PUB deployed ind/min":               (claim_pub_deployed_ind,        0.86, 0.1),
+    "PUB deployed R":                     (claim_pub_deployed_R,          1.89, 0.02),
+    "PUB retuned detection latency":      (claim_pub_retuned_detect,      1.50, 0.05),
+    "PUB retuned R":                      (claim_pub_retuned_R,           4.68, 0.02),
+    "PUB streaming o4 t0.25 detection":   (claim_pub_stream_detect,       0.63, 0.02),
+    "PUB streaming o4 t0.25 R":           (claim_pub_stream_R,            3.11, 0.02),
+    "PUB alternatives dominating":        (claim_pub_dominating,          9, 0),
+    "PUB dominating, first crossing":     (claim_pub_dominating_first_crossing, 9, 0),
+    "PUB dominating, T9/T10":             (claim_pub_dominating_tp,       9, 0),
+    "PUB dominating, synthetic":          (claim_pub_dominating_synth,    9, 0),
+    "PUB retuned beats deployed, subj.":  (claim_pub_retuned_subject_dominance, 0.785, 0.005),
+    "PUB floor R / deployed R":           (claim_pub_floor_info_ratio,    1.50, 0.02),
+    "PUB floor d":                        (claim_pub_floor_d,             0.39, 0.02),
+    "PUB floor ind/min":                  (claim_pub_floor_ind,           49.7, 0.1),
+    "PUB floor detection latency":        (claim_pub_floor_detect,        0.63, 0.02),
+    "PUB resting-run rho":                (claim_pub_autocorr_rho,        0.918, 0.005),
+    "PUB 20-min n_eff":                   (claim_pub_session_neff,        51.0, 0.5),
+    "PUB autocorrelation overstatement":  (claim_pub_overstatement,       4.85, 0.05),
+    "PUB decorrelation time":             (claim_pub_decorrelation,       4, 0),
+    "PUB DEAP trial rho":                 (claim_pub_deap_rho,            0.918, 0.005),
+    "PUB dichotomisation factor":         (claim_pub_dichotomisation,     8.15, 0.1),
+    "PUB replay: no dwell, in a xfade":   (claim_pub_replay_no_dwell,     4176, 0),
+    "PUB replay: per minute, no dwell":   (claim_pub_replay_no_dwell_rate, 31.66, 0.05),
+    "PUB replay: 1 s dwell, in a xfade":  (claim_pub_replay_with_dwell,   0,    0),
+    "PUB replay: deployed, in a xfade":   (claim_pub_replay_deployed,     0, 0),
+    "PUB AF7/AF8 alpha ratio":            (claim_pub_alpha_af_ratio,      1.80, 0.02),
+    "PUB AF7/AF8 fraction rising":        (claim_pub_alpha_af_fraction,   0.868, 0.005),
+    "PUB AF7/AF8 dz":                     (claim_pub_alpha_af_dz,         0.96, 0.02),
+    "PUB AF7/AF8 rejection":              (claim_pub_alpha_af_rejection,  0.198, 0.005),
+    "PUB T9/T10 alpha ratio":             (claim_pub_alpha_t_ratio,       1.46, 0.02),
+    "PUB T9/T10 fraction rising":         (claim_pub_alpha_t_fraction,    0.890, 0.005),
+    "PUB AF7 prominence ratio":           (claim_pub_prominence_af7,      1.35, 0.02),
+    "PUB AF8 prominence ratio":           (claim_pub_prominence_af8,      1.41, 0.02),
+}
+CLAIMS.update(PUBLIC_CLAIMS)
+
 
 # Claims that dominate the runtime, and what they cost. --quick skips exactly these.
 #
@@ -977,7 +1322,18 @@ def main() -> int:
     parser.add_argument("--quick", action="store_true",
                         help="skip the claims that recompute from raw data. NOT a "
                              "substitute for a full run before committing or submitting.")
+    parser.add_argument("--self-data", action="store_true",
+                        help="run the retired claims about the author's own recordings "
+                             "instead of the paper's claims")
+    parser.add_argument("--recompute", action="store_true",
+                        help="regenerate results/public/*.json before checking")
     args = parser.parse_args()
+
+    global CLAIMS, RECOMPUTE
+    RECOMPUTE = args.recompute
+    if args.self_data:
+        CLAIMS = SELF_DATA_CLAIMS
+        print("  --self-data: the RETIRED recording-based claims. The paper cites none.")
 
     print("=" * 78)
     print("CLAIM VERIFICATION - every headline number, regenerated from artefacts")

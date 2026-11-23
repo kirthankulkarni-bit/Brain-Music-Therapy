@@ -26,11 +26,13 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # The figures arxiv_short.tex includes. Keep in step with it; the check below is what
 # tells you when it has drifted.
+#
+# Since 11/21 the paper uses public and synthetic data only, so these are the figures
+# scripts/make_public_figures.py writes, not the recording-based ones of make_figures.py.
 FIGURES = (
-    "fig0_alpha_validation.png",
-    "fig0b_alpha_validation_af78.png",
-    "fig2_autocorrelation.png",
-    "fig6_estimator_tradeoff.png",
+    "public_estimator_tradeoff.png",
+    "public_autocorrelation.png",
+    "public_alpha_validation.png",
 )
 
 
@@ -65,7 +67,7 @@ def main() -> int:
             missing.append(wanted)
 
     if missing:
-        print(f"\n{len(missing)} problem(s). Run scripts/make_figures.py first.")
+        print(f"\n{len(missing)} problem(s). Run scripts/make_public_figures.py first.")
         return 1
 
     print(f"\n{len(FIGURES)} figures staged in docs/arxiv-figures.")
