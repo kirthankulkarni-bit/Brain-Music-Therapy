@@ -834,15 +834,15 @@ remains unread behind a paywall. URLs accessed 2026-08-28, re-checked 2026-09-06
     D. J. McFarland, T. Hinterberger, N. Birbaumer & J. R. Wolpaw, *IEEE Transactions on
     Biomedical Engineering* 51(6):1034–1043 (2004). doi:10.1109/TBME.2004.827072.
     The source of the PhysioNet EEG Motor Movement/Imagery Dataset used in §3.4, §5–§7.
-    **Added 2026-11-22; metadata not yet checked against Crossref.**
+    **Added and verified against Crossref and PubMed 2026-11-22.**
 
 13. **PhysioBank, PhysioToolkit, and PhysioNet.** A. L. Goldberger et al., *Circulation*
     101(23):e215–e220 (2000). doi:10.1161/01.CIR.101.23.e215. The required citation for
-    PhysioNet data. **Added 2026-11-22; metadata not yet checked against Crossref.**
+    PhysioNet data. **Added and verified against Crossref and PubMed 2026-11-22.**
 
 14. **MEG and EEG data analysis with MNE-Python.** A. Gramfort et al., *Frontiers in
     Neuroscience* 7:267 (2013). doi:10.3389/fnins.2013.00267. Loader for the PhysioNet
-    data. **Added 2026-11-22; metadata not yet checked against Crossref.**
+    data. **Added and verified against Crossref and PubMed 2026-11-22.**
 
 ### Outstanding literature work
 
