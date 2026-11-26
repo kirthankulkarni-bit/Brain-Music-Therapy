@@ -8,7 +8,7 @@ system.*
 **DRAFT — sections 1–8.** §9 (planned study) is specified in
 [analysis_plan.md](analysis_plan.md), frozen at tag `preregistration-v1`.
 
-Numbers in this draft are checked by `python scripts/verify_claims.py` (74/74 reproduce).
+Numbers in this draft are checked by `python scripts/verify_claims.py` (77/77 reproduce).
 **Since 2026-11-22 every EEG result here comes from public data (PhysioNet EEGBCI, HEROIC,
 DEAP) or synthetic signals.** Recordings made during development, the author's pilot session
 included, are not used for any claim; the self-recorded claims still run with
@@ -501,6 +501,16 @@ says nothing about arousal, which is a smaller and different signal. It does fol
 nothing in this paper shows those two channels record cortex reliably on a Muse, and that
 the obvious next experiment is the DEAP arousal check repeated with the index computed from
 TP9/TP10, or after re-referencing.
+
+**That check has been run, and the temporal sites hold up.** DEAP has no TP9/TP10, so the
+index was computed from the four sites around them (T7, P7, T8, P8). It correlates with
+arousal at rho = +0.454 (p = 0.003), against +0.303 for AF3/AF4. We do not read that as the
+temporal sites being better. Four frontal channels averaged (AF3, AF4, Fp1, Fp2) also
+improve, to +0.342; a neighbouring temporoparietal set (CP5, CP6, P7, P8) gives +0.295; a
+bootstrap interval for the frontal-minus-temporal difference runs from -0.47 to +0.15; and
+nine channel sets were tried on 40 trials from one participant. The defensible reading is
+narrower: moving the index to TP9/TP10 need not cost it sensitivity to arousal, and on a
+Muse those are the channels that demonstrably record cortex.
 
 **Index construct validity.** Two separable claims underlie the measurement: that the
 electrodes record cortex, and that log(beta/alpha) measures *arousal*. The second was

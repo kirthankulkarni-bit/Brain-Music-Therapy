@@ -1397,6 +1397,36 @@ def claim_heroic_overstatement() -> tuple[float, str]:
     return a["overstatement"], f"N_eff {a['session_n_eff']:.1f} of 1200"
 
 
+def _deap_rho(chans):
+    from scipy import stats as spstats
+    sys.path.insert(0, os.path.join(_ROOT, "scripts"))
+    from validate_index_deap import DEAP_CHANNELS, trial_index
+
+    c = _deap()
+    if c.get("missing"):
+        return float("nan"), "s01.dat absent"
+    picks = [DEAP_CHANNELS.index(ch) for ch in chans]
+    idx = np.array([trial_index(c["data"][t], picks) for t in range(c["data"].shape[0])])
+    ok = np.isfinite(idx)
+    rho, p = spstats.spearmanr(idx[ok], c["arousal"][ok])
+    return float(rho), f"{ok.sum()} trials, {'+'.join(chans)}, p {p:.3f}"
+
+
+def claim_deap_temporal_rho() -> tuple[float, str]:
+    """T7+P7+T8+P8, the DEAP sites around the Muse's TP9/TP10."""
+    return _deap_rho(("T7", "P7", "T8", "P8"))
+
+
+def claim_deap_frontal4_rho() -> tuple[float, str]:
+    """Four frontal channels, the like-for-like control for averaging four sites."""
+    return _deap_rho(("AF3", "AF4", "Fp1", "Fp2"))
+
+
+def claim_deap_temporal_neighbour_rho() -> tuple[float, str]:
+    """A neighbouring temporoparietal set, to show the 0.454 is not robust."""
+    return _deap_rho(("CP5", "CP6", "P7", "P8"))
+
+
 HEROIC_CLAIMS = {
     "MUSE sessions used":                 (claim_heroic_sessions,               36, 0),
     "MUSE subjects":                      (claim_heroic_subjects,               13, 0),
@@ -1416,6 +1446,9 @@ HEROIC_CLAIMS = {
     "MUSE AF8 prominence ratio":          (claim_heroic_prom_af8,               1.03, 0.01),
     "MUSE block rho":                     (claim_heroic_rho,                    0.905, 0.005),
     "MUSE autocorrelation overstatement": (claim_heroic_overstatement,          4.47, 0.05),
+    "DEAP T7+P7+T8+P8 arousal rho":       (claim_deap_temporal_rho,             0.454, 0.005),
+    "DEAP AF3+AF4+Fp1+Fp2 arousal rho":   (claim_deap_frontal4_rho,             0.342, 0.005),
+    "DEAP CP5+CP6+P7+P8 arousal rho":     (claim_deap_temporal_neighbour_rho,   0.295, 0.005),
 }
 PUBLIC_CLAIMS.update(HEROIC_CLAIMS)
 CLAIMS.update(PUBLIC_CLAIMS)
