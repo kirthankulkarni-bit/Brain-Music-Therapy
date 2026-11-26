@@ -918,9 +918,10 @@ def _pub(name: str) -> dict:
         return _PUB[name]
     path = os.path.join(_ROOT, "results", "public", name + ".json")
     if RECOMPUTE or not os.path.exists(path):
-        if name == "analyses":
+        if name in ("analyses", "heroic_analyses"):
             import subprocess
-            subprocess.run([sys.executable, os.path.join(_ROOT, "scripts", "public_analyses.py"),
+            script = "public_analyses.py" if name == "analyses" else "heroic_analyses.py"
+            subprocess.run([sys.executable, os.path.join(_ROOT, "scripts", script),
                             "--out", path], check=True)
         else:
             import estimator_sweep_public as esp
@@ -928,6 +929,8 @@ def _pub(name: str) -> dict:
                 "eegbci_af": ("eegbci", ["AF7", "AF8"], {}),
                 "eegbci_tp": ("eegbci", ["TP9", "TP10"], {}),
                 "synth_134": ("synthetic", ["AF7", "AF8"], {}),
+                "heroic_af": ("heroic", ["AF7", "AF8"], {}),
+                "heroic_tp": ("heroic", ["TP9", "TP10"], {}),
             }[name]
             res = esp.run(source, pair, seeds=50, ratio=1.34, hold=esp.HOLD_S, **kw)
             os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -1291,6 +1294,130 @@ PUBLIC_CLAIMS = {
     "PUB AF7 prominence ratio":           (claim_pub_prominence_af7,      1.35, 0.02),
     "PUB AF8 prominence ratio":           (claim_pub_prominence_af8,      1.41, 0.02),
 }
+
+
+# ------------------------------------------------- HEROIC: the same checks on a Muse 2
+#
+# Muse 2 recordings with real (unspliced) eye-state transitions; see public_data.py for
+# the source and the inclusion rules. Subjects contribute one to five sessions, so the
+# figures quoted are subject-level: each subject's median over their sessions, then the
+# median across the 13 subjects. --recompute needs the HEROIC download (HEROIC_DIR).
+
+def _hsub(config: str, key: str) -> float:
+    r = _pub("heroic_tp")
+    if key == "detect":
+        key = f"detect_h{r['hold_s']:g}"
+    return float(r["subject_summary"][config][key]["median"])
+
+
+def _halpha(pair: str) -> dict:
+    return _pub("heroic_analyses")["alpha"][pair]
+
+
+def claim_heroic_sessions() -> tuple[float, str]:
+    r = _pub("heroic_tp")
+    return r["n_sessions"], f"{r['n_subjects']} subjects after dedup and the 0.5 s gap rule"
+
+
+def claim_heroic_subjects() -> tuple[float, str]:
+    return _pub("heroic_tp")["n_subjects"], "sub005 and sub012 counted as one"
+
+
+def claim_heroic_deployed_detect() -> tuple[float, str]:
+    return _hsub("deployed", "detect"), "TP9/TP10, subject medians, includes reaction to cue"
+
+
+def claim_heroic_deployed_R() -> tuple[float, str]:
+    return _hsub("deployed", "R"), "TP9/TP10, subject medians"
+
+
+def claim_heroic_dominating_subjects() -> tuple[float, str]:
+    r = _pub("heroic_tp")
+    return len(r["dominating_subject_medians"]), f"of {len(r['alternatives'])}, subject medians"
+
+
+def claim_heroic_dominating_sessions() -> tuple[float, str]:
+    r = _pub("heroic_tp")
+    return len(r["dominating_medians"]), f"of {len(r['alternatives'])}, session medians"
+
+
+def claim_heroic_retuned_session_dominance() -> tuple[float, str]:
+    d = _pub("heroic_tp")["per_session_dominance"]["windowed 2/0.5/0.5"]
+    return d["fraction_of_sessions"], f"of {d['n']} sessions"
+
+
+def claim_heroic_floor_ratio() -> tuple[float, str]:
+    return (_hsub("streaming o2 t=0.1", "R") / _hsub("deployed", "R"),
+            f"floor R {_hsub('streaming o2 t=0.1', 'R'):.2f}")
+
+
+def claim_heroic_af_ratio() -> tuple[float, str]:
+    a = _halpha("AF7/AF8")
+    return a["ratio_median_subjects"], f"{a['subjects_increase']}/{a['n_subjects']} subjects rise"
+
+
+def claim_heroic_af_p() -> tuple[float, str]:
+    return _halpha("AF7/AF8")["wilcoxon_p_subjects"], "Wilcoxon over subjects"
+
+
+def claim_heroic_af_rising() -> tuple[float, str]:
+    a = _halpha("AF7/AF8")
+    return a["subjects_increase"], f"of {a['n_subjects']}"
+
+
+def claim_heroic_tp_ratio() -> tuple[float, str]:
+    a = _halpha("TP9/TP10")
+    return a["ratio_median_subjects"], f"{a['subjects_increase']}/{a['n_subjects']} subjects rise"
+
+
+def claim_heroic_tp_p() -> tuple[float, str]:
+    return _halpha("TP9/TP10")["wilcoxon_p_subjects"], "Wilcoxon over subjects"
+
+
+def claim_heroic_tp_rising() -> tuple[float, str]:
+    a = _halpha("TP9/TP10")
+    return a["subjects_increase"], f"of {a['n_subjects']}"
+
+
+def claim_heroic_prom_af7() -> tuple[float, str]:
+    return _halpha("AF7/AF8")["prominence_ratio_median_subjects"]["AF7"], "criterion 1.2"
+
+
+def claim_heroic_prom_af8() -> tuple[float, str]:
+    return _halpha("AF7/AF8")["prominence_ratio_median_subjects"]["AF8"], "criterion 1.2"
+
+
+def claim_heroic_rho() -> tuple[float, str]:
+    a = _pub("heroic_analyses")["autocorrelation"]
+    return a["rho_median"], f"{a['n_blocks']} clean 61 s eye blocks, AF7/AF8"
+
+
+def claim_heroic_overstatement() -> tuple[float, str]:
+    a = _pub("heroic_analyses")["autocorrelation"]
+    return a["overstatement"], f"N_eff {a['session_n_eff']:.1f} of 1200"
+
+
+HEROIC_CLAIMS = {
+    "MUSE sessions used":                 (claim_heroic_sessions,               36, 0),
+    "MUSE subjects":                      (claim_heroic_subjects,               13, 0),
+    "MUSE deployed detection latency":    (claim_heroic_deployed_detect,        8.49, 0.05),
+    "MUSE deployed R":                    (claim_heroic_deployed_R,             1.59, 0.02),
+    "MUSE alternatives dominating (subj)": (claim_heroic_dominating_subjects,   9, 0),
+    "MUSE alternatives dominating (sess)": (claim_heroic_dominating_sessions,   9, 0),
+    "MUSE retuned dominance, sessions":   (claim_heroic_retuned_session_dominance, 0.829, 0.005),
+    "MUSE floor / deployed R":            (claim_heroic_floor_ratio,            2.68, 0.02),
+    "MUSE AF7/AF8 alpha ratio":           (claim_heroic_af_ratio,               1.06, 0.01),
+    "MUSE AF7/AF8 Wilcoxon p":            (claim_heroic_af_p,                   0.11, 0.005),
+    "MUSE AF7/AF8 subjects rising":       (claim_heroic_af_rising,              9, 0),
+    "MUSE TP9/TP10 alpha ratio":          (claim_heroic_tp_ratio,               1.82, 0.02),
+    "MUSE TP9/TP10 Wilcoxon p":           (claim_heroic_tp_p,                   0.021, 0.001),
+    "MUSE TP9/TP10 subjects rising":      (claim_heroic_tp_rising,              10, 0),
+    "MUSE AF7 prominence ratio":          (claim_heroic_prom_af7,               1.08, 0.01),
+    "MUSE AF8 prominence ratio":          (claim_heroic_prom_af8,               1.03, 0.01),
+    "MUSE block rho":                     (claim_heroic_rho,                    0.905, 0.005),
+    "MUSE autocorrelation overstatement": (claim_heroic_overstatement,          4.47, 0.05),
+}
+PUBLIC_CLAIMS.update(HEROIC_CLAIMS)
 CLAIMS.update(PUBLIC_CLAIMS)
 
 

@@ -18,6 +18,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.ticker  # noqa: E402
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RES = os.path.join(_ROOT, "results", "public")
@@ -134,9 +135,76 @@ def fig_alpha():
     return path
 
 
+def fig_heroic():
+    """Muse 2 (HEROIC): eye-state alpha at the cue, and the estimator trade-off on TP9/TP10."""
+    an = load("heroic_analyses.json")["alpha"]
+    res = load("heroic_tp.json")
+    dk = f"detect_h{res['hold_s']:g}"
+    fig, (a0, a1) = plt.subplots(1, 2, figsize=(7.6, 3.4),
+                                 gridspec_kw={"width_ratios": [1, 1.15]})
+    for label, color in (("AF7/AF8", ACCENT), ("TP9/TP10", BAND)):
+        v = an[label]
+        x = np.asarray(v["trace_rel_s"])
+        q = np.asarray(v["trace_q"])
+        a0.fill_between(x, q[0], q[1], color=color, alpha=0.15, lw=0)
+        a0.plot(x, v["trace_median"], color=color, lw=1.6,
+                label=f"{label}: {v['ratio_median_subjects']:.2f}x, "
+                      f"{v['subjects_increase']}/{v['n_subjects']} subjects")
+    a0.axvline(0, color=INK, lw=0.8, ls=":")
+    a0.text(0.5, 0.03, "cue: open eyes", transform=a0.get_xaxis_transform(), fontsize=7.5,
+            color=MUTED)
+    a0.axhline(1.0, color=INK, lw=0.5)
+    a0.set_yscale("log")
+    a0.set_yticks([0.25, 0.5, 1.0, 2.0])
+    a0.yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter("%g"))
+    a0.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    a0.set_xlabel("time from cue (s)")
+    a0.set_ylabel("alpha / session's eyes-closed mean")
+    a0.set_title("Alpha at eye opening, Muse 2", fontsize=9)
+    a0.legend(frameon=False, fontsize=7.5, loc="upper right")
+
+    s = res["subject_summary"]
+    base = s["deployed"]
+    bx, by = base[dk]["median"], base["R"]["median"]
+    for name in ["deployed"] + res["alternatives"]:
+        m = s[name]
+        x, y = m[dk]["median"], m["R"]["median"]
+        deployed = name == "deployed"
+        stream = name.startswith("streaming")
+        color = ACCENT if deployed else (INK if stream else BAND)
+        a1.scatter(x, y, s=90 if deployed else 45,
+                   marker="s" if deployed else ("^" if stream else "o"),
+                   color=color, zorder=3, edgecolor="white", linewidth=0.8)
+    a1.set_xscale("log")
+    xl, yl = a1.get_xlim(), (0, a1.get_ylim()[1] * 1.05)
+    a1.fill_between([xl[0], bx], by, yl[1], color=BAND, alpha=0.08, zorder=0)
+    a1.axhline(by, color=ACCENT, lw=0.9, ls=":")
+    a1.axvline(bx, color=ACCENT, lw=0.9, ls=":")
+    a1.set_xlim(xl)
+    a1.set_ylim(yl)
+    a1.set_xticks([1, 2, 4, 8])
+    a1.xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter("%g"))
+    a1.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    a1.annotate("deployed", xy=(bx, by), xytext=(bx * 0.45, by * 0.45), fontsize=8,
+                color=ACCENT, arrowprops=dict(arrowstyle="->", color=ACCENT, lw=0.9))
+    a1.set_xlabel("detection latency (s, log scale)")
+    a1.set_ylabel(r"information rate $R$")
+    a1.set_title(f"TP9/TP10, {res['n_subjects']} subjects (subject medians)\n"
+                 f"{len(res['dominating_subject_medians'])} of {len(res['alternatives'])} "
+                 "alternatives beat deployed on both axes", fontsize=9)
+    path = os.path.join(OUT, "public_heroic_muse.png")
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+    return path
+
+
 def main() -> int:
     os.makedirs(OUT, exist_ok=True)
-    for fn in (fig_estimator, fig_autocorrelation, fig_alpha):
+    figs = [fig_estimator, fig_autocorrelation, fig_alpha]
+    if os.path.exists(os.path.join(RES, "heroic_analyses.json")):
+        figs.append(fig_heroic)
+    for fn in figs:
         print(f"  OK  {os.path.basename(fn())}")
     return 0
 

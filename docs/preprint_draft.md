@@ -8,9 +8,9 @@ system.*
 **DRAFT — sections 1–8.** §9 (planned study) is specified in
 [analysis_plan.md](analysis_plan.md), frozen at tag `preregistration-v1`.
 
-Numbers in this draft are checked by `python scripts/verify_claims.py` (56/56 reproduce).
-**Since 2026-11-22 every EEG result here comes from public data (PhysioNet EEGBCI, DEAP) or
-synthetic signals.** Recordings made during development, the author's pilot session
+Numbers in this draft are checked by `python scripts/verify_claims.py` (74/74 reproduce).
+**Since 2026-11-22 every EEG result here comes from public data (PhysioNet EEGBCI, HEROIC,
+DEAP) or synthetic signals.** Recordings made during development, the author's pilot session
 included, are not used for any claim; the self-recorded claims still run with
 `verify_claims.py --self-data` but are not cited. The submitted version is
 [arxiv_short.md](arxiv_short.md); this draft keeps the longer argument and must agree
@@ -34,7 +34,8 @@ precision modes; nothing reaches realtime; the bound is the autoregressive decod
 not arithmetic; a precomputed library covers the controller's finite prompt space exactly
 and cuts worst-case response 8×; on 109 public subjects the deployed estimator loses to
 all 9 alternatives on both latency and information rate, and the 0.439 s floor is 1.50× as
-informative; and four statistical cautions for closed-loop EEG. State explicitly that no
+informative; the same 9 of 9 holds on Muse 2 recordings (HEROIC, 13 subjects, real
+transitions), where the index channels AF7/AF8 show almost no eye-state alpha; and four statistical cautions for closed-loop EEG. State explicitly that no
 efficacy data are reported and that all EEG results use public or synthetic data.)*
 
 ---
@@ -337,6 +338,35 @@ Muse (§8). And the retuned controller has not been listened to: zero sub-crossf
 switches establishes that transitions are resolvable, not that the resulting rate of
 change is musically acceptable.
 
+### 3.5 The result survives a real Muse and a real transition
+
+Everything above is a gel cap and a splice. HEROIC (Sugden et al., 2024; Zenodo
+10.5281/zenodo.11493897, CC BY 4.0) is neither: participants wore a Muse 2 at home or in the
+lab, and every session runs about 61 s eyes closed, a spoken cue, and about 61 s eyes open,
+recorded continuously at 256 Hz. The transition is real, and the latency we measure includes
+the participant's reaction to the cue, whose onset is the transition time.
+
+Two rules were fixed before any estimator touched the data. Four recordings are
+byte-identical copies filed under two subject folders (sub005 and sub012), so each is kept
+once and the two folders count as one subject. And any recording with a gap over 0.5 s in
+the eye blocks is excluded; shorter Bluetooth jitter is interpolated onto a uniform grid.
+That leaves **36 of 61 unique recordings, from 13 subjects**. Subjects contribute one to
+five sessions, so the figures below are subject-level: each subject's median over their own
+sessions, then the median across subjects.
+
+On TP9/TP10, **all 9 alternatives again beat the deployed estimator on both axes**, on
+subject medians and on session medians. The deployed estimator takes **8.49 s** to register
+eye opening, which is longer than on PhysioNet for the right reason: a real eye opening
+adds reaction time and a gradual fade of alpha that a splice does not have. The retuned
+windowed setting beats it on both axes in 82.9% of sessions, and the floor's information
+rate is **2.68×** the deployed value.
+
+The comparison had to be run on TP9/TP10, and why is the more important finding (§5): on a
+Muse, AF7/AF8 barely see the eyes close. Run on those channels, the sweep produced deployed
+"detections" at 0.99 s, which is impossible after a real step through a 4 s window and a
+3 s smoother. The estimator was crossing a midpoint between two nearly equal levels by
+chance. We report that run as uninterpretable rather than as a result.
+
 ---
 
 ## 4. Architecture: a precomputed library that covers the controller exactly
@@ -454,6 +484,24 @@ The rejection threshold was moved from 150 µV to 350 µV during development, be
 strict threshold removes eyes-open windows preferentially (blinks happen with the eyes
 open) and inflates the contrast. 350 µV is what every number above uses.
 
+**The same check on a Muse fails at the index channels.** On the HEROIC recordings (§3.5),
+alpha at AF7/AF8 rose by a median of only **1.06×** on eye closure, in 9 of 13 subjects
+(Wilcoxon over subjects p = 0.11), and the alpha peak hardly moved (prominence ratios 1.08 at
+AF7, 1.03 at AF8). TP9/TP10 in the same sessions rose **1.82×**, in 10 of 13 subjects
+(p = 0.021). This is the pattern the development recordings showed before the paper dropped
+them — TP9/TP10 strong, AF7/AF8 weak and without a clear peak — now on 13 people who are not
+the author.
+
+One plausible mechanism is the reference. The Muse references to Fpz, a few centimetres from
+AF7 and AF8, so alpha common to the reference and the frontal sites cancels in the recorded
+difference, while TP9/TP10 sit far enough away to keep it. That is untested here. Whatever
+the cause, the arousal index is computed from the two channels where, on its own hardware,
+one of the most robust effects in EEG is barely visible. It does not follow that the index
+says nothing about arousal, which is a smaller and different signal. It does follow that
+nothing in this paper shows those two channels record cortex reliably on a Muse, and that
+the obvious next experiment is the DEAP arousal check repeated with the index computed from
+TP9/TP10, or after re-referencing.
+
 **Index construct validity.** Two separable claims underlie the measurement: that the
 electrodes record cortex, and that log(beta/alpha) measures *arousal*. The second was
 inherited from the literature, so we tested it on DEAP, which pairs 32-channel EEG with
@@ -548,6 +596,8 @@ by √(1200/51.0) ≈ **4.85×** (Figure 2).
 The time scale is set mostly by the smoother, so this is a property of the design rather
 than of any listener. One-minute resting runs also contain none of the slow drift of a
 longer session, which makes 0.918 a lower bound on what a closed-loop session would show.
+On the Muse recordings, within each clean 61 s eye block, the same index gives rho = 0.905
+and a 4.47× overstatement, so the caution does not depend on the cap.
 Every inferential quantity in this project either uses the effective sample size or a
 permutation null that preserves the autocorrelation.
 
@@ -701,18 +751,19 @@ it is not one this work answers.** It is the most important threat to the approa
 should be tested directly — for example by manipulating delay experimentally, which the
 architecture in §4 makes cheap.
 
-**The data are not from the target hardware.** Every analysis-path result comes from a
-64-channel gel cap sampled at 160 Hz, or from synthetic signals. The Muse's dry electrodes
-are noisier and more prone to artefact, so absolute values of d and R will differ, and the
-9-of-9 dominance result needs confirming on a Muse before it is relied on. The transitions
-are spliced and therefore instantaneous, where a real eye closure takes time to raise
-alpha, so the detection latencies are upper bounds on the estimator alone. T9/T10 stand in
-for TP9/TP10. The resting runs last one minute, which limits §7.1 and §7.4.
+**Only part of the data is from the target hardware.** The PhysioNet results come from a
+64-channel gel cap sampled at 160 Hz, with spliced, instantaneous transitions, T9/T10
+standing in for TP9/TP10, and one-minute runs that limit §7.1 and §7.4. The HEROIC
+recordings (§3.5) are a Muse with real transitions and confirm the estimator comparison, but
+only at TP9/TP10 and only from 13 subjects in one protocol. On those same recordings the
+index channels showed almost no eye-state alpha (§5), so the arousal index is weakly
+supported on the hardware it is built for. Moving the index to TP9/TP10, or re-referencing,
+are the alternatives, and neither has been evaluated.
 
 **Frontal channels only.** The Muse 2 has no occipital electrodes, and frontal alpha is
 weaker and more contaminated by ocular and muscle artefact than occipital alpha. The
-PhysioNet frontal channels pass the alpha-peak check (§5); whether dry frontal contacts
-do is the open question.
+PhysioNet frontal channels pass the alpha-peak check (§5); on a Muse, in HEROIC, they do
+not.
 
 **Single site, single headset, single operator.** The operator cannot be blinded, since
 running the sham arm requires supplying the yoked source explicitly.
@@ -843,6 +894,13 @@ remains unread behind a paywall. URLs accessed 2026-08-28, re-checked 2026-09-06
 14. **MEG and EEG data analysis with MNE-Python.** A. Gramfort et al., *Frontiers in
     Neuroscience* 7:267 (2013). doi:10.3389/fnins.2013.00267. Loader for the PhysioNet
     data. **Added and verified against Crossref and PubMed 2026-11-22.**
+
+15. **HEROIC: a platform for remote collection of electroencephalographic data using
+    consumer-grade brain wearables.** R. J. Sugden, I. Campbell, V.-L. L.
+    Pham-Kim-Nghiem-Phu, R. Higazy, E. Dent, K. Edelstein, A. Leon & P. Diamandis, *BMC
+    Bioinformatics* 25:243 (2024). doi:10.1186/s12859-024-05865-9. Data: Zenodo
+    10.5281/zenodo.11493897 (CC BY 4.0). The Muse 2 dataset of §3.5 and §5.
+    **Added 2026-11-25; metadata checked against Crossref.**
 
 ### Outstanding literature work
 

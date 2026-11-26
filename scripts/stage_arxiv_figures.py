@@ -33,6 +33,7 @@ FIGURES = (
     "public_estimator_tradeoff.png",
     "public_autocorrelation.png",
     "public_alpha_validation.png",
+    "public_heroic_muse.png",
 )
 
 

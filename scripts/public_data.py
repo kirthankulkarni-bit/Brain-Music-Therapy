@@ -11,6 +11,11 @@ SOURCES
              are one-minute eyes-open and eyes-closed resting baselines. Downloaded by
              MNE on first use into ~/mne_data; nothing is stored in this repository.
 
+  heroic     HEROIC (Zenodo 10.5281/zenodo.11493897, CC BY 4.0): Muse 2 sessions with a
+             real eyes-closed -> eyes-open transition at a spoken cue. The only source here
+             recorded on the system's own hardware. Must be downloaded by hand; see the
+             HEROIC section below.
+
   synthetic  1/f background plus an alpha-band component whose power steps by a known
              ratio between alternating 60 s eyes-open and eyes-closed blocks, at the
              Muse 2's 256 Hz. Transition times are exact by construction.
@@ -139,8 +144,97 @@ def synthetic_session(seed: int, ratio: float, blocks: int = 6, block_s: float =
                    timeline=timeline)
 
 
+# --------------------------------------------------------------------- HEROIC (Muse 2)
+#
+# HEROIC (Zenodo 10.5281/zenodo.11493897, CC BY 4.0): Muse 2 recordings made at home and in
+# the lab with the HEROIC platform. Every session opens with ~61 s eyes closed, a ~5 s
+# spoken cue, then ~61 s eyes open (two subjects repeat the pair), recorded continuously
+# at the Muse's 256 Hz on TP9, AF7, AF8, TP10. Unlike EEGBCI, the transitions are REAL:
+# nothing is spliced, and the measured latency includes the participant's reaction to the
+# cue. The transition is placed at cue onset (the end of the preceding block), which is
+# when the participant is told to change state.
+#
+# Rules fixed before any estimator was run on this data:
+#   * byte-identical recordings are kept once. The archive holds four sub005 sessions
+#     that are copies of four sub012 sessions; those two folders are treated as ONE
+#     subject, since which of them recorded it cannot be told.
+#   * a session is excluded if any inter-sample gap inside the eye blocks (+-5 s)
+#     exceeds 0.5 s. Shorter jitter is interpolated onto a uniform 256 Hz grid.
+#
+# Not stored in this repository. Download the zip from Zenodo, extract it, and point
+# HEROIC_DIR at the public_software_paper_data folder (default ~/eeg_data/heroic/x/...).
+
+HEROIC_FS = 256.0
+HEROIC_MAX_GAP_S = 0.5
+HEROIC_DIR = os.environ.get("HEROIC_DIR", os.path.join(
+    os.path.expanduser("~"), "eeg_data", "heroic", "x", "public_software_paper_data"))
+_HEROIC_SAME_PERSON = {"sub005": "sub005=sub012", "sub012": "sub005=sub012"}
+
+
+def heroic_files(root: str = HEROIC_DIR) -> list[str]:
+    """Unique EEG.csv paths, duplicates removed by content hash, in sorted order."""
+    import glob
+    import hashlib
+
+    seen, out = set(), []
+    for f in sorted(glob.glob(os.path.join(root, "sub*", "*", "*", "EEG.csv"))):
+        h = hashlib.md5(open(f, "rb").read()).hexdigest()
+        if h not in seen:
+            seen.add(h)
+            out.append(f)
+    return out
+
+
+def heroic_session(path: str) -> Session:
+    """One HEROIC recording on a uniform grid, or ValueError if it breaks the gap rule."""
+    import json
+
+    a = np.genfromtxt(path, delimiter=",", skip_header=1)
+    t, raw = a[:, 0], a[:, 1:5].T                                  # TP9, AF7, AF8, TP10
+    info = json.load(open(os.path.join(os.path.dirname(path), "session_info.json")))
+    blocks = [b for b in info["task_log"] if b["name"] == "eyes_closed_eyes_open"]
+    if not blocks:
+        raise ValueError("no eye blocks")
+    kinds = []
+    for b in blocks:
+        inside = (t >= b["start"]) & (t <= b["end"])
+        marks = set(np.unique(a[inside, 5]).astype(int)) & {3, 4}
+        if len(marks) != 1:
+            raise ValueError(f"block markers {sorted(marks)}")
+        kinds.append(EC if marks == {3} else EO)
+
+    lo, hi = blocks[0]["start"] - 5.0, blocks[-1]["end"] + 5.0
+    span = (t >= lo) & (t <= hi)
+    gap = float(np.diff(t[span]).max())
+    if gap > HEROIC_MAX_GAP_S:
+        raise ValueError(f"{gap:.2f} s gap in the eye blocks")
+    t0 = t[span][0]
+    grid = np.arange(t0, t[span][-1], 1.0 / HEROIC_FS)
+    chans = np.vstack([np.interp(grid, t, ch) for ch in raw])
+
+    rel = lambda x: float(x - t0)                                  # noqa: E731
+    timeline = [(rel(blocks[0]["start"]), kinds[0])]
+    timeline += [(rel(blocks[i - 1]["end"]), kinds[i]) for i in range(1, len(blocks))]
+    timeline.append((rel(blocks[-1]["end"]), None))
+    parts = os.path.normpath(path).split(os.sep)
+    sub, setting, rec = parts[-4], parts[-3], parts[-2][:15]
+    return Session(chans=chans, fs=HEROIC_FS, channels=MUSE_NAMES,
+                   name=f"{sub}/{setting}/{rec}", subject=_HEROIC_SAME_PERSON.get(sub, sub),
+                   timeline=timeline)
+
+
 def sessions(source: str, seeds: int = 50, ratio: float = 1.34, subjects=None):
     """Yield sessions, skipping (and naming) any subject whose files fail to load."""
+    if source == "heroic":
+        files = heroic_files()
+        if not files:
+            raise FileNotFoundError(f"no HEROIC data under {HEROIC_DIR}; see public_data.py")
+        for f in files:
+            try:
+                yield heroic_session(f)
+            except ValueError as exc:
+                print(f"  [skip] {os.path.relpath(f, HEROIC_DIR)}: {exc}")
+        return
     if source == "eegbci":
         for s in (subjects or EEGBCI_SUBJECTS):
             try:

@@ -22,6 +22,12 @@ Usage:
     python scripts/estimator_sweep_public.py --source eegbci --pair AF7 AF8 --out results/public/eegbci_af.json
     python scripts/estimator_sweep_public.py --source eegbci --pair TP9 TP10 --out results/public/eegbci_tp.json
     python scripts/estimator_sweep_public.py --source synthetic --ratio 1.34 --seeds 50 --out results/public/synth_134.json
+    python scripts/estimator_sweep_public.py --source heroic --pair AF7 AF8 --out results/public/heroic_af.json
+
+HEROIC is Muse 2 data with real (unspliced) transitions and several sessions per subject,
+so its result also carries a subject-level summary: each subject's median over their own
+sessions, then the median across subjects. That is the figure to quote; the session-level
+one lets a subject with five sessions count five times.
 """
 
 from __future__ import annotations
@@ -199,10 +205,11 @@ def summarise(rows, key):
 def run(source, pair_names, seeds, ratio, hold, subjects=None):
     per = {}
     rejection = []
-    names = []
+    names, subject_of = [], {}
     for sess in sessions(source, seeds=seeds, ratio=ratio, subjects=subjects):
         pair = tuple(site(p, source) for p in pair_names)
         names.append(sess["name"])
+        subject_of[sess["name"]] = sess.get("subject", sess["name"])
         for name, w, h, tau in WINDOWED:
             t, y, rej = windowed(sess, pair, w, h, tau)
             if name == "deployed":
@@ -229,6 +236,28 @@ def run(source, pair_names, seeds, ratio, hold, subjects=None):
                 if all(np.isfinite([a[dk], b[dk], a["R"], b["R"]]))]
         dom[name] = {"fraction_of_sessions": float(np.mean(wins)) if wins else None,
                      "n": len(wins)}
+    # Subject level: median over each subject's sessions, then across subjects.
+    subj = sorted(set(subject_of.values()))
+    subject_summary = {}
+    for name, rows in per.items():
+        by = {}
+        for r in rows:
+            by.setdefault(subject_of[r["session"]], []).append(r)
+        subject_summary[name] = {}
+        for k in (dk, "detect_h0", "d", "rho", "ind_min", "R"):
+            meds = []
+            for rs in by.values():
+                v = np.asarray([r[k] for r in rs], dtype=float)
+                v = v[np.isfinite(v)]
+                if v.size:
+                    meds.append({"x": float(np.median(v))})
+            subject_summary[name][k] = summarise(meds, "x")
+    sb = subject_summary["deployed"]
+    dominating_subjects = [n for n in alternatives
+                           if subject_summary[n][dk]["median"] is not None
+                           and subject_summary[n][dk]["median"] < sb[dk]["median"]
+                           and subject_summary[n]["R"]["median"] > sb["R"]["median"]]
+
     b = summary["deployed"]
     dominating = [n for n in alternatives
                   if summary[n][dk]["median"] is not None
@@ -238,6 +267,9 @@ def run(source, pair_names, seeds, ratio, hold, subjects=None):
         "source": source, "pair": list(pair_names), "hold_s": hold,
         "ratio": ratio if source == "synthetic" else None,
         "n_sessions": len(names), "sessions": names,
+        "n_subjects": len(subj), "subject_of": subject_of,
+        "subject_summary": subject_summary,
+        "dominating_subject_medians": dominating_subjects,
         "deployed_rejection": summarise([{"x": r} for r in rejection], "x"),
         "alternatives": alternatives, "frontier": [n for n, *_ in FRONTIER],
         "dominating_medians": dominating,
@@ -267,11 +299,19 @@ def print_table(res):
     print(f"\n  alternatives beating deployed on both medians: "
           f"{len(res['dominating_medians'])} of {len(res['alternatives'])}")
     print(f"  deployed R = {base_R:.2f}")
+    if res.get("n_subjects", res["n_sessions"]) < res["n_sessions"]:
+        print(f"  subject level ({res['n_subjects']} subjects): "
+              f"{len(res['dominating_subject_medians'])} of {len(res['alternatives'])} beat deployed")
+        ss = res["subject_summary"]
+        for name in ["deployed"] + res["alternatives"] + res["frontier"]:
+            m = {k: (v["median"] if v["median"] is not None else float("nan"))
+                 for k, v in ss[name].items()}
+            print(f"    {name:<22}{m[dk]:>7.2f}s{m['d']:>7.2f}{m['ind_min']:>9.1f}{m['R']:>7.2f}")
 
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
-    p.add_argument("--source", choices=["eegbci", "synthetic"], required=True)
+    p.add_argument("--source", choices=["eegbci", "synthetic", "heroic"], required=True)
     p.add_argument("--pair", nargs=2, default=["AF7", "AF8"])
     p.add_argument("--seeds", type=int, default=50)
     p.add_argument("--ratio", type=float, default=1.34)
