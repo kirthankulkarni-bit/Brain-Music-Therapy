@@ -918,9 +918,10 @@ def _pub(name: str) -> dict:
         return _PUB[name]
     path = os.path.join(_ROOT, "results", "public", name + ".json")
     if RECOMPUTE or not os.path.exists(path):
-        if name in ("analyses", "heroic_analyses"):
+        if name in ("analyses", "heroic_analyses", "tp_index"):
             import subprocess
-            script = "public_analyses.py" if name == "analyses" else "heroic_analyses.py"
+            script = {"analyses": "public_analyses.py", "heroic_analyses": "heroic_analyses.py",
+                      "tp_index": "tp_index.py"}[name]
             subprocess.run([sys.executable, os.path.join(_ROOT, "scripts", script),
                             "--out", path], check=True)
         else:
@@ -1451,6 +1452,117 @@ HEROIC_CLAIMS = {
     "DEAP CP5+CP6+P7+P8 arousal rho":     (claim_deap_temporal_neighbour_rho,   0.295, 0.005),
 }
 PUBLIC_CLAIMS.update(HEROIC_CLAIMS)
+
+
+# ------------------------------------ TP9/TP10 as the index channels (tp_index.py)
+
+def _tp(dataset: str, pair: str) -> dict:
+    return _pub("tp_index")[dataset][pair]
+
+
+def _pct(dataset, pair, band):
+    """Eyes-open vs eyes-closed band power change, percent."""
+    x = _tp(dataset, pair)["eo_minus_ec_log10"][band]
+    return float((10 ** x - 1) * 100), f"{pair}, EO vs EC, subject medians"
+
+
+def claim_tp_af_alpha_pct():
+    return _pct("heroic", "AF7/AF8", "alpha")
+
+
+def claim_tp_af_beta_pct():
+    return _pct("heroic", "AF7/AF8", "beta")
+
+
+def claim_tp_af_gamma_pct():
+    return _pct("heroic", "AF7/AF8", "gamma")
+
+
+def claim_tp_tp_alpha_pct():
+    return _pct("heroic", "TP9/TP10", "alpha")
+
+
+def claim_tp_tp_beta_pct():
+    return _pct("heroic", "TP9/TP10", "beta")
+
+
+def claim_tp_emg_af():
+    return _tp("heroic", "AF7/AF8")["emg_r_subject_median"], "index vs log gamma, within state"
+
+
+def claim_tp_emg_tp():
+    return _tp("heroic", "TP9/TP10")["emg_r_subject_median"], "index vs log gamma, within state"
+
+
+def claim_tp_rej_af():
+    return _tp("heroic", "AF7/AF8")["rejection_subject_median"], "350 uV rule, subject medians"
+
+
+def claim_tp_rej_tp():
+    return _tp("heroic", "TP9/TP10")["rejection_subject_median"], "350 uV rule, subject medians"
+
+
+def claim_tp_rho_muse():
+    a = _tp("heroic", "TP9/TP10")["autocorrelation"]
+    return a["rho_median"], f"{a['n']} clean eye blocks"
+
+
+def claim_tp_rho_eegbci():
+    a = _tp("eegbci", "T9/T10")["autocorrelation"]
+    return a["rho_median"], f"{a['n']} resting runs"
+
+
+def _tpdeap(pair, key):
+    d = _pub("tp_index")["deap"]
+    if d.get("missing"):
+        return float("nan"), "s01.dat absent"
+    return d[pair][key], f"{d[pair]['n_trials']} trials, p {d[pair].get('partial_p', 0):.3f}"
+
+
+def claim_tp_deap_gamma():
+    return _tpdeap("T7/P7/T8/P8", "gamma_arousal_rho")
+
+
+def claim_tp_deap_partial_t():
+    return _tpdeap("T7/P7/T8/P8", "index_arousal_partial_gamma")
+
+
+def claim_tp_deap_partial_af():
+    return _tpdeap("AF3/AF4", "index_arousal_partial_gamma")
+
+
+def claim_tp_emg_eegbci_af():
+    return _tp("eegbci", "AF7/AF8")["emg_r_median"], "resting runs, index vs log gamma"
+
+
+def claim_tp_emg_eegbci_t():
+    return _tp("eegbci", "T9/T10")["emg_r_median"], "resting runs, index vs log gamma"
+
+
+def claim_tp_deap_gamma_p():
+    return _tpdeap("T7/P7/T8/P8", "gamma_arousal_p")
+
+
+TP_CLAIMS = {
+    "TP: Muse AF alpha change, EO vs EC %": (claim_tp_af_alpha_pct,   -5.4, 0.3),
+    "TP: Muse AF beta change %":           (claim_tp_af_beta_pct,     12.4, 0.3),
+    "TP: Muse AF gamma change %":          (claim_tp_af_gamma_pct,    17.8, 0.3),
+    "TP: Muse TP alpha change %":          (claim_tp_tp_alpha_pct,   -45.1, 0.3),
+    "TP: Muse TP beta change %":           (claim_tp_tp_beta_pct,    -15.6, 0.3),
+    "TP: Muse AF index~gamma r":           (claim_tp_emg_af,          0.21, 0.005),
+    "TP: Muse TP index~gamma r":           (claim_tp_emg_tp,          0.02, 0.005),
+    "TP: Muse AF rejection":               (claim_tp_rej_af,          0.022, 0.0005),
+    "TP: Muse TP rejection":               (claim_tp_rej_tp,          0.045, 0.0005),
+    "TP: Muse TP block rho":               (claim_tp_rho_muse,        0.911, 0.005),
+    "TP: PhysioNet T9/T10 rho":            (claim_tp_rho_eegbci,      0.906, 0.005),
+    "TP: DEAP temporal gamma~arousal":     (claim_tp_deap_gamma,     -0.095, 0.005),
+    "TP: DEAP temporal partial (gamma)":   (claim_tp_deap_partial_t,  0.492, 0.005),
+    "TP: DEAP AF3/AF4 partial (gamma)":    (claim_tp_deap_partial_af, 0.298, 0.005),
+    "TP: PhysioNet AF index~gamma r":      (claim_tp_emg_eegbci_af,   0.07, 0.005),
+    "TP: PhysioNet T9/T10 index~gamma r":  (claim_tp_emg_eegbci_t,    0.04, 0.005),
+    "TP: DEAP temporal gamma~arousal p":   (claim_tp_deap_gamma_p,    0.56, 0.005),
+}
+PUBLIC_CLAIMS.update(TP_CLAIMS)
 CLAIMS.update(PUBLIC_CLAIMS)
 
 

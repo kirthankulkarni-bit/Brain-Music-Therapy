@@ -8,7 +8,7 @@ system.*
 **DRAFT — sections 1–8.** §9 (planned study) is specified in
 [analysis_plan.md](analysis_plan.md), frozen at tag `preregistration-v1`.
 
-Numbers in this draft are checked by `python scripts/verify_claims.py` (77/77 reproduce).
+Numbers in this draft are checked by `python scripts/verify_claims.py` (94/94 reproduce).
 **Since 2026-11-22 every EEG result here comes from public data (PhysioNet EEGBCI, HEROIC,
 DEAP) or synthetic signals.** Recordings made during development, the author's pilot session
 included, are not used for any claim; the self-recorded claims still run with
@@ -311,7 +311,8 @@ them: the retuned windowed configuration beats the deployed one on both axes in 
 of subjects individually.
 
 The mechanism connects this section to §7. At tau = 3 s consecutive outputs are nearly
-identical (rho = 0.972), yielding **0.9 independent observations per minute**. That is the
+identical (rho = 0.972 over the 120 s session, transitions included), yielding **0.9
+independent observations per minute**. That is the
 same smoothing that gives a 20-minute session an effective sample size of 51 (§7.1).
 **The smoother is simultaneously the largest latency term and the dominant cause of the
 autocorrelation that collapses statistical power.** Shortening it pays twice.
@@ -511,6 +512,29 @@ bootstrap interval for the frontal-minus-temporal difference runs from -0.47 to 
 nine channel sets were tried on 40 trials from one participant. The defensible reading is
 narrower: moving the index to TP9/TP10 need not cost it sensitivity to arousal, and on a
 Muse those are the channels that demonstrably record cortex.
+
+**Is the temporal index muscle?** That was the worry about moving it. TP9 and TP10 sit over
+the temporalis, and muscle activity is broadband, so it raises beta and with it log(beta/
+alpha). An index there could correlate with arousal because people clench when aroused.
+`scripts/tp_index.py` checks this with the extractor's own 30–45 Hz gamma band as the muscle
+proxy, and finds the opposite of the worry:
+
+- Within each eye state, the TP9/TP10 index is essentially unrelated to gamma power on the
+  Muse (median Spearman 0.02 across subjects). The AF7/AF8 index is weakly coupled to it
+  (0.21). On PhysioNet both are small (0.04 and 0.07).
+- Band by band, eye opening on the Muse changes AF7/AF8 alpha by only −5% while beta rises
+  12% and gamma 18%. Whatever eye-state contrast the frontal index has is high-frequency
+  power, plausibly from the muscles around the eyes. At TP9/TP10 alpha falls 45% and beta
+  16%.
+- On DEAP, gamma at T7/P7/T8/P8 does not track arousal (rho = −0.095, p = 0.56). Partialling
+  it out leaves the temporal index at +0.492 (p = 0.001) and AF3/AF4 at +0.298.
+
+The move costs little elsewhere. Lag-1 autocorrelation of the smoothed index is 0.911 at
+TP9/TP10 against 0.905 at AF7/AF8 on the Muse, and 0.906 against 0.918 on PhysioNet T9/T10,
+so §7.1's N_eff argument is unchanged. The 350 µV rule rejects more Muse windows at
+TP9/TP10 (4.5% against 2.2%), the one measure on which the frontal pair does better. The
+deployed system still uses AF7/AF8; the temporal index is what we would change first, and
+its arousal evidence is still one DEAP participant.
 
 **Index construct validity.** Two separable claims underlie the measurement: that the
 electrodes record cortex, and that log(beta/alpha) measures *arousal*. The second was
@@ -767,8 +791,9 @@ standing in for TP9/TP10, and one-minute runs that limit §7.1 and §7.4. The HE
 recordings (§3.5) are a Muse with real transitions and confirm the estimator comparison, but
 only at TP9/TP10 and only from 13 subjects in one protocol. On those same recordings the
 index channels showed almost no eye-state alpha (§5), so the arousal index is weakly
-supported on the hardware it is built for. Moving the index to TP9/TP10, or re-referencing,
-are the alternatives, and neither has been evaluated.
+supported on the hardware it is built for. Moving the index to TP9/TP10 has been checked on
+public data (§5) but not against arousal on a Muse, and re-referencing has not been
+evaluated.
 
 **Frontal channels only.** The Muse 2 has no occipital electrodes, and frontal alpha is
 weaker and more contaminated by ocular and muscle artefact than occipital alpha. The
